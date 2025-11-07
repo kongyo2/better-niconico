@@ -54,6 +54,28 @@ function showPremiumSection(): void {
 }
 
 /**
+ * TV放送中のアニメセクションを非表示にする
+ */
+function hideOnAirAnime(): void {
+  const onAirAnimeContainer = document.querySelector('.OnTvAnimeVideosContainer');
+  if (onAirAnimeContainer) {
+    (onAirAnimeContainer as HTMLElement).style.display = 'none';
+    console.log('[Better Niconico] TV放送中のアニメセクションを非表示にしました');
+  }
+}
+
+/**
+ * TV放送中のアニメセクションを表示する
+ */
+function showOnAirAnime(): void {
+  const onAirAnimeContainer = document.querySelector('.OnTvAnimeVideosContainer');
+  if (onAirAnimeContainer) {
+    (onAirAnimeContainer as HTMLElement).style.display = '';
+    console.log('[Better Niconico] TV放送中のアニメセクションを表示しました');
+  }
+}
+
+/**
  * 設定を適用する
  */
 async function applySettings(): Promise<void> {
@@ -63,6 +85,12 @@ async function applySettings(): Promise<void> {
     hidePremiumSection();
   } else {
     showPremiumSection();
+  }
+
+  if (settings.hideOnAirAnime) {
+    hideOnAirAnime();
+  } else {
+    showOnAirAnime();
   }
 }
 

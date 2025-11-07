@@ -50,9 +50,14 @@ async function saveSettings(settings: BetterNiconicoSettings): Promise<void> {
  */
 function updateUI(settings: BetterNiconicoSettings): void {
   const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
+  const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
     hidePremiumCheckbox.checked = settings.hidePremiumSection;
+  }
+
+  if (hideOnAirAnimeCheckbox) {
+    hideOnAirAnimeCheckbox.checked = settings.hideOnAirAnime;
   }
 }
 
@@ -61,9 +66,11 @@ function updateUI(settings: BetterNiconicoSettings): void {
  */
 function getSettingsFromUI(): BetterNiconicoSettings {
   const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
+  const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
+    hideOnAirAnime: hideOnAirAnimeCheckbox?.checked ?? DEFAULT_SETTINGS.hideOnAirAnime,
   };
 }
 
@@ -78,9 +85,18 @@ async function initialize(): Promise<void> {
 
     // チェックボックスの変更を監視
     const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
+    const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
+        const newSettings = getSettingsFromUI();
+        await saveSettings(newSettings);
+        showStatusMessage('設定を保存しました');
+      });
+    }
+
+    if (hideOnAirAnimeCheckbox) {
+      hideOnAirAnimeCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         await saveSettings(newSettings);
         showStatusMessage('設定を保存しました');
