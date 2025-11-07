@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Chrome Extension Boilerplate",
-  "description": "A simple Chrome extension boilerplate built with TypeScript",
+  "name": "Better Niconico",
+  "description": "ニコニコ動画のレイアウトと細部を改善する拡張機能",
   "permissions": [
     "activeTab",
     "storage",
     "scripting"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "*://*.nicovideo.jp/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
@@ -19,13 +19,15 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["*://*.nicovideo.jp/*"],
       "js": ["src/content/index.ts"],
+      "css": ["src/content/index.css"],
       "run_at": "document_end"
     }
   ],
   "action": {
-    "default_title": "Chrome Extension Boilerplate"
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Better Niconico 設定"
   },
   "icons": {
     "16": "public/icons/icon16.png",

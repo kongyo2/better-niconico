@@ -1,6 +1,6 @@
 import fs from 'fs'
 import { resolve } from 'path'
-import type { PluginOption } from 'vite'
+import type { PluginOption, NormalizedOutputOptions } from 'vite'
 
 /**
  * Plugin to remove dev icons from production build
@@ -11,7 +11,7 @@ export function stripDevIcons(isDev: boolean): PluginOption {
 
   return {
     name: 'strip-dev-icons',
-    renderStart(outputOptions: any) {
+    renderStart(outputOptions: NormalizedOutputOptions) {
       const outDir = outputOptions.dir
       if (!outDir) return
 

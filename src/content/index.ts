@@ -1,240 +1,135 @@
-// Content script for Chrome Extension
-// This script runs in the context of web pages
+// Better Niconico - Content Script
+// ニコニコ動画のレイアウトと細部改善を行う拡張機能
 import './index.css';
+import type { BetterNiconicoSettings } from '../types/settings';
+import { DEFAULT_SETTINGS, STORAGE_KEY } from '../types/settings';
 
 /**
- * Type definitions
+ * 設定を読み込む
  */
-interface Message {
-  action: string;
-  data?: unknown;
-}
-
-interface MessageResponse {
-  success: boolean;
-  data?: unknown;
-  error?: string;
-}
-
-/**
- * Application state
- */
-class ExtensionState {
-  private isActive = false;
-
-  getActive(): boolean {
-    return this.isActive;
-  }
-
-  setActive(value: boolean): void {
-    this.isActive = value;
-  }
-
-  toggle(): void {
-    this.isActive = !this.isActive;
-  }
-}
-
-const state = new ExtensionState();
-
-/**
- * Utility functions
- */
-
-/**
- * Creates a DOM element with specified attributes and properties
- */
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  options: {
-    className?: string;
-    textContent?: string;
-    id?: string;
-    attributes?: Record<string, string>;
-  } = {}
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-
-  if (options.className) {
-    element.className = options.className;
-  }
-  if (options.textContent) {
-    element.textContent = options.textContent;
-  }
-  if (options.id) {
-    element.id = options.id;
-  }
-  if (options.attributes) {
-    Object.entries(options.attributes).forEach(([key, value]) => {
-      element.setAttribute(key, value);
+async function loadSettings(): Promise<BetterNiconicoSettings> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get([STORAGE_KEY], (result) => {
+      const settings = result[STORAGE_KEY] as BetterNiconicoSettings | undefined;
+      resolve(settings || DEFAULT_SETTINGS);
     });
-  }
-
-  return element;
+  });
 }
 
 /**
- * Storage operations with error handling
+ * 設定を保存する
  */
-async function getStorageData<T = unknown>(key: string): Promise<T | undefined> {
+async function saveSettings(settings: BetterNiconicoSettings): Promise<void> {
   return new Promise((resolve, reject) => {
-    try {
-      chrome.storage.local.get([key], (result) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(result[key] as T);
-        }
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-async function setStorageData(key: string, value: unknown): Promise<void> {
-  return new Promise((resolve, reject) => {
-    try {
-      chrome.storage.local.set({ [key]: value }, () => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve();
-        }
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-/**
- * Example: Inject a notification element into the page
- */
-function showNotification(message: string): void {
-  // Remove existing notification if any
-  const existing = document.getElementById('extension-notification');
-  if (existing) {
-    existing.remove();
-  }
-
-  // Create notification element
-  const notification = createElement('div', {
-    id: 'extension-notification',
-    className: 'extension-notification',
-    textContent: message
-  });
-
-  document.body.appendChild(notification);
-
-  // Auto-remove after 3 seconds
-  setTimeout(() => {
-    notification.remove();
-  }, 3000);
-}
-
-/**
- * Example: Main functionality - toggle feature on/off
- */
-function toggleFeature(): void {
-  state.toggle();
-
-  if (state.getActive()) {
-    // Feature is now active
-    console.log('Feature activated');
-    showNotification('Extension feature activated!');
-
-    // Example: Add a class to the body
-    document.body.classList.add('extension-active');
-
-    // Save state
-    void setStorageData('featureActive', true);
-  } else {
-    // Feature is now inactive
-    console.log('Feature deactivated');
-    showNotification('Extension feature deactivated!');
-
-    // Example: Remove the class from body
-    document.body.classList.remove('extension-active');
-
-    // Save state
-    void setStorageData('featureActive', false);
-  }
-}
-
-/**
- * Message listener - receives messages from background script
- */
-chrome.runtime.onMessage.addListener(
-  (
-    request: Message,
-    sender: chrome.runtime.MessageSender,
-    sendResponse: (response: MessageResponse) => void
-  ) => {
-    console.log('Message received in content script:', request);
-
-    try {
-      switch (request.action) {
-        case 'ping':
-          // Respond to ping to confirm content script is available
-          sendResponse({ success: true, data: 'pong' });
-          break;
-
-        case 'iconClicked':
-          // Handle icon click
-          toggleFeature();
-          sendResponse({ success: true });
-          break;
-
-        case 'getState':
-          // Return current state
-          sendResponse({
-            success: true,
-            data: { isActive: state.getActive() }
-          });
-          break;
-
-        default:
-          sendResponse({
-            success: false,
-            error: `Unknown action: ${request.action}`
-          });
+    chrome.storage.sync.set({ [STORAGE_KEY]: settings }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
       }
-    } catch (error) {
-      sendResponse({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-
-    return false; // Synchronous response
-  }
-);
+    });
+  });
+}
 
 /**
- * Initialization
+ * プレミアム会員セクションを非表示にする
+ */
+function hidePremiumSection(): void {
+  const premiumContainer = document.querySelector('.TagPushVideosContainer');
+  if (premiumContainer) {
+    (premiumContainer as HTMLElement).style.display = 'none';
+    console.log('[Better Niconico] プレミアム会員セクションを非表示にしました');
+  }
+}
+
+/**
+ * プレミアム会員セクションを表示する
+ */
+function showPremiumSection(): void {
+  const premiumContainer = document.querySelector('.TagPushVideosContainer');
+  if (premiumContainer) {
+    (premiumContainer as HTMLElement).style.display = '';
+    console.log('[Better Niconico] プレミアム会員セクションを表示しました');
+  }
+}
+
+/**
+ * 設定を適用する
+ */
+async function applySettings(): Promise<void> {
+  const settings = await loadSettings();
+
+  if (settings.hidePremiumSection) {
+    hidePremiumSection();
+  } else {
+    showPremiumSection();
+  }
+}
+
+/**
+ * 設定変更を監視する
+ */
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync' && changes[STORAGE_KEY]) {
+    console.log('[Better Niconico] 設定が変更されました');
+    void applySettings();
+  }
+});
+
+/**
+ * メッセージリスナー
+ */
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getSettings') {
+    void loadSettings().then((settings) => {
+      sendResponse({ success: true, data: settings });
+    });
+    return true; // 非同期レスポンス
+  }
+
+  if (request.action === 'updateSettings') {
+    const newSettings = request.data as BetterNiconicoSettings;
+    void saveSettings(newSettings).then(() => {
+      void applySettings();
+      sendResponse({ success: true });
+    });
+    return true; // 非同期レスポンス
+  }
+
+  return false;
+});
+
+/**
+ * 初期化
+ * ページ読み込み時とDOM変更時に設定を適用
  */
 async function initialize(): Promise<void> {
-  try {
-    console.log('Content script initialized');
+  console.log('[Better Niconico] 初期化開始');
 
-    // Load saved state
-    const savedState = await getStorageData<boolean>('featureActive');
-    if (savedState !== undefined) {
-      state.setActive(savedState);
+  // 初回適用
+  await applySettings();
 
-      if (state.getActive()) {
-        document.body.classList.add('extension-active');
+  // MutationObserverでDOM変更を監視
+  // ニコニコ動画は動的にコンテンツを読み込むため
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.addedNodes.length > 0) {
+        // 新しいノードが追加されたら設定を再適用
+        void applySettings();
+        break;
       }
     }
+  });
 
-    // You can add more initialization logic here
-  } catch (error) {
-    console.error('Error initializing content script:', error);
-  }
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  console.log('[Better Niconico] 初期化完了');
 }
 
-// Run initialization when DOM is ready
+// DOMContentLoadedまたは既に読み込み済みの場合は即座に実行
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => void initialize());
 } else {

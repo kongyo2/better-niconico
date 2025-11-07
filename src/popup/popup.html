@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Better Niconico 設定</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="title">Better Niconico</h1>
+      <p class="subtitle">ニコニコ動画をあなた好みにカスタマイズ</p>
+    </header>
+
+    <main class="settings">
+      <div class="setting-item">
+        <div class="setting-info">
+          <label for="hidePremiumSection" class="setting-label">
+            プレミアム会員セクションを非表示
+          </label>
+          <p class="setting-description">
+            「プレミアム会員なら動画が見放題！」のセクションを非表示にします
+          </p>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="hidePremiumSection">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- 将来の機能拡張のためのプレースホルダー -->
+      <div class="future-features">
+        <p class="future-text">更なる改善機能を追加予定...</p>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="status-message" id="statusMessage"></div>
+      <p class="version">v1.0.0</p>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Chrome Extension Manifest V3 boilerplate built with TypeScript, Vite, and @crxjs/vite-plugin. The extension uses a background service worker and content scripts for web page interaction.
+Better Niconico is a Chrome Extension (Manifest V3) that improves the layout and UI of Niconico Video (nicovideo.jp). Inspired by [Calm Twitter](https://github.com/yusukesaitoh/calm-twitter) and [Refined GitHub](https://github.com/refined-github/refined-github), it allows users to individually toggle features on/off through a settings UI.
+
+Built with TypeScript, Vite, and @crxjs/vite-plugin. The extension targets **only** nicovideo.jp domains.
 
 ## Development Commands
 
@@ -25,49 +27,116 @@ npm run generate-icons
 npm run lint              # Silent mode
 npm run lint:strict       # Fail on warnings
 npm run lint:fix          # Auto-fix issues
-npm run check:file        # Check specific file
 ```
 
 ## Architecture
 
 ### Extension Components
 
-- **Background Service Worker** (`src/background/index.ts`): Runs in the background, handles extension lifecycle events, storage operations, and message routing. Cannot access DOM.
-- **Content Script** (`src/content/index.ts`): Injected into web pages, has access to page DOM, communicates with background via message passing.
+**Target Site**: `*://*.nicovideo.jp/*` (all Niconico domains)
 
-### Message Passing Pattern
+The extension has three main components:
 
-Communication between background and content scripts uses typed messages:
+1. **Background Service Worker** (`src/background/index.ts`)
+   - Runs in the background
+   - Handles extension lifecycle events (install/update)
+   - Monitors tab updates for nicovideo.jp pages
+   - Cannot access DOM
+
+2. **Content Script** (`src/content/index.ts`)
+   - Injected into nicovideo.jp pages
+   - Has access to page DOM
+   - Applies UI modifications based on user settings
+   - Uses **MutationObserver** to handle dynamically loaded content
+   - Listens for settings changes via `chrome.storage.onChanged`
+
+3. **Popup UI** (`src/popup/`)
+   - Popup displayed when clicking extension icon
+   - Beautiful gradient design with toggle switches
+   - Reads and writes settings to `chrome.storage.sync`
+   - Settings changes are immediately reflected on active pages
+
+### Settings System Architecture
+
+Settings are centrally defined in `src/types/settings.ts`:
 
 ```typescript
-interface Message {
-  action: string;
-  data?: unknown;
+export interface BetterNiconicoSettings {
+  hidePremiumSection: boolean;
+  // Add new features here
 }
 
-interface MessageResponse {
-  success: boolean;
-  data?: unknown;
-  error?: string;
+export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
+  hidePremiumSection: true,
+};
+
+export const STORAGE_KEY = 'betterNiconicoSettings';
+```
+
+**Settings Flow**:
+1. Settings are stored in `chrome.storage.sync` (synced across devices)
+2. Popup UI reads/writes settings when user toggles features
+3. Content script listens to `chrome.storage.onChanged` and re-applies modifications
+4. Settings changes trigger immediate re-application via `applySettings()`
+
+### Content Script Pattern
+
+The content script (`src/content/index.ts`) uses this pattern:
+
+1. **Initialization**: Load settings and apply on page load
+2. **MutationObserver**: Re-apply settings when DOM changes (Niconico loads content dynamically)
+3. **Storage Listener**: Re-apply settings when user changes them in popup
+4. **Modular Functions**: Each feature has its own show/hide functions
+
+Example feature implementation:
+```typescript
+function hidePremiumSection(): void {
+  const element = document.querySelector('.TagPushVideosContainer');
+  if (element) {
+    (element as HTMLElement).style.display = 'none';
+  }
+}
+
+function showPremiumSection(): void {
+  const element = document.querySelector('.TagPushVideosContainer');
+  if (element) {
+    (element as HTMLElement).style.display = '';
+  }
 }
 ```
 
-- Background → Content: `chrome.tabs.sendMessage(tabId, message)`
-- Content → Background: `chrome.runtime.sendMessage(message)`
-- Use `return true` in listener to keep message channel open for async responses
-- Always handle `chrome.runtime.lastError` for error checking
+### Adding New Features
 
-### Storage Utilities
+To add a new feature:
 
-Content script provides `getStorageData<T>()` and `setStorageData()` wrappers around `chrome.storage.local` with promise-based API and error handling.
+1. **Add setting to types** (`src/types/settings.ts`):
+   ```typescript
+   export interface BetterNiconicoSettings {
+     hidePremiumSection: boolean;
+     newFeature: boolean; // Add here
+   }
 
-### Restricted Pages Handling
+   export const DEFAULT_SETTINGS = {
+     hidePremiumSection: true,
+     newFeature: false, // Add default
+   };
+   ```
 
-Background service worker includes logic to detect and handle restricted pages (chrome://, edge://, about:, etc.) where content scripts cannot run. It attempts programmatic injection as a fallback when content script is not available.
+2. **Add UI toggle** (`src/popup/popup.html`):
+   - Copy existing `.setting-item` div
+   - Update checkbox `id` and labels
+
+3. **Add popup logic** (`src/popup/popup.ts`):
+   - Update `updateUI()` to set checkbox state
+   - Update `getSettingsFromUI()` to read checkbox state
+
+4. **Implement feature** (`src/content/index.ts`):
+   - Create show/hide functions
+   - Add logic to `applySettings()`
 
 ## TypeScript Configuration
 
-- **Strict mode** enabled with noUnusedLocals and noUnusedParameters
+- **Strict mode** enabled with `noUnusedLocals` and `noUnusedParameters`
 - **Path aliases** configured:
   - `@/*` → `src/*`
   - `@content/*` → `src/content/*`
@@ -76,34 +145,45 @@ Background service worker includes logic to detect and handle restricted pages (
 
 ## Manifest Configuration
 
-- `manifest.json`: Base configuration for both dev and production
+- `manifest.json`: Base configuration
 - `manifest.dev.json`: Development overrides (adds "[DEV]" suffix to name)
-- `vite.config.ts` merges manifests and injects version from package.json
-- Permissions: activeTab, storage, scripting
-- Host permissions: <all_urls>
+- `vite.config.ts` merges manifests and injects version from `package.json`
+- **Permissions**: activeTab, storage, scripting
+- **Host permissions**: `*://*.nicovideo.jp/*` (Niconico only)
+- **Popup**: `src/popup/popup.html` (shown when clicking extension icon)
 
 ## Build System Details
 
 - **Development**: Nodemon watches `src/`, config files, and manifests, rebuilds on changes
 - **Production**: Minified, no sourcemaps, custom plugin removes dev-only icons
 - **Icon Generation**: `generate-icons.js` converts `public/icons/icon.svg` to PNG sizes (16, 32, 48, 128) using @resvg/resvg-js
+- **Custom Plugin** (`custom-vite-plugins.ts`): Strips dev icons from production builds
 
 ## Linting with Oxlint
 
 Fast Rust-based linter configured in `.oxlintrc.json`:
-- TypeScript plugin with no-explicit-any as error
+- TypeScript plugin with `no-explicit-any` as error (use proper types or `unknown`)
 - Floating promises detection (errors on unhandled promises)
 - Console logging allowed (common in extensions)
 - Side-effect imports allowed (CSS imports)
 
-## State Management
-
-Content script uses `ExtensionState` class for managing feature toggle state. State persists via Chrome storage and survives page reloads.
-
 ## Loading the Extension in Chrome
 
-1. Run `npm run dev` or `npm run build`
+1. Run `npm run build` (production) or `npm run dev` (development)
 2. Navigate to `chrome://extensions/`
 3. Enable "Developer mode"
 4. Click "Load unpacked" and select the `dist/` directory
 5. For development, changes auto-rebuild and reload with nodemon
+
+## Current Features
+
+- **Hide Premium Section**: Removes `.TagPushVideosContainer` element (the "プレミアム会員なら動画が見放題！" section)
+  - Default: ON
+  - Toggleable via popup UI
+
+## Implementation Notes
+
+- **MutationObserver**: Essential for Niconico because content loads dynamically. Observer watches for new DOM nodes and re-applies settings.
+- **Chrome Storage Sync**: Settings sync across devices where user is logged into Chrome
+- **Error Handling**: Always check `chrome.runtime.lastError` in Chrome API callbacks
+- **Typing**: Avoid `any`, use `unknown` or proper types. Import types from `vite` when needed (e.g., `NormalizedOutputOptions`)
