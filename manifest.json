@@ -21,7 +21,6 @@
     {
       "matches": ["*://*.nicovideo.jp/*"],
       "js": ["src/content/index.ts"],
-      "css": ["src/content/index.css"],
       "run_at": "document_end"
     }
   ],

@@ -152,12 +152,39 @@ To add a new feature:
 - **Host permissions**: `*://*.nicovideo.jp/*` (Niconico only)
 - **Popup**: `src/popup/popup.html` (shown when clicking extension icon)
 
+### CRITICAL: CSS Handling in Manifest
+
+**DO NOT** manually add `"css"` entries to `manifest.json` in the `content_scripts` section. The @crxjs/vite-plugin automatically handles CSS injection when `injectCss: true` is set in `vite.config.ts` (line 26).
+
+If you manually add CSS paths like `"css": ["src/content/index.css"]`, the build will fail because the source path doesn't exist in the `dist/` folder. The plugin automatically compiles CSS to `assets/*.css` and injects the correct path during build.
+
+**Correct pattern** (in manifest.json):
+```json
+"content_scripts": [{
+  "matches": ["*://*.nicovideo.jp/*"],
+  "js": ["src/content/index.ts"],
+  "run_at": "document_end"
+  // No "css" array needed - handled by @crxjs/vite-plugin
+}]
+```
+
 ## Build System Details
 
 - **Development**: Nodemon watches `src/`, config files, and manifests, rebuilds on changes
+  - When files change, nodemon runs `vite build --mode development`
+  - Extension auto-reloads in Chrome (requires initial manual load)
+  - Check `nodemon.json` for watched files and ignored patterns
 - **Production**: Minified, no sourcemaps, custom plugin removes dev-only icons
 - **Icon Generation**: `generate-icons.js` converts `public/icons/icon.svg` to PNG sizes (16, 32, 48, 128) using @resvg/resvg-js
 - **Custom Plugin** (`custom-vite-plugins.ts`): Strips dev icons from production builds
+
+### Icon Design Guidelines
+
+The extension icon (`public/icons/icon.svg`) follows this design:
+- **Black gradient background** - Matches Niconico brand colors (#1a1a1a to #000000)
+- **White smile face** - Niconico's iconic symbol
+- **Red plus badge** - Indicates "Better" (improvement) over standard Niconico
+- Generate all sizes with `npm run generate-icons` after editing SVG
 
 ## Linting with Oxlint
 
@@ -173,7 +200,10 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 2. Navigate to `chrome://extensions/`
 3. Enable "Developer mode"
 4. Click "Load unpacked" and select the `dist/` directory
-5. For development, changes auto-rebuild and reload with nodemon
+5. For development mode (`npm run dev`):
+   - Changes auto-rebuild via nodemon
+   - Click the reload icon in `chrome://extensions/` to see updates
+   - Or use Chrome Extension Reloader for automatic refresh
 
 ## Current Features
 

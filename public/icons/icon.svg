@@ -1,6 +1,26 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" rx="24" fill="#4285F4"/>
-  <path d="M64 32L88 56L64 80L40 56L64 32Z" fill="white"/>
-  <path d="M64 48L76 60L64 72L52 60L64 48Z" fill="#EA4335"/>
-  <circle cx="64" cy="88" r="8" fill="white"/>
+  <!-- Background with gradient -->
+  <rect width="128" height="128" rx="24" fill="url(#gradient)"/>
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a1a1a"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Smile face circle -->
+  <circle cx="64" cy="64" r="36" fill="white"/>
+
+  <!-- Left eye -->
+  <circle cx="52" cy="56" r="5" fill="#000000"/>
+
+  <!-- Right eye -->
+  <circle cx="76" cy="56" r="5" fill="#000000"/>
+
+  <!-- Smile -->
+  <path d="M 48 68 Q 64 80 80 68" stroke="#000000" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+  <!-- Plus sign (Better/Improvement indicator) -->
+  <circle cx="92" cy="36" r="14" fill="#FF6B6B"/>
+  <path d="M 92 29 L 92 43 M 85 36 L 99 36" stroke="white" stroke-width="3" stroke-linecap="round"/>
 </svg>
