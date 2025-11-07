@@ -24,7 +24,7 @@ function hidePremiumSection(): void {
   // プレミアムセクションには特定のテキストが含まれているはず
   const textContent = parentBlock.textContent || '';
   if (!textContent.includes('プレミアム') && !textContent.includes('見放題')) {
-    console.warn('[Better Niconico] プレミアムセクションの検証に失敗しました');
+    // テキストがまだロードされていない可能性があるため、警告は出さずに処理をスキップ
     return;
   }
 

@@ -286,9 +286,10 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 ### 3. Restore Classic Video Layout
 **Location**: `src/content/features/restoreClassicVideoLayout.ts`
 - Moves video information (title, tags, uploader) above the video player
-- Reorders `.grid-area_[player]` and `.grid-area_[bottom]` in the DOM
-- **Idempotent**: Checks DOM order via `getCurrentLayout()` before reordering
-- **Uses marker attributes**: `data-bn-layout` tracks current layout state
+- Modifies CSS Grid's `grid-template-areas` property to change visual layout
+- **IMPORTANT**: Niconico uses CSS Grid with `grid-template-areas`, so DOM element reordering does not affect visual layout
+- **Idempotent**: Uses `data-bn-layout` marker to prevent redundant operations
+- **Implementation**: Changes `grid-template-areas` from `"player sidebar" "bottom sidebar"` to `"bottom sidebar" "player sidebar"`
 - Only active on `/watch/*` pages
 - Default: **OFF**
 
@@ -316,7 +317,14 @@ parentBlock.style.display = 'none';
 - `.grid-area_[player]` - Video player container
 - `.grid-area_[bottom]` - Video information (title, tags, uploader info)
 - `.grid-area_[sidebar]` - Right sidebar (recommendations, comments)
-- Parent uses CSS Grid with `grid-template-areas`
+- **Parent uses CSS Grid with `grid-template-areas`**
+
+**CRITICAL - CSS Grid Architecture**:
+Niconico's watch page uses CSS Grid's `grid-template-areas` property to control layout. This means:
+- **DOM element order does not affect visual layout** - Grid items are positioned by their `grid-area` CSS property
+- To change layout, modify the parent's `grid-template-areas` property, not DOM order
+- Default: `'"player sidebar" "bottom sidebar" "bottom sidebar"'`
+- Classic layout: `'"bottom sidebar" "player sidebar" "player sidebar"'`
 
 **CSS Class Escaping**:
 When selecting classes with special characters (like brackets), escape them in `querySelector`:
@@ -350,25 +358,24 @@ document.querySelector('.grid-area_\\[player\\]')
    element.setAttribute(MARKER, 'true');
    ```
 
-3. **Verify DOM order before reordering elements**
+3. **Verify CSS state before modifying styles**
    ```typescript
-   // For layout features that reorder elements
-   const parent = element.parentElement;
-   const children = Array.from(parent.children);
-   const currentIndex = children.indexOf(element);
+   // For layout features that modify CSS
+   const parent = element.parentElement as HTMLElement;
 
-   if (currentIndex === desiredIndex) {
-     return; // Already in correct position
+   if (parent.style.gridTemplateAreas === desiredLayout) {
+     return; // Already in desired layout
    }
-   // Proceed with reordering...
+   parent.style.gridTemplateAreas = desiredLayout;
    ```
 
-4. **Add content validation for safety**
+4. **Add content validation for safety (but avoid excessive logging)**
    ```typescript
    // When hiding elements, verify it's the intended target
    const textContent = element.textContent || '';
    if (!textContent.includes('ExpectedKeyword')) {
-     console.warn('[Better Niconico] Validation failed');
+     // Silently skip - content may not be loaded yet due to MutationObserver timing
+     // Avoid console.warn() here as it creates noise during dynamic content loading
      return; // Don't hide unintended elements
    }
    ```

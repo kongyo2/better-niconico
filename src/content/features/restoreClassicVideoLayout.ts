@@ -53,16 +53,14 @@ function restoreClassicLayout(): void {
   }
 
   // すでにクラシックレイアウトの場合は何もしない
-  const currentLayout = getCurrentLayout();
-  if (currentLayout === 'classic') {
-    // マーカーを設定（すでに設定済みでも問題ない）
-    playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
-    bottomArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
+  if (playerArea.getAttribute(LAYOUT_MARKER) === LAYOUT_CLASSIC) {
     return;
   }
 
-  // bottomAreaをplayerAreaの前に移動
-  playerArea.parentElement.insertBefore(bottomArea, playerArea);
+  // CSS Gridのレイアウトを変更
+  // ニコニコはgrid-template-areasを使用しているため、CSSで配置を変更
+  const parent = playerArea.parentElement as HTMLElement;
+  parent.style.gridTemplateAreas = '"bottom sidebar" "player sidebar" "player sidebar"';
 
   // マーカーを設定
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
@@ -87,23 +85,14 @@ function restoreDefaultLayout(): void {
   }
 
   // すでにデフォルトレイアウトの場合は何もしない
-  const currentLayout = getCurrentLayout();
-  if (currentLayout === 'default') {
-    // マーカーを設定（すでに設定済みでも問題ない）
-    playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_DEFAULT);
-    bottomArea.setAttribute(LAYOUT_MARKER, LAYOUT_DEFAULT);
+  if (playerArea.getAttribute(LAYOUT_MARKER) === LAYOUT_DEFAULT ||
+      playerArea.getAttribute(LAYOUT_MARKER) === null) {
     return;
   }
 
-  // bottomAreaをplayerAreaの後に移動
-  // playerAreaの次の兄弟要素（通常はsidebar）の前に挿入
-  const nextElement = playerArea.nextElementSibling;
-  if (nextElement && nextElement !== bottomArea) {
-    playerArea.parentElement.insertBefore(bottomArea, nextElement);
-  } else {
-    // sidebarが見つからない場合は末尾に追加
-    playerArea.parentElement.appendChild(bottomArea);
-  }
+  // CSS Gridのレイアウトを元に戻す
+  const parent = playerArea.parentElement as HTMLElement;
+  parent.style.gridTemplateAreas = '';  // 元のCSSに戻す
 
   // マーカーを設定
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_DEFAULT);
