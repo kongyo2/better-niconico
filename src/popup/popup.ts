@@ -51,6 +51,7 @@ async function saveSettings(settings: BetterNiconicoSettings): Promise<void> {
 function updateUI(settings: BetterNiconicoSettings): void {
   const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
   const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
+  const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
     hidePremiumCheckbox.checked = settings.hidePremiumSection;
@@ -58,6 +59,10 @@ function updateUI(settings: BetterNiconicoSettings): void {
 
   if (hideOnAirAnimeCheckbox) {
     hideOnAirAnimeCheckbox.checked = settings.hideOnAirAnime;
+  }
+
+  if (restoreClassicVideoLayoutCheckbox) {
+    restoreClassicVideoLayoutCheckbox.checked = settings.restoreClassicVideoLayout;
   }
 }
 
@@ -67,10 +72,12 @@ function updateUI(settings: BetterNiconicoSettings): void {
 function getSettingsFromUI(): BetterNiconicoSettings {
   const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
   const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
+  const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
     hideOnAirAnime: hideOnAirAnimeCheckbox?.checked ?? DEFAULT_SETTINGS.hideOnAirAnime,
+    restoreClassicVideoLayout: restoreClassicVideoLayoutCheckbox?.checked ?? DEFAULT_SETTINGS.restoreClassicVideoLayout,
   };
 }
 
@@ -86,6 +93,7 @@ async function initialize(): Promise<void> {
     // チェックボックスの変更を監視
     const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
     const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
+    const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
@@ -97,6 +105,14 @@ async function initialize(): Promise<void> {
 
     if (hideOnAirAnimeCheckbox) {
       hideOnAirAnimeCheckbox.addEventListener('change', async () => {
+        const newSettings = getSettingsFromUI();
+        await saveSettings(newSettings);
+        showStatusMessage('設定を保存しました');
+      });
+    }
+
+    if (restoreClassicVideoLayoutCheckbox) {
+      restoreClassicVideoLayoutCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         await saveSettings(newSettings);
         showStatusMessage('設定を保存しました');

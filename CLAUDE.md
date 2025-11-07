@@ -63,11 +63,14 @@ Settings are centrally defined in `src/types/settings.ts`:
 ```typescript
 export interface BetterNiconicoSettings {
   hidePremiumSection: boolean;
-  // Add new features here
+  hideOnAirAnime: boolean;
+  restoreClassicVideoLayout: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hidePremiumSection: true,
+  hideOnAirAnime: true,
+  restoreClassicVideoLayout: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -76,32 +79,45 @@ export const STORAGE_KEY = 'betterNiconicoSettings';
 **Settings Flow**:
 1. Settings are stored in `chrome.storage.sync` (synced across devices)
 2. Popup UI reads/writes settings when user toggles features
-3. Content script listens to `chrome.storage.onChanged` and re-applies modifications
+3. Content script listens to `chrome.storage.onChanged` and re-applies all features
 4. Settings changes trigger immediate re-application via `applySettings()`
+5. Each feature module's `apply()` function is called with the current setting value
 
-### Content Script Pattern
+### Content Script Pattern & Modular Architecture
 
 The content script (`src/content/index.ts`) uses this pattern:
 
 1. **Initialization**: Load settings and apply on page load
 2. **MutationObserver**: Re-apply settings when DOM changes (Niconico loads content dynamically)
 3. **Storage Listener**: Re-apply settings when user changes them in popup
-4. **Modular Functions**: Each feature has its own show/hide functions
+4. **Modular Features**: Each feature is a separate module in `src/content/features/`
 
-Example feature implementation:
+**Feature Module Pattern** (`src/content/features/*.ts`):
 ```typescript
-function hidePremiumSection(): void {
-  const element = document.querySelector('.TagPushVideosContainer');
-  if (element) {
-    (element as HTMLElement).style.display = 'none';
+/**
+ * Each feature module exports an apply(enabled: boolean) function
+ * This keeps features isolated and maintainable
+ */
+export function apply(enabled: boolean): void {
+  if (enabled) {
+    // Enable the feature
+  } else {
+    // Disable the feature
   }
 }
+```
 
-function showPremiumSection(): void {
-  const element = document.querySelector('.TagPushVideosContainer');
-  if (element) {
-    (element as HTMLElement).style.display = '';
-  }
+**Main Content Script** imports and applies all features:
+```typescript
+import * as hidePremiumSection from './features/hidePremiumSection';
+import * as hideOnAirAnime from './features/hideOnAirAnime';
+import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
+
+async function applySettings(): Promise<void> {
+  const settings = await loadSettings();
+  hidePremiumSection.apply(settings.hidePremiumSection);
+  hideOnAirAnime.apply(settings.hideOnAirAnime);
+  restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
 }
 ```
 
@@ -109,30 +125,57 @@ function showPremiumSection(): void {
 
 To add a new feature:
 
-1. **Add setting to types** (`src/types/settings.ts`):
+1. **Create feature module** (`src/content/features/myNewFeature.ts`):
+   ```typescript
+   export function apply(enabled: boolean): void {
+     if (enabled) {
+       // Enable feature logic
+       const element = document.querySelector('.TargetSelector');
+       if (element) {
+         (element as HTMLElement).style.display = 'none';
+       }
+     } else {
+       // Disable feature logic
+       const element = document.querySelector('.TargetSelector');
+       if (element) {
+         (element as HTMLElement).style.display = '';
+       }
+     }
+   }
+   ```
+
+2. **Add setting to types** (`src/types/settings.ts`):
    ```typescript
    export interface BetterNiconicoSettings {
      hidePremiumSection: boolean;
-     newFeature: boolean; // Add here
+     myNewFeature: boolean; // Add here
    }
 
    export const DEFAULT_SETTINGS = {
      hidePremiumSection: true,
-     newFeature: false, // Add default
+     myNewFeature: false, // Add default
    };
    ```
 
-2. **Add UI toggle** (`src/popup/popup.html`):
+3. **Import and apply in content script** (`src/content/index.ts`):
+   ```typescript
+   import * as myNewFeature from './features/myNewFeature';
+
+   async function applySettings(): Promise<void> {
+     const settings = await loadSettings();
+     // ... existing features
+     myNewFeature.apply(settings.myNewFeature);
+   }
+   ```
+
+4. **Add UI toggle** (`src/popup/popup.html`):
    - Copy existing `.setting-item` div
    - Update checkbox `id` and labels
 
-3. **Add popup logic** (`src/popup/popup.ts`):
+5. **Add popup logic** (`src/popup/popup.ts`):
    - Update `updateUI()` to set checkbox state
    - Update `getSettingsFromUI()` to read checkbox state
-
-4. **Implement feature** (`src/content/index.ts`):
-   - Create show/hide functions
-   - Add logic to `applySettings()`
+   - Add event listener for the new checkbox
 
 ## TypeScript Configuration
 
@@ -205,13 +248,155 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
    - Click the reload icon in `chrome://extensions/` to see updates
    - Or use Chrome Extension Reloader for automatic refresh
 
+## Typical Development Workflow
+
+1. **Start development server**: `npm run dev`
+2. **Make changes** to feature files in `src/content/features/`
+3. **Reload extension** in Chrome (click reload icon in chrome://extensions/)
+4. **Test on target pages**:
+   - Watch page: https://www.nicovideo.jp/watch/sm9
+   - Video top page: https://www.nicovideo.jp/video_top
+5. **Check console** for `[Better Niconico]` logs and errors
+6. **Lint before commit**: `npm run lint:strict`
+
+**Troubleshooting**:
+- If extension doesn't load: Check `dist/manifest.json` exists and is valid
+- If changes don't appear: Hard reload the page (Ctrl+Shift+R) after reloading extension
+- If features conflict: Check console for excessive logging (indicates idempotency issues)
+- If build fails: Run `npm run clean` then `npm run build`
+
 ## Current Features
 
-- **Hide Premium Section**: Removes `.TagPushVideosContainer` element (the "プレミアム会員なら動画が見放題！" section)
-  - Default: ON
-  - Toggleable via popup UI
+### 1. Hide Premium Section
+**Location**: `src/content/features/hidePremiumSection.ts`
+- Hides `.TagPushVideosContainer` ("プレミアム会員なら動画が見放題！" section)
+- Uses `.closest('.BaseLayout-block')` to hide parent container including `.Separator` border
+- **Safeguards**: Validates content contains "プレミアム" or "見放題" before hiding
+- **Idempotent**: Uses `data-bn-premium-hidden` marker to prevent redundant operations
+- Default: **ON**
+
+### 2. Hide On-Air Anime Section
+**Location**: `src/content/features/hideOnAirAnime.ts`
+- Hides `.OnTvAnimeVideosContainer` ("TV放送中のアニメ" section)
+- Uses `.closest('.BaseLayout-block')` to hide parent container including `.Separator` border
+- **Safeguards**: Validates content contains "TV放送中" or "アニメ" before hiding
+- **Idempotent**: Uses `data-bn-anime-hidden` marker to prevent redundant operations
+- Default: **ON**
+
+### 3. Restore Classic Video Layout
+**Location**: `src/content/features/restoreClassicVideoLayout.ts`
+- Moves video information (title, tags, uploader) above the video player
+- Reorders `.grid-area_[player]` and `.grid-area_[bottom]` in the DOM
+- **Idempotent**: Checks DOM order via `getCurrentLayout()` before reordering
+- **Uses marker attributes**: `data-bn-layout` tracks current layout state
+- Only active on `/watch/*` pages
+- Default: **OFF**
 
 ## Implementation Notes
+
+### DOM Manipulation Best Practices
+
+**IMPORTANT**: When hiding sections on video_top page:
+- **DO NOT** hide elements directly (e.g., `.TagPushVideosContainer`, `.OnTvAnimeVideosContainer`)
+- **ALWAYS** use `.closest('.BaseLayout-block')` to hide the parent container
+- **WHY**: Each section has a `.Separator` element (border) inside the parent `.BaseLayout-block`. If you hide only the content container, the separator remains visible, creating a visual bug.
+
+```typescript
+// ❌ WRONG - leaves separator visible
+const container = document.querySelector('.TagPushVideosContainer');
+container.style.display = 'none';
+
+// ✅ CORRECT - hides entire block including separator
+const container = document.querySelector('.TagPushVideosContainer');
+const parentBlock = container.closest('.BaseLayout-block');
+parentBlock.style.display = 'none';
+```
+
+**Watch Page Layout Structure**:
+- `.grid-area_[player]` - Video player container
+- `.grid-area_[bottom]` - Video information (title, tags, uploader info)
+- `.grid-area_[sidebar]` - Right sidebar (recommendations, comments)
+- Parent uses CSS Grid with `grid-template-areas`
+
+**CSS Class Escaping**:
+When selecting classes with special characters (like brackets), escape them in `querySelector`:
+```typescript
+// Class: .grid-area_[player]
+document.querySelector('.grid-area_\\[player\\]')
+```
+
+### Idempotency and MutationObserver Considerations
+
+**CRITICAL**: Since the content script uses MutationObserver to handle dynamic content, all feature `apply()` functions **MUST be idempotent** (safe to call multiple times).
+
+**Best Practices**:
+1. **Check current state before modifying DOM**
+   ```typescript
+   // ✅ GOOD - Check if already in desired state
+   if (element.style.display === 'none') {
+     return; // Already hidden, do nothing
+   }
+   element.style.display = 'none';
+   ```
+
+2. **Use marker attributes to track processing**
+   ```typescript
+   const MARKER = 'data-bn-processed';
+
+   if (element.getAttribute(MARKER) === 'true') {
+     return; // Already processed
+   }
+   element.style.display = 'none';
+   element.setAttribute(MARKER, 'true');
+   ```
+
+3. **Verify DOM order before reordering elements**
+   ```typescript
+   // For layout features that reorder elements
+   const parent = element.parentElement;
+   const children = Array.from(parent.children);
+   const currentIndex = children.indexOf(element);
+
+   if (currentIndex === desiredIndex) {
+     return; // Already in correct position
+   }
+   // Proceed with reordering...
+   ```
+
+4. **Add content validation for safety**
+   ```typescript
+   // When hiding elements, verify it's the intended target
+   const textContent = element.textContent || '';
+   if (!textContent.includes('ExpectedKeyword')) {
+     console.warn('[Better Niconico] Validation failed');
+     return; // Don't hide unintended elements
+   }
+   ```
+
+**Why This Matters**:
+- MutationObserver triggers on every DOM change
+- Without idempotency checks, features may cause infinite loops or performance issues
+- Features may undo each other if they modify the same elements
+
+### Debugging and Testing
+
+**Chrome DevTools Console**:
+- All features log their actions with `[Better Niconico]` prefix
+- Check console for warnings about validation failures
+- Monitor for excessive log spam (indicates non-idempotent code)
+
+**Testing Strategy**:
+1. Test with extension on a fresh page load
+2. Test toggling settings on/off multiple times
+3. Test on pages with dynamic content loading (scroll, click tabs)
+4. Check that unrelated sections remain unaffected
+
+**Common Issues**:
+- If a feature "stops working", check if MutationObserver is triggering too frequently
+- If wrong elements are hidden, add content validation checks
+- If layout features cause flickering, ensure idempotency
+
+### General Notes
 
 - **MutationObserver**: Essential for Niconico because content loads dynamically. Observer watches for new DOM nodes and re-applies settings.
 - **Chrome Storage Sync**: Settings sync across devices where user is logged into Chrome

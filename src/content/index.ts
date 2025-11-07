@@ -4,6 +4,11 @@ import './index.css';
 import type { BetterNiconicoSettings } from '../types/settings';
 import { DEFAULT_SETTINGS, STORAGE_KEY } from '../types/settings';
 
+// Feature modules
+import * as hidePremiumSection from './features/hidePremiumSection';
+import * as hideOnAirAnime from './features/hideOnAirAnime';
+import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
+
 /**
  * 設定を読み込む
  */
@@ -32,66 +37,15 @@ async function saveSettings(settings: BetterNiconicoSettings): Promise<void> {
 }
 
 /**
- * プレミアム会員セクションを非表示にする
- */
-function hidePremiumSection(): void {
-  const premiumContainer = document.querySelector('.TagPushVideosContainer');
-  if (premiumContainer) {
-    (premiumContainer as HTMLElement).style.display = 'none';
-    console.log('[Better Niconico] プレミアム会員セクションを非表示にしました');
-  }
-}
-
-/**
- * プレミアム会員セクションを表示する
- */
-function showPremiumSection(): void {
-  const premiumContainer = document.querySelector('.TagPushVideosContainer');
-  if (premiumContainer) {
-    (premiumContainer as HTMLElement).style.display = '';
-    console.log('[Better Niconico] プレミアム会員セクションを表示しました');
-  }
-}
-
-/**
- * TV放送中のアニメセクションを非表示にする
- */
-function hideOnAirAnime(): void {
-  const onAirAnimeContainer = document.querySelector('.OnTvAnimeVideosContainer');
-  if (onAirAnimeContainer) {
-    (onAirAnimeContainer as HTMLElement).style.display = 'none';
-    console.log('[Better Niconico] TV放送中のアニメセクションを非表示にしました');
-  }
-}
-
-/**
- * TV放送中のアニメセクションを表示する
- */
-function showOnAirAnime(): void {
-  const onAirAnimeContainer = document.querySelector('.OnTvAnimeVideosContainer');
-  if (onAirAnimeContainer) {
-    (onAirAnimeContainer as HTMLElement).style.display = '';
-    console.log('[Better Niconico] TV放送中のアニメセクションを表示しました');
-  }
-}
-
-/**
  * 設定を適用する
  */
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
 
-  if (settings.hidePremiumSection) {
-    hidePremiumSection();
-  } else {
-    showPremiumSection();
-  }
-
-  if (settings.hideOnAirAnime) {
-    hideOnAirAnime();
-  } else {
-    showOnAirAnime();
-  }
+  // 各機能を適用
+  hidePremiumSection.apply(settings.hidePremiumSection);
+  hideOnAirAnime.apply(settings.hideOnAirAnime);
+  restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
 }
 
 /**
