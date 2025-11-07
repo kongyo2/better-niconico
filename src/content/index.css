@@ -1,0 +1,39 @@
+/* Content script styles for Chrome Extension */
+/* These styles are injected into the web pages where the extension runs */
+
+/* Notification element */
+.extension-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #4caf50;
+  color: white;
+  padding: 16px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Example: Style changes when extension is active */
+body.extension-active {
+  /* Add your custom styles here when the extension feature is active */
+  /* For example: */
+  /* border: 3px solid #4caf50; */
+}
+
+/* Add more custom styles for your extension here */

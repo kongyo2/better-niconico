@@ -1,0 +1,35 @@
+{
+  "name": "chrome-extension-boilerplate-ts",
+  "version": "1.0.0",
+  "description": "A simple Chrome extension boilerplate with TypeScript and Vite",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --config nodemon.json",
+    "build": "npm run generate-icons && vite build",
+    "preview": "vite build --watch --mode development",
+    "generate-icons": "node generate-icons.js",
+    "clean": "node -e \"const fs = require('fs'); if (fs.existsSync('dist')) { fs.rmSync('dist', {recursive: true, force: true}); }\"",
+    "lint": "oxlint --silent",
+    "lint:strict": "oxlint --deny-warnings",
+    "lint:fix": "oxlint --fix",
+    "check:file": "oxlint"
+  },
+  "keywords": [
+    "chrome-extension",
+    "typescript",
+    "vite",
+    "boilerplate"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.2.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/chrome": "^0.0.268",
+    "nodemon": "^3.1.10",
+    "oxlint": "^1.24.0",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}

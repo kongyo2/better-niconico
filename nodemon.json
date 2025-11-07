@@ -1,0 +1,18 @@
+{
+  "env": {
+    "__DEV__": "true",
+    "NODE_ENV": "development"
+  },
+  "watch": [
+    "src",
+    "vite.config.ts",
+    "manifest.json",
+    "manifest.dev.json"
+  ],
+  "ext": "ts,css,html,json",
+  "ignore": [
+    "src/**/*.spec.ts",
+    "dist/**"
+  ],
+  "exec": "vite build --mode development"
+}
