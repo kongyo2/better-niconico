@@ -17,27 +17,15 @@ function isWatchPage(): boolean {
 }
 
 /**
- * 親作品・子作品セクションを取得
+ * 動画の詳細情報セクションを取得
  */
-function getParentChildWorksSection(): HTMLElement | null {
+function getDetailInfoSection(): HTMLElement | null {
   const headings = Array.from(document.querySelectorAll('h1'));
-  const heading = headings.find(h => h.textContent?.includes('この動画の親作品・子作品'));
+  const heading = headings.find(h => h.textContent?.includes('動画の詳細情報'));
   if (!heading) return null;
 
-  // セクション全体を取得（祖父母要素が該当セクションのコンテナ）
-  return heading.parentElement?.parentElement as HTMLElement | null;
-}
-
-/**
- * ニコニ広告セクションを取得
- */
-function getNicoAdSection(): HTMLElement | null {
-  const headings = Array.from(document.querySelectorAll('h1'));
-  const heading = headings.find(h => h.textContent?.includes('ニコニ広告'));
-  if (!heading) return null;
-
-  // セクション全体を取得（祖父母要素が該当セクションのコンテナ）
-  return heading.parentElement?.parentElement as HTMLElement | null;
+  // セクション全体を取得（最も近いSECTION要素を探す）
+  return heading.closest('section') as HTMLElement | null;
 }
 
 /**
@@ -83,20 +71,42 @@ function restoreClassicLayout(): void {
 
   const parent = playerArea.parentElement as HTMLElement;
 
-  // 下部に残すセクションを取得
-  const parentChildWorks = getParentChildWorksSection();
-  const nicoAd = getNicoAdSection();
+  // 動画の詳細情報セクションを取得（これより上の要素は上部に表示）
+  const detailInfoSection = getDetailInfoSection();
+  if (!detailInfoSection) {
+    // 詳細情報セクションが見つからない場合は何もしない
+    return;
+  }
+
+  // 下部に移動するセクションを収集
+  // 詳細情報セクションより後ろにある全ての要素を取得
+  const elementsToMove: HTMLElement[] = [];
+  let foundDetailInfo = false;
+
+  Array.from(bottomArea.children).forEach((child) => {
+    if (child === detailInfoSection) {
+      foundDetailInfo = true;
+      // 詳細情報セクション自体も下部に移動
+      elementsToMove.push(child as HTMLElement);
+    } else if (foundDetailInfo) {
+      // 詳細情報セクション以降の全ての要素を移動対象に
+      elementsToMove.push(child as HTMLElement);
+    }
+  });
+
+  if (elementsToMove.length === 0) {
+    return;
+  }
 
   // 下部セクション用のコンテナを作成
   const bottomContainer = getOrCreateBottomContainer(parent);
 
-  // セクションを下部コンテナに移動
-  if (parentChildWorks && parentChildWorks.parentElement === bottomArea) {
-    bottomContainer.appendChild(parentChildWorks);
-  }
-  if (nicoAd && nicoAd.parentElement === bottomArea) {
-    bottomContainer.appendChild(nicoAd);
-  }
+  // 要素を下部コンテナに移動
+  elementsToMove.forEach((element) => {
+    if (element.parentElement === bottomArea) {
+      bottomContainer.appendChild(element);
+    }
+  });
 
   // CSS Gridのレイアウトを変更
   // 新しいグリッドエリア "bn-bottom" を追加し、プレイヤーの下に配置
@@ -107,7 +117,7 @@ function restoreClassicLayout(): void {
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
   bottomArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
 
-  console.log('[Better Niconico] 動画情報を上部に移動しました（親作品・広告セクションは下部に保持）');
+  console.log('[Better Niconico] 動画情報を上部に移動しました（詳細情報以下は下部に保持）');
 }
 
 /**

@@ -286,11 +286,11 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 ### 3. Restore Classic Video Layout
 **Location**: `src/content/features/restoreClassicVideoLayout.ts`
 - Moves video information (title, tags, uploader) above the video player
-- **Keeps at bottom**: "この動画の親作品・子作品" and "ニコニ広告" sections remain below the player
+- **Keeps at bottom**: "動画の詳細情報" section and everything below it (including parent/child works, advertisements, and recommendation shelves) remain below the player
 - **Implementation approach**:
-  - Identifies sections to keep at bottom using h1 heading text matching
+  - Identifies the "動画の詳細情報" (video detail info) section using h1 heading text matching
   - Creates new grid container `#bn-bottom-sections` with `grid-area: bn-bottom`
-  - Moves parent/child works and advertisement sections into this container
+  - Moves the detail info section and all subsequent elements into this container
   - Modifies CSS Grid's `grid-template-areas` to: `'"bottom sidebar" "player sidebar" "bn-bottom sidebar"'`
   - Sets `grid-template-rows: 'min-content min-content min-content'`
 - **Cleanup**: When disabled, moves sections back to original container and removes created elements
