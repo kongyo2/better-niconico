@@ -229,7 +229,7 @@ export function apply(enabled: boolean): void {
 - `manifest.json`: Base configuration
 - `manifest.dev.json`: Development overrides (adds "[DEV]" suffix to name)
 - `vite.config.ts` merges manifests and injects version from `package.json`
-- **Permissions**: activeTab, storage, scripting
+- **Permissions**: storage (for settings persistence)
 - **Host permissions**: `*://*.nicovideo.jp/*` (Niconico only)
 - **Popup**: `src/popup/popup.html` (shown when clicking extension icon)
 

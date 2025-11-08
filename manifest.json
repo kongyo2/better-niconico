@@ -3,9 +3,7 @@
   "name": "Better Niconico",
   "description": "ニコニコ動画のレイアウトと細部を改善する拡張機能",
   "permissions": [
-    "activeTab",
-    "storage",
-    "scripting"
+    "storage"
   ],
   "host_permissions": [
     "*://*.nicovideo.jp/*"
