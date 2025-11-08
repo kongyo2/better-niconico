@@ -291,9 +291,13 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
   - Identifies the "動画の詳細情報" (video detail info) section using h1 heading text matching
   - Creates new grid container `#bn-bottom-sections` with `grid-area: bn-bottom`
   - Moves the detail info section and all subsequent elements into this container
+  - Removes Tailwind's `grid-tr_`, `grid-template-areas_`, and `grid-tc_` classes to prevent conflicts
+  - **Sidebar height constraint**: Sets `max-height: calc(100vh - 80px)`, `overflow-y: auto`, `position: sticky`, and `top: 80px` on sidebar to prevent it from forcing massive grid row heights
   - Modifies CSS Grid's `grid-template-areas` to: `'"bottom sidebar" "player sidebar" "bn-bottom sidebar"'`
-  - Sets `grid-template-rows: 'min-content min-content min-content'`
-- **Cleanup**: When disabled, moves sections back to original container and removes created elements
+  - Sets `grid-template-rows: 'auto auto auto'` (NOT `min-content` - see critical note below)
+  - Sets `align-items: start` on parent and `align-self: start` on grid items
+- **Cleanup**: When disabled, moves sections back to original container, restores Tailwind classes, resets all styles, and removes created elements
+- **CRITICAL**: The sidebar spans all 3 rows and is ~5460px tall. Without `max-height`, it dominates grid row sizing. Using `min-content` causes each row to become massive (1600-1900px) creating huge gaps above and below the player. The `auto` + `max-height` solution allows proper layout.
 - **IMPORTANT**: Niconico uses CSS Grid with `grid-template-areas`, so DOM element reordering alone does not affect visual layout
 - **Idempotent**: Uses `data-bn-layout` marker to prevent redundant operations
 - Only active on `/watch/*` pages
@@ -385,10 +389,36 @@ For complex layout modifications that require moving elements between containers
 4. **Update grid layout** to accommodate new areas:
    ```typescript
    parent.style.gridTemplateAreas = '"area1 sidebar" "area2 sidebar" "custom-area sidebar"';
-   parent.style.gridTemplateRows = 'min-content min-content min-content';
+   parent.style.gridTemplateRows = 'auto auto auto';
+   parent.style.alignItems = 'start';
+
+   // If sidebar spans multiple rows, constrain its height
+   const sidebar = document.querySelector('.grid-area_\\[sidebar\\]');
+   if (sidebar) {
+     sidebar.style.maxHeight = 'calc(100vh - 80px)';
+     sidebar.style.overflowY = 'auto';
+     sidebar.style.position = 'sticky';
+     sidebar.style.top = '80px';
+   }
    ```
 
 **Why this matters**: Complex features like `restoreClassicVideoLayout` need to move some elements but not others. Creating intermediate containers with CSS Grid areas allows precise control over layout without affecting DOM structure outside the feature's scope.
+
+**CSS Grid Row Sizing Pitfall**:
+
+When working with CSS Grid layouts, especially with items that span multiple rows:
+
+1. **The Problem**: If a grid item (like `.grid-area_[sidebar]`) spans all rows and has large content (~5460px), it will dominate the row sizing calculation. Using `grid-template-rows: min-content min-content min-content` causes each row to expand to accommodate the spanning item, creating massive rows (1600-1900px each) even when individual items are much smaller.
+
+2. **The Solution**:
+   - Use `grid-template-rows: auto auto auto` instead of `min-content`
+   - Constrain the spanning item with `max-height` and `overflow-y: auto`
+   - Use `position: sticky` for better UX (keeps sidebar visible while scrolling)
+   - Set `align-items: start` on the grid container and `align-self: start` on grid items
+
+3. **Why This Works**: By constraining the sidebar's height and using `auto` for row sizing, the grid rows size based on their direct children rather than the spanning sidebar. This prevents unwanted whitespace above/below content.
+
+4. **Tailwind Class Conflicts**: Niconico uses Tailwind's arbitrary value classes like `grid-tr_[min-content_min-content_1fr]`. These can conflict with inline styles. When modifying grid properties, remove the conflicting Tailwind classes first, then apply inline styles.
 
 ### Idempotency and MutationObserver Considerations
 
@@ -459,6 +489,10 @@ For complex layout modifications that require moving elements between containers
 - If a feature "stops working", check if MutationObserver is triggering too frequently
 - If wrong elements are hidden, add content validation checks
 - If layout features cause flickering, ensure idempotency
+- If you see massive whitespace above/below the video player when using `restoreClassicVideoLayout`, check:
+  - Grid template rows should be `auto auto auto`, not `min-content`
+  - Sidebar should have `max-height` constraint
+  - Tailwind grid classes (`grid-tr_`, `grid-template-areas_`, `grid-tc_`) should be removed before applying inline styles
 
 ### General Notes
 

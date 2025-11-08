@@ -60,7 +60,10 @@ function restoreClassicLayout(): void {
   // 動画情報のエリア（タイトル、タグ、投稿者情報など）
   const bottomArea = document.querySelector('.grid-area_\\[bottom\\]') as HTMLElement;
 
-  if (!playerArea || !bottomArea || !playerArea.parentElement) {
+  // サイドバーエリア
+  const sidebar = document.querySelector('.grid-area_\\[sidebar\\]') as HTMLElement;
+
+  if (!playerArea || !bottomArea || !sidebar || !playerArea.parentElement) {
     return;
   }
 
@@ -108,10 +111,42 @@ function restoreClassicLayout(): void {
     }
   });
 
+  // Tailwindの grid-tr_ クラスを削除（行の高さが固定されるのを防ぐ）
+  const classesArray = Array.from(parent.classList);
+  const gridTrClass = classesArray.find((c) => c.includes('grid-tr_'));
+  if (gridTrClass) {
+    parent.classList.remove(gridTrClass);
+  }
+
+  // grid-template-areas_ クラスも削除（インラインスタイルで上書き）
+  const gridTemplateAreasClass = classesArray.find((c) => c.includes('grid-template-areas_'));
+  if (gridTemplateAreasClass) {
+    parent.classList.remove(gridTemplateAreasClass);
+  }
+
+  // grid-tc_ クラスも削除（インラインスタイルで上書き）
+  const gridTcClass = classesArray.find((c) => c.includes('grid-tc_'));
+  if (gridTcClass) {
+    parent.classList.remove(gridTcClass);
+  }
+
+  // サイドバーの高さを制限して、グリッド行の高さが巨大にならないようにする
+  sidebar.style.maxHeight = 'calc(100vh - 80px)'; // ヘッダー分を引く
+  sidebar.style.overflowY = 'auto';
+  sidebar.style.position = 'sticky';
+  sidebar.style.top = '80px';
+
   // CSS Gridのレイアウトを変更
   // 新しいグリッドエリア "bn-bottom" を追加し、プレイヤーの下に配置
   parent.style.gridTemplateAreas = '"bottom sidebar" "player sidebar" "bn-bottom sidebar"';
-  parent.style.gridTemplateRows = 'min-content min-content min-content';
+  parent.style.gridTemplateRows = 'auto auto auto';
+  parent.style.gridTemplateColumns = 'var(--watch-player-width) var(--watch-sidebar-width)';
+  parent.style.alignItems = 'start';
+
+  // 各グリッドアイテムに align-self: start を設定
+  bottomArea.style.alignSelf = 'start';
+  playerArea.style.alignSelf = 'start';
+  bottomContainer.style.alignSelf = 'start';
 
   // マーカーを設定
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
@@ -130,6 +165,7 @@ function restoreDefaultLayout(): void {
 
   const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
   const bottomArea = document.querySelector('.grid-area_\\[bottom\\]') as HTMLElement;
+  const sidebar = document.querySelector('.grid-area_\\[sidebar\\]') as HTMLElement;
 
   if (!playerArea || !bottomArea || !playerArea.parentElement) {
     return;
@@ -154,9 +190,34 @@ function restoreDefaultLayout(): void {
     bottomContainer.remove();
   }
 
-  // CSS Gridのレイアウトを元に戻す
+  // 削除したTailwindクラスを復元
+  if (!parent.className.includes('grid-tr_')) {
+    parent.classList.add('grid-tr_[min-content_min-content_1fr]');
+  }
+  if (!parent.className.includes('grid-template-areas_')) {
+    parent.classList.add('grid-template-areas_[_"player_sidebar"_"bottom_sidebar"_"bottom_sidebar"_]');
+  }
+  if (!parent.className.includes('grid-tc_')) {
+    parent.classList.add('grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)]');
+  }
+
+  // CSS Gridのインラインスタイルを削除
   parent.style.gridTemplateAreas = '';
   parent.style.gridTemplateRows = '';
+  parent.style.gridTemplateColumns = '';
+  parent.style.alignItems = '';
+
+  // グリッドアイテムのスタイルをリセット
+  bottomArea.style.alignSelf = '';
+  playerArea.style.alignSelf = '';
+
+  // サイドバーのスタイルをリセット
+  if (sidebar) {
+    sidebar.style.maxHeight = '';
+    sidebar.style.overflowY = '';
+    sidebar.style.position = '';
+    sidebar.style.top = '';
+  }
 
   // マーカーを設定
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_DEFAULT);
