@@ -1,12 +1,15 @@
 /**
  * 動画再生画面のレイアウトを従来の形式に戻す機能
  * タグ・動画名などの情報を動画プレイヤーの上部に移動します
+ * ただし、「この動画の親作品・子作品」と「ニコニ広告」のセクションは下部に残します
  */
 
 // 処理済みマーカー属性
 const LAYOUT_MARKER = 'data-bn-layout';
 const LAYOUT_CLASSIC = 'classic';
 const LAYOUT_DEFAULT = 'default';
+const BOTTOM_CONTAINER_ID = 'bn-bottom-sections';
+const BOTTOM_CONTAINER_MARKER = 'data-bn-bottom-container';
 
 // 動画視聴ページかどうかを判定
 function isWatchPage(): boolean {
@@ -14,24 +17,45 @@ function isWatchPage(): boolean {
 }
 
 /**
- * 現在のレイアウト状態を確認
+ * 親作品・子作品セクションを取得
  */
-function getCurrentLayout(): 'classic' | 'default' | null {
-  const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
-  const bottomArea = document.querySelector('.grid-area_\\[bottom\\]') as HTMLElement;
+function getParentChildWorksSection(): HTMLElement | null {
+  const headings = Array.from(document.querySelectorAll('h1'));
+  const heading = headings.find(h => h.textContent?.includes('この動画の親作品・子作品'));
+  if (!heading) return null;
 
-  if (!playerArea || !bottomArea || !playerArea.parentElement) {
-    return null;
+  // セクション全体を取得（祖父母要素が該当セクションのコンテナ）
+  return heading.parentElement?.parentElement as HTMLElement | null;
+}
+
+/**
+ * ニコニ広告セクションを取得
+ */
+function getNicoAdSection(): HTMLElement | null {
+  const headings = Array.from(document.querySelectorAll('h1'));
+  const heading = headings.find(h => h.textContent?.includes('ニコニ広告'));
+  if (!heading) return null;
+
+  // セクション全体を取得（祖父母要素が該当セクションのコンテナ）
+  return heading.parentElement?.parentElement as HTMLElement | null;
+}
+
+/**
+ * 下部に残すセクション用のコンテナを作成または取得
+ */
+function getOrCreateBottomContainer(gridParent: HTMLElement): HTMLElement {
+  let container = document.getElementById(BOTTOM_CONTAINER_ID);
+
+  if (!container) {
+    container = document.createElement('div');
+    container.id = BOTTOM_CONTAINER_ID;
+    container.setAttribute(BOTTOM_CONTAINER_MARKER, 'true');
+    container.style.gridArea = 'bn-bottom';
+    container.className = 'd_flex flex-d_column gap_x2';
+    gridParent.appendChild(container);
   }
 
-  // DOM上の順序を確認
-  const parent = playerArea.parentElement;
-  const children = Array.from(parent.children);
-  const playerIndex = children.indexOf(playerArea);
-  const bottomIndex = children.indexOf(bottomArea);
-
-  // bottomがplayerより前にある場合はクラシックレイアウト
-  return bottomIndex < playerIndex ? 'classic' : 'default';
+  return container;
 }
 
 /**
@@ -57,16 +81,33 @@ function restoreClassicLayout(): void {
     return;
   }
 
-  // CSS Gridのレイアウトを変更
-  // ニコニコはgrid-template-areasを使用しているため、CSSで配置を変更
   const parent = playerArea.parentElement as HTMLElement;
-  parent.style.gridTemplateAreas = '"bottom sidebar" "player sidebar" "player sidebar"';
+
+  // 下部に残すセクションを取得
+  const parentChildWorks = getParentChildWorksSection();
+  const nicoAd = getNicoAdSection();
+
+  // 下部セクション用のコンテナを作成
+  const bottomContainer = getOrCreateBottomContainer(parent);
+
+  // セクションを下部コンテナに移動
+  if (parentChildWorks && parentChildWorks.parentElement === bottomArea) {
+    bottomContainer.appendChild(parentChildWorks);
+  }
+  if (nicoAd && nicoAd.parentElement === bottomArea) {
+    bottomContainer.appendChild(nicoAd);
+  }
+
+  // CSS Gridのレイアウトを変更
+  // 新しいグリッドエリア "bn-bottom" を追加し、プレイヤーの下に配置
+  parent.style.gridTemplateAreas = '"bottom sidebar" "player sidebar" "bn-bottom sidebar"';
+  parent.style.gridTemplateRows = 'min-content min-content min-content';
 
   // マーカーを設定
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
   bottomArea.setAttribute(LAYOUT_MARKER, LAYOUT_CLASSIC);
 
-  console.log('[Better Niconico] 動画情報を上部に移動しました');
+  console.log('[Better Niconico] 動画情報を上部に移動しました（親作品・広告セクションは下部に保持）');
 }
 
 /**
@@ -90,9 +131,22 @@ function restoreDefaultLayout(): void {
     return;
   }
 
-  // CSS Gridのレイアウトを元に戻す
   const parent = playerArea.parentElement as HTMLElement;
-  parent.style.gridTemplateAreas = '';  // 元のCSSに戻す
+
+  // 下部コンテナから要素を元に戻す
+  const bottomContainer = document.getElementById(BOTTOM_CONTAINER_ID);
+  if (bottomContainer) {
+    // 全ての子要素をbottomAreaに戻す
+    while (bottomContainer.firstChild) {
+      bottomArea.appendChild(bottomContainer.firstChild);
+    }
+    // コンテナを削除
+    bottomContainer.remove();
+  }
+
+  // CSS Gridのレイアウトを元に戻す
+  parent.style.gridTemplateAreas = '';
+  parent.style.gridTemplateRows = '';
 
   // マーカーを設定
   playerArea.setAttribute(LAYOUT_MARKER, LAYOUT_DEFAULT);

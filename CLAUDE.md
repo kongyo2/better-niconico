@@ -286,10 +286,16 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 ### 3. Restore Classic Video Layout
 **Location**: `src/content/features/restoreClassicVideoLayout.ts`
 - Moves video information (title, tags, uploader) above the video player
-- Modifies CSS Grid's `grid-template-areas` property to change visual layout
-- **IMPORTANT**: Niconico uses CSS Grid with `grid-template-areas`, so DOM element reordering does not affect visual layout
+- **Keeps at bottom**: "この動画の親作品・子作品" and "ニコニ広告" sections remain below the player
+- **Implementation approach**:
+  - Identifies sections to keep at bottom using h1 heading text matching
+  - Creates new grid container `#bn-bottom-sections` with `grid-area: bn-bottom`
+  - Moves parent/child works and advertisement sections into this container
+  - Modifies CSS Grid's `grid-template-areas` to: `'"bottom sidebar" "player sidebar" "bn-bottom sidebar"'`
+  - Sets `grid-template-rows: 'min-content min-content min-content'`
+- **Cleanup**: When disabled, moves sections back to original container and removes created elements
+- **IMPORTANT**: Niconico uses CSS Grid with `grid-template-areas`, so DOM element reordering alone does not affect visual layout
 - **Idempotent**: Uses `data-bn-layout` marker to prevent redundant operations
-- **Implementation**: Changes `grid-template-areas` from `"player sidebar" "bottom sidebar"` to `"bottom sidebar" "player sidebar"`
 - Only active on `/watch/*` pages
 - Default: **OFF**
 
@@ -324,7 +330,10 @@ Niconico's watch page uses CSS Grid's `grid-template-areas` property to control 
 - **DOM element order does not affect visual layout** - Grid items are positioned by their `grid-area` CSS property
 - To change layout, modify the parent's `grid-template-areas` property, not DOM order
 - Default: `'"player sidebar" "bottom sidebar" "bottom sidebar"'`
-- Classic layout: `'"bottom sidebar" "player sidebar" "player sidebar"'`
+- Classic layout (implemented by extension): `'"bottom sidebar" "player sidebar" "bn-bottom sidebar"'`
+  - `bottom`: Video info (title, tags, uploader) - moved to top
+  - `player`: Video player - middle
+  - `bn-bottom`: Parent/child works and ads - kept at bottom (custom grid area created by extension)
 
 **CSS Class Escaping**:
 When selecting classes with special characters (like brackets), escape them in `querySelector`:
@@ -332,6 +341,54 @@ When selecting classes with special characters (like brackets), escape them in `
 // Class: .grid-area_[player]
 document.querySelector('.grid-area_\\[player\\]')
 ```
+
+**Advanced DOM Manipulation for Layout Changes**:
+
+For complex layout modifications that require moving elements between containers:
+
+1. **Create managed containers** with unique IDs and marker attributes:
+   ```typescript
+   const CONTAINER_ID = 'bn-custom-container';
+   const CONTAINER_MARKER = 'data-bn-custom';
+
+   let container = document.getElementById(CONTAINER_ID);
+   if (!container) {
+     container = document.createElement('div');
+     container.id = CONTAINER_ID;
+     container.setAttribute(CONTAINER_MARKER, 'true');
+     container.style.gridArea = 'custom-area'; // Set grid area
+     parent.appendChild(container);
+   }
+   ```
+
+2. **Move elements safely** by checking parent before moving:
+   ```typescript
+   const section = getSectionElement();
+   if (section && section.parentElement === sourceContainer) {
+     targetContainer.appendChild(section); // Moves the element
+   }
+   ```
+
+3. **Clean up properly** when feature is disabled:
+   ```typescript
+   const container = document.getElementById(CONTAINER_ID);
+   if (container) {
+     // Move all children back to original location
+     while (container.firstChild) {
+       originalContainer.appendChild(container.firstChild);
+     }
+     // Remove the created container
+     container.remove();
+   }
+   ```
+
+4. **Update grid layout** to accommodate new areas:
+   ```typescript
+   parent.style.gridTemplateAreas = '"area1 sidebar" "area2 sidebar" "custom-area sidebar"';
+   parent.style.gridTemplateRows = 'min-content min-content min-content';
+   ```
+
+**Why this matters**: Complex features like `restoreClassicVideoLayout` need to move some elements but not others. Creating intermediate containers with CSS Grid areas allows precise control over layout without affecting DOM structure outside the feature's scope.
 
 ### Idempotency and MutationObserver Considerations
 
