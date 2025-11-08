@@ -181,6 +181,40 @@ To add a new feature:
    - Update `getSettingsFromUI()` to read checkbox state
    - Add event listener for the new checkbox
 
+### Page-Specific Features
+
+Some features only apply to specific pages. Use the following pattern:
+
+```typescript
+/**
+ * Check if the current page is a watch page
+ */
+function isWatchPage(): boolean {
+  return window.location.pathname.startsWith('/watch/');
+}
+
+export function apply(enabled: boolean): void {
+  // For features that only work on specific pages
+  if (!isWatchPage()) {
+    // Clean up if feature was previously enabled
+    disableFeature();
+    return;
+  }
+
+  // Apply feature only on target pages
+  if (enabled) {
+    enableFeature();
+  } else {
+    disableFeature();
+  }
+}
+```
+
+**Current page-specific features**:
+- `restoreClassicVideoLayout`: Only on `/watch/*` pages
+- `darkMode`: Only on `/watch/*` pages
+- `hidePremiumSection`, `hideOnAirAnime`: Primarily on video_top page, but check for target elements on all pages
+
 ## TypeScript Configuration
 
 - **Strict mode** enabled with `noUnusedLocals` and `noUnusedParameters`
@@ -309,7 +343,7 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 
 ### 4. Dark Mode
 **Location**: `src/content/features/darkMode.ts` and `src/content/styles/darkMode.css`
-- Transforms Niconico's entire UI into a dark color scheme
+- Transforms Niconico's UI into a dark color scheme on video watch pages
 - **Implementation**: Overrides Niconico's 330+ CSS variables by adding `bn-dark-mode` class to `<html>` element
 - **CSS Architecture**: Uses CSS variable cascading to override official design tokens
   - Inverts monotone colors (l0 ↔ l100, l5 ↔ l95, etc.)
@@ -322,7 +356,9 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
   - Slight image opacity reduction (0.95) for eye comfort, except video thumbnails
   - Enhanced shadows for better depth perception
 - **Idempotent**: Checks for class existence before adding/removing
-- **Compatibility**: Works across all nicovideo.jp pages (video_top, watch, etc.)
+- **Page-Specific Behavior**: Only active on `/watch/*` pages
+  - Uses `isWatchPage()` to check `window.location.pathname`
+  - Automatically disabled on other pages (video_top, etc.) regardless of user setting
 - **CSS Variables Overridden**:
   - Monotone colors (15 variables)
   - Transparent colors (17 variables)
