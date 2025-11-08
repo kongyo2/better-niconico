@@ -65,12 +65,14 @@ export interface BetterNiconicoSettings {
   hidePremiumSection: boolean;
   hideOnAirAnime: boolean;
   restoreClassicVideoLayout: boolean;
+  enableDarkMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hidePremiumSection: true,
   hideOnAirAnime: true,
   restoreClassicVideoLayout: false,
+  enableDarkMode: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -112,9 +114,11 @@ export function apply(enabled: boolean): void {
 import * as hidePremiumSection from './features/hidePremiumSection';
 import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
+import * as darkMode from './features/darkMode';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
+  darkMode.apply(settings.enableDarkMode);
   hidePremiumSection.apply(settings.hidePremiumSection);
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
@@ -301,6 +305,32 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - **IMPORTANT**: Niconico uses CSS Grid with `grid-template-areas`, so DOM element reordering alone does not affect visual layout
 - **Idempotent**: Uses `data-bn-layout` marker to prevent redundant operations
 - Only active on `/watch/*` pages
+- Default: **OFF**
+
+### 4. Dark Mode
+**Location**: `src/content/features/darkMode.ts` and `src/content/styles/darkMode.css`
+- Transforms Niconico's entire UI into a dark color scheme
+- **Implementation**: Overrides Niconico's 330+ CSS variables by adding `bn-dark-mode` class to `<html>` element
+- **CSS Architecture**: Uses CSS variable cascading to override official design tokens
+  - Inverts monotone colors (l0 ↔ l100, l5 ↔ l95, etc.)
+  - Inverts transparent white/gray alpha values
+  - Adjusts layer backgrounds, text colors, icons, and UI elements
+  - Preserves brand colors (Niconico logo, premium gold, etc.)
+- **Color Palette**: Dark background (hsl(0 0% 8%)) with inverted lightness values
+- **Visual Enhancements**:
+  - Custom scrollbar styling for dark theme
+  - Slight image opacity reduction (0.95) for eye comfort, except video thumbnails
+  - Enhanced shadows for better depth perception
+- **Idempotent**: Checks for class existence before adding/removing
+- **Compatibility**: Works across all nicovideo.jp pages (video_top, watch, etc.)
+- **CSS Variables Overridden**:
+  - Monotone colors (15 variables)
+  - Transparent colors (17 variables)
+  - Layer/background colors (30 variables)
+  - Text colors (27 variables)
+  - Action/button colors (25 variables)
+  - Icon colors (19 variables)
+  - Borders, forms, tooltips, tabs, shadows
 - Default: **OFF**
 
 ## Implementation Notes

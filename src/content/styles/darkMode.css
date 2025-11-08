@@ -1,0 +1,258 @@
+/* Better Niconico - Dark Mode Styles */
+/*
+ * ニコニコ動画の公式CSS変数を上書きしてダークモードを実装
+ * HTML要素に .bn-dark-mode クラスが追加されたときに適用される
+ */
+
+html.bn-dark-mode {
+  /* ========================================
+   * 基本カラーパレット (Monotone)
+   * ======================================== */
+
+  /* モノトーンカラーの反転 */
+  --colors-monotone--l0: hsl(0 0% 100%);
+  --colors-monotone--l5: hsl(0 0% 95%);
+  --colors-monotone--l10: hsl(0 0% 95%);
+  --colors-monotone--l15: hsl(0 0% 90%);
+  --colors-monotone--l20: hsl(0 0% 90%);
+  --colors-monotone--l25: hsl(0 0% 85%);
+  --colors-monotone--l30: hsl(0 0% 80%);
+  --colors-monotone--l40: hsl(0 0% 70%);
+  --colors-monotone--l50: hsl(0 0% 60%);
+  --colors-monotone--l60: hsl(0 0% 50%);
+  --colors-monotone--l70: hsl(0 0% 40%);
+  --colors-monotone--l80: hsl(0 0% 30%);
+  --colors-monotone--l90: hsl(0 0% 20%);
+  --colors-monotone--l95: hsl(0 0% 10%);
+  --colors-monotone--l100: hsl(0 0% 0%);
+
+  /* ========================================
+   * 透明度カラー (Transparent)
+   * ======================================== */
+
+  /* 白と黒の透明度を反転 */
+  --colors-transparent-white--a100: hsl(0 0% 10% / 100%);
+  --colors-transparent-white--a95: hsl(0 0% 10% / 95%);
+  --colors-transparent-white--a80: hsl(0 0% 10% / 80%);
+  --colors-transparent-white--a60: hsl(0 0% 10% / 60%);
+  --colors-transparent-white--a40: hsl(0 0% 10% / 40%);
+  --colors-transparent-white--a20: hsl(0 0% 10% / 20%);
+  --colors-transparent-white--a10: hsl(0 0% 10% / 10%);
+  --colors-transparent-white--a5: hsl(0 0% 10% / 5%);
+
+  --colors-transparent-gray--a100: hsl(0 0% 95% / 100%);
+  --colors-transparent-gray--a95: hsl(0 0% 95% / 95%);
+  --colors-transparent-gray--a80: hsl(0 0% 95% / 80%);
+  --colors-transparent-gray--a60: hsl(0 0% 95% / 60%);
+  --colors-transparent-gray--a40: hsl(0 0% 95% / 40%);
+  --colors-transparent-gray--a20: hsl(0 0% 95% / 20%);
+  --colors-transparent-gray--a10: hsl(0 0% 95% / 10%);
+  --colors-transparent-gray--a5: hsl(0 0% 95% / 5%);
+
+  /* ========================================
+   * レイヤーカラー (Layer)
+   * ======================================== */
+
+  /* 背景色 */
+  --colors-layer-background: hsl(0 0% 8%);
+
+  /* サーフェス - 高強調 */
+  --colors-layer-surface-high-em: hsl(0 0% 15%);
+  --colors-layer-surface-high-em-black: hsl(0 0% 100%);
+  --colors-layer-surface-high-em-white: hsl(0 0% 0%);
+
+  /* サーフェス - 中強調 */
+  --colors-layer-surface-medium-em: hsl(0 0% 18%);
+  --colors-layer-surface-medium-em-inv: hsl(0 0% 95%);
+  --colors-layer-surface-medium-em-black: hsl(0 0% 95%);
+  --colors-layer-surface-medium-em-white: hsl(0 0% 10%);
+
+  /* サーフェス - 低強調 */
+  --colors-layer-surface-low-em: hsl(0 0% 25%);
+  --colors-layer-surface-low-em-black: hsl(0 0% 80%);
+  --colors-layer-surface-lower-em: hsl(0 0% 35%);
+
+  /* オーバーレイ */
+  --colors-layer-surface-overlay: hsl(0 0% 95% / 80%);
+  --colors-layer-surface-overlay-black: hsl(0 0% 95% / 80%);
+  --colors-layer-content-overlay: hsl(0 0% 10% / 80%);
+
+  /* スケルトン (ローディング) */
+  --colors-layer-skeleton: linear-gradient(to right, #0000, #ffffff1a, #0000);
+
+  /* ========================================
+   * テキストカラー (Text)
+   * ======================================== */
+
+  /* レイヤー上のテキスト - 高強調 */
+  --colors-text-on-layer-high-em: hsl(0 0% 95%);
+  --colors-text-on-layer-high-em-inv: hsl(0 0% 10%);
+  --colors-text-on-layer-high-em-black: hsl(0 0% 95%);
+  --colors-text-on-layer-high-em-white: hsl(0 0% 10%);
+
+  /* レイヤー上のテキスト - 中強調 */
+  --colors-text-on-layer-medium-em: hsl(0 0% 95% / 80%);
+  --colors-text-on-layer-medium-em-inv: hsl(0 0% 10% / 80%);
+
+  /* レイヤー上のテキスト - 低強調 */
+  --colors-text-on-layer-low-em: hsl(0 0% 95% / 60%);
+  --colors-text-on-layer-lower-em: hsl(0 0% 95% / 40%);
+
+  /* 訪問済みリンク */
+  --colors-text-on-layer-visited: hsl(0 0% 60%);
+
+  /* ラベル上のテキスト */
+  --colors-text-on-label-white: hsl(0 0% 0%);
+  --colors-text-on-label-gray: hsl(0 0% 100%);
+
+  /* ========================================
+   * アクションカラー (Button / Interactive)
+   * ======================================== */
+
+  /* ベースアクション */
+  --colors-action-base: hsl(0 0% 95% / 10%);
+  --colors-action-base-hover: hsl(0 0% 95% / 20%);
+  --colors-action-text-on-base: hsl(0 0% 95%);
+  --colors-action-text-on-base_disabled: hsl(0 0% 40%);
+
+  /* プライマリアクション */
+  --colors-action-primary: hsl(0 0% 95% / 95%);
+  --colors-action-primary-hover: hsl(0 0% 95% / 80%);
+  --colors-action-text-on-primary: hsl(0 0% 10%);
+
+  /* ターシャリアクション */
+  --colors-action-tertiary-hover: hsl(0 0% 95% / 10%);
+  --colors-action-text-on-tertiary: hsl(0 0% 70%);
+  --colors-action-tertiary-inv-hover: hsl(0 0% 10% / 5%);
+  --colors-action-text-on-tertiary-inv: hsl(0 0% 60%);
+
+  /* ターシャリ - ホワイト */
+  --colors-action-tertiary-white-base: hsl(0 0% 95% / 20%);
+  --colors-action-tertiary-white-hover: hsl(0 0% 95% / 40%);
+  --colors-action-text-on-tertiary-white: hsl(0 0% 10% / 95%);
+
+  /* UIボーダー */
+  --colors-action-ui-border: hsl(0 0% 50%);
+
+  /* タグのヘルプ */
+  --colors-action-tag-help: hsl(0 0% 40%);
+  --colors-action-tag-help-hover: hsl(0 0% 60%);
+
+  /* ========================================
+   * アイコンカラー (Icon)
+   * ======================================== */
+
+  /* ベースアイコン */
+  --colors-icon-base: hsl(0 0% 10%);
+  --colors-icon-base-disabled: hsl(0 0% 70%);
+
+  /* プライマリアイコン */
+  --colors-icon-primary: hsl(0 0% 70%);
+  --colors-icon-primary-white: hsl(0 0% 10%);
+
+  /* ビデオ説明アイコン */
+  --colors-icon-video-description: hsl(0 0% 50%);
+
+  /* 視聴ページコントローラーアイコン */
+  --colors-icon-watch-controller-base: hsl(0 0% 30%);
+  --colors-icon-watch-controller-hover: hsl(0 0% 5%);
+  --colors-icon-watch-controller-disabled: hsl(0 0% 70%);
+
+  /* ヘッダー検索アイコン */
+  --colors-icon-header-search-base: hsl(0 0% 70%);
+
+  /* ニコるアイコン */
+  --colors-icon-nicoru-on-background: hsl(0 0% 90%);
+  --colors-icon-nicoru-off-background: hsl(0 0% 90%);
+  --colors-icon-nicoru-off-stroke: hsl(0 0% 50%);
+
+  /* ========================================
+   * ボーダーカラー (Border)
+   * ======================================== */
+
+  --colors-border-base: hsl(0 0% 95% / 10%);
+  --colors-border-high-em: hsl(0 0% 95% / 5%);
+  --colors-border-color-command: rgb(255 255 255 / 0.3);
+
+  /* ========================================
+   * 入力フォーム (Input Form)
+   * ======================================== */
+
+  --colors-input-form-background: hsl(0 0% 95% / 5%);
+  --colors-input-form-placeholder: hsl(0 0% 80%);
+  --colors-input-form-input-text: hsl(0 0% 10%);
+
+  /* ========================================
+   * その他のUI要素
+   * ======================================== */
+
+  /* ツールチップ */
+  --colors-tooltip-background: hsl(0 0% 90%);
+  --colors-tooltip-text-on-background: hsl(0 0% 10%);
+
+  /* スナックバー */
+  --colors-snackbar-base: hsl(0 0% 10%);
+  --colors-snackbar-text-on-base: hsl(0 0% 95%);
+
+  /* タブ */
+  --colors-tab-base: hsl(0 0% 95% / 10%);
+  --colors-tab-base-hover: hsl(0 0% 95% / 20%);
+  --colors-tab-base-active: hsl(0 0% 10% / 95%);
+  --colors-tab-object-on-base: hsl(0 0% 10%);
+  --colors-tab-object-on-base-hover: hsl(0 0% 10%);
+  --colors-tab-object-on-base-active: hsl(0 0% 95%);
+  --colors-tab-text-on-base: hsl(0 0% 10%);
+  --colors-tab-text-on-base-hover: hsl(0 0% 10%);
+  --colors-tab-text-on-base-active: hsl(0 0% 95%);
+  --colors-tab-text-on-base-disabled: hsl(0 0% 40%);
+
+  /* シャドウ (暗い背景用に調整) */
+  --shadows-base: 0 0 8px 0 rgba(0, 0, 0, 0.6);
+  --shadows-base-bottom: 0 4px 8px -4px rgba(0, 0, 0, 0.6);
+
+  /* ========================================
+   * サービス固有カラー (維持)
+   * これらの色はブランドカラーなので変更しない
+   * ======================================== */
+
+  /* ニコニコ動画ロゴは白のままにする */
+  --colors-service-color-nicovideo-logo: hsl(0 0% 0%);
+}
+
+/* ========================================
+ * 追加の視覚的調整
+ * ======================================== */
+
+html.bn-dark-mode body {
+  /* ボディの背景色を確実に適用 */
+  background-color: hsl(0 0% 8%);
+  color: hsl(0 0% 95%);
+}
+
+/* スクロールバーのスタイリング (Chrome/Edge) */
+html.bn-dark-mode ::-webkit-scrollbar {
+  background-color: hsl(0 0% 12%);
+}
+
+html.bn-dark-mode ::-webkit-scrollbar-thumb {
+  background-color: hsl(0 0% 30%);
+  border-radius: 4px;
+}
+
+html.bn-dark-mode ::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(0 0% 40%);
+}
+
+/* 画像の明るさを少し抑える (目に優しく) */
+html.bn-dark-mode img {
+  opacity: 0.95;
+}
+
+html.bn-dark-mode img:hover {
+  opacity: 1;
+}
+
+/* ビデオサムネイルは完全な明るさを維持 */
+html.bn-dark-mode img[src*="nicovideo.cdn.nimg.jp"] {
+  opacity: 1;
+}

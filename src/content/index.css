@@ -1,5 +1,8 @@
 /* Better Niconico - Content Script Styles */
 
+/* ダークモードのスタイル */
+@import './styles/darkMode.css';
+
 /* プレミアム会員セクションを非表示にする際のスムーズなトランジション */
 .TagPushVideosContainer {
   transition: opacity 0.3s ease-out, height 0.3s ease-out;
