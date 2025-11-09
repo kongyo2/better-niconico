@@ -11,6 +11,8 @@
  * - Main content video uses blob: URLs and may not appear until ads finish
  * - Canvas must replace video in the exact same position with same styling
  * - The render() function from anime4k-webgpu handles its own render loop using requestVideoFrameCallback
+ * - Video src changes (navigation, playlist) are detected and upscaling is re-initialized
+ * - Fullscreen mode automatically disables upscaling to prevent issues
  */
 
 import { render, ModeA } from 'anime4k-webgpu';
@@ -30,11 +32,48 @@ let webGPUSupportCache: boolean | null = null;
 // アクティブなレンダリングコントローラー（クリーンアップ用）
 let activeRenderController: AbortController | null = null;
 
+// 現在処理中の動画のsrcを追跡（動画変更を検出するため）
+let currentVideoSrc: string | null = null;
+
+// 現在の動画要素への参照（動画変更を検出するため）
+let currentVideoElement: HTMLVideoElement | null = null;
+
+// 現在の設定状態（全画面モード対応のため）
+let currentEnabled: boolean = false;
+
+// 動画監視用のMutationObserver
+let videoObserver: MutationObserver | null = null;
+
+// 全画面モードイベントリスナーのセットアップ済みフラグ
+let fullscreenListenerSetup: boolean = false;
+
 /**
  * 動画視聴ページかどうかを判定
  */
 function isWatchPage(): boolean {
   return window.location.pathname.startsWith('/watch/');
+}
+
+/**
+ * 全画面モードかどうかを判定
+ */
+function isFullscreenMode(): boolean {
+  // Fullscreen APIを優先的に使用
+  if (document.fullscreenElement) {
+    return true;
+  }
+
+  // フォールバック: DOMベースの検出
+  // 全画面モード時、プレイヤーエリアに100dvw x 100dvhの要素が存在する
+  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  if (playerArea) {
+    const fullscreenElement = playerArea.querySelector('.w_\\[100dvw\\].h_\\[100dvh\\]');
+    if (fullscreenElement) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -100,6 +139,7 @@ function isValidContentVideo(video: HTMLVideoElement): boolean {
  * - 複数の video 要素から、実際のコンテンツ動画を特定
  * - 広告動画は除外
  * - 空のプレースホルダー動画は除外
+ * - より確実にメインコンテンツ動画を特定するため、複数の条件をチェック
  */
 function getVideoElement(): HTMLVideoElement | null {
   // プレイヤーエリア内のすべてのvideo要素を取得
@@ -111,13 +151,44 @@ function getVideoElement(): HTMLVideoElement | null {
   const videos = Array.from(playerArea.querySelectorAll('video')) as HTMLVideoElement[];
 
   // 有効なコンテンツ動画を探す（広告とプレースホルダーを除外）
+  // より確実に特定するため、readyStateもチェック
+  let bestVideo: HTMLVideoElement | null = null;
+  let bestReadyState = -1;
+
   for (const video of videos) {
     if (isValidContentVideo(video)) {
-      return video;
+      // readyStateが高い動画を優先（よりロード済みの動画）
+      if (video.readyState > bestReadyState) {
+        bestVideo = video;
+        bestReadyState = video.readyState;
+      }
     }
   }
 
-  return null;
+  return bestVideo;
+}
+
+/**
+ * 動画が変更されたかどうかを判定
+ * - srcが変更された場合
+ * - 動画要素自体が変更された場合
+ */
+function hasVideoChanged(video: HTMLVideoElement | null): boolean {
+  if (!video) {
+    return currentVideoElement !== null || currentVideoSrc !== null;
+  }
+
+  // 動画要素が変更された場合
+  if (currentVideoElement !== video) {
+    return true;
+  }
+
+  // srcが変更された場合
+  if (currentVideoSrc !== video.src) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -182,11 +253,19 @@ function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement | null
  * 動画がロード完了するまで待機
  * anime4k-webgpu の render() 関数は内部で HAVE_FUTURE_DATA を待つが、
  * canvas作成前に基本的な準備が整っているか確認する
+ * リトライロジック付きで、より確実に動画の準備を待つ
  */
-async function waitForVideoReady(video: HTMLVideoElement): Promise<boolean> {
+async function waitForVideoReady(video: HTMLVideoElement, retryCount = 0): Promise<boolean> {
   // すでにロード済みの場合
   if (video.readyState >= video.HAVE_METADATA && video.videoWidth && video.videoHeight) {
     return true;
+  }
+
+  // 最大3回までリトライ
+  const maxRetries = 3;
+  if (retryCount >= maxRetries) {
+    console.warn('[Better Niconico] Video ready check failed after max retries');
+    return false;
   }
 
   // ロード完了を待機（タイムアウト付き）
@@ -197,22 +276,38 @@ async function waitForVideoReady(video: HTMLVideoElement): Promise<boolean> {
       if (resolved) return;
       resolved = true;
       video.removeEventListener('loadedmetadata', handler);
+      video.removeEventListener('loadeddata', handler);
 
-      if (video.videoWidth && video.videoHeight) {
-        resolve(true);
-      } else {
-        resolve(false);
-      }
+      // 少し待ってから再度チェック（DOM更新を待つ）
+      setTimeout(() => {
+        if (video.videoWidth && video.videoHeight) {
+          resolve(true);
+        } else if (retryCount < maxRetries) {
+          // リトライ
+          void waitForVideoReady(video, retryCount + 1).then(resolve);
+        } else {
+          resolve(false);
+        }
+      }, 100);
     };
 
+    // loadedmetadataとloadeddataの両方を監視
     video.addEventListener('loadedmetadata', handler);
+    video.addEventListener('loadeddata', handler);
 
     // タイムアウト（10秒）
     setTimeout(() => {
       if (resolved) return;
       resolved = true;
       video.removeEventListener('loadedmetadata', handler);
-      resolve(false);
+      video.removeEventListener('loadeddata', handler);
+
+      if (retryCount < maxRetries) {
+        // リトライ
+        void waitForVideoReady(video, retryCount + 1).then(resolve);
+      } else {
+        resolve(false);
+      }
     }, 10000);
   });
 }
@@ -225,6 +320,16 @@ async function enableUpscaling(): Promise<void> {
     return;
   }
 
+  // 全画面モードの場合はアップスケーリングを無効化
+  if (isFullscreenMode()) {
+    console.log('[Better Niconico] 全画面表示中のため、動画アップスケーリングを無効化します');
+    // 既存のアップスケーリングがあればクリーンアップ
+    if (currentVideoElement) {
+      cleanupUpscaling(currentVideoElement);
+    }
+    return;
+  }
+
   const video = getVideoElement();
   if (!video) {
     // 動画要素が見つからない場合は静かに終了
@@ -232,7 +337,19 @@ async function enableUpscaling(): Promise<void> {
     return;
   }
 
+  // 動画が変更された場合は、既存のアップスケーリングをクリーンアップ
+  if (hasVideoChanged(video)) {
+    console.log('[Better Niconico] 動画が変更されました。既存のアップスケーリングを停止します');
+    if (currentVideoElement) {
+      cleanupUpscaling(currentVideoElement);
+    }
+    // 状態をリセット
+    currentVideoElement = null;
+    currentVideoSrc = null;
+  }
+
   // すでに有効化されている場合は何もしない（冪等性）
+  // ただし、動画が変更された場合は上記でクリーンアップ済み
   if (video.getAttribute(UPSCALING_MARKER) === UPSCALING_ACTIVE) {
     return;
   }
@@ -261,6 +378,7 @@ async function enableUpscaling(): Promise<void> {
     console.log('[Better Niconico] Starting video upscaling with Anime4K-WebGPU', {
       nativeResolution: `${video.videoWidth}x${video.videoHeight}`,
       targetResolution: `${canvas.width}x${canvas.height}`,
+      videoSrc: video.src.substring(0, 50) + (video.src.length > 50 ? '...' : ''),
     });
 
     // 前回のレンダリングコントローラーがあれば中止
@@ -304,6 +422,10 @@ async function enableUpscaling(): Promise<void> {
     // マーカーを設定
     video.setAttribute(UPSCALING_MARKER, UPSCALING_ACTIVE);
 
+    // 現在の動画情報を記録
+    currentVideoElement = video;
+    currentVideoSrc = video.src;
+
     console.log('[Better Niconico] Video upscaling enabled successfully');
   } catch (error) {
     // AbortErrorは正常なクリーンアップなのでログに出さない
@@ -316,6 +438,9 @@ async function enableUpscaling(): Promise<void> {
 
     // エラー時のクリーンアップ
     cleanupUpscaling(video);
+    // 状態をリセット
+    currentVideoElement = null;
+    currentVideoSrc = null;
   }
 }
 
@@ -350,6 +475,10 @@ function cleanupUpscaling(video: HTMLVideoElement | null): void {
       v.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE);
     });
   }
+
+  // 状態をリセット
+  currentVideoElement = null;
+  currentVideoSrc = null;
 }
 
 /**
@@ -362,13 +491,128 @@ function disableUpscaling(): void {
 }
 
 /**
+ * 全画面表示イベントのリスナーをセットアップ
+ * 全画面表示への遷移を確実に捕捉し、アップスケーリングを適切に切り替える
+ */
+function setupFullscreenListener(): void {
+  if (!isWatchPage() || fullscreenListenerSetup) {
+    return;
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) {
+      // 全画面表示に入った - アップスケーリングを無効化
+      console.log('[Better Niconico] 全画面表示に入りました。動画アップスケーリングを無効化します。');
+      if (currentVideoElement) {
+        cleanupUpscaling(currentVideoElement);
+      }
+    } else {
+      // 全画面表示から抜けた - 設定がONなら自動的にアップスケーリングを再適用
+      console.log('[Better Niconico] 全画面表示から抜けました。');
+      if (currentEnabled) {
+        // DOM更新を待つために少し遅延させる
+        setTimeout(() => {
+          console.log('[Better Niconico] 動画アップスケーリングを再適用します。');
+          void enableUpscaling();
+        }, 100);
+      }
+    }
+  });
+
+  fullscreenListenerSetup = true;
+  console.log('[Better Niconico] 全画面表示イベントリスナーをセットアップしました');
+}
+
+/**
+ * 動画要素の変更を監視するMutationObserverをセットアップ
+ * src変更や動画の切り替えを検出する
+ */
+function setupVideoObserver(): void {
+  if (!isWatchPage() || videoObserver) {
+    return;
+  }
+
+  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  if (!playerArea) {
+    return;
+  }
+
+  videoObserver = new MutationObserver((mutations) => {
+    // 動画要素の変更を検出
+    for (const mutation of mutations) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+        // src属性が変更された
+        const video = mutation.target as HTMLVideoElement;
+        if (isValidContentVideo(video) && currentEnabled) {
+          console.log('[Better Niconico] 動画のsrcが変更されました。アップスケーリングを再初期化します。');
+          // 既存のアップスケーリングをクリーンアップ
+          if (currentVideoElement) {
+            cleanupUpscaling(currentVideoElement);
+          }
+          // 少し遅延させてから再適用（DOM更新を待つ）
+          setTimeout(() => {
+            void enableUpscaling();
+          }, 200);
+        }
+      }
+
+      // 新しいvideo要素が追加された場合
+      if (mutation.addedNodes.length > 0) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as HTMLElement;
+            if (element.tagName === 'VIDEO' || element.querySelector('video')) {
+              if (currentEnabled) {
+                console.log('[Better Niconico] 新しい動画要素が検出されました。アップスケーリングを再適用します。');
+                // 少し遅延させてから再適用（DOM更新を待つ）
+                setTimeout(() => {
+                  void enableUpscaling();
+                }, 200);
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  videoObserver.observe(playerArea, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['src'],
+  });
+
+  console.log('[Better Niconico] 動画要素監視をセットアップしました');
+}
+
+/**
+ * 動画監視を停止
+ */
+function stopVideoObserver(): void {
+  if (videoObserver) {
+    videoObserver.disconnect();
+    videoObserver = null;
+  }
+}
+
+/**
  * 設定を適用する（冪等性を保証）
  * @param enabled - true: アップスケーリング有効, false: アップスケーリング無効
  */
 export function apply(enabled: boolean): void {
+  currentEnabled = enabled;
+
   if (enabled) {
+    // 全画面表示イベントリスナーをセットアップ（初回のみ）
+    setupFullscreenListener();
+    // 動画要素監視をセットアップ（初回のみ）
+    setupVideoObserver();
     void enableUpscaling();
   } else {
     disableUpscaling();
+    // 動画監視を停止
+    stopVideoObserver();
   }
 }
