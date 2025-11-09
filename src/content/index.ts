@@ -9,6 +9,7 @@ import * as hidePremiumSection from './features/hidePremiumSection';
 import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
 import * as darkMode from './features/darkMode';
+import * as videoUpscaling from './features/videoUpscaling';
 
 /**
  * 設定を読み込む
@@ -48,6 +49,7 @@ async function applySettings(): Promise<void> {
   hidePremiumSection.apply(settings.hidePremiumSection);
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
+  videoUpscaling.apply(settings.enableVideoUpscaling);
 }
 
 /**
