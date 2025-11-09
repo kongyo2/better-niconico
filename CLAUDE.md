@@ -66,6 +66,7 @@ export interface BetterNiconicoSettings {
   hideOnAirAnime: boolean;
   restoreClassicVideoLayout: boolean;
   enableVideoUpscaling: boolean;
+  showNicoRankButton: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
@@ -73,6 +74,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideOnAirAnime: true,
   restoreClassicVideoLayout: false,
   enableVideoUpscaling: false,
+  showNicoRankButton: true,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -115,6 +117,7 @@ import * as hidePremiumSection from './features/hidePremiumSection';
 import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
 import * as videoUpscaling from './features/videoUpscaling';
+import * as addNicoRankButton from './features/addNicoRankButton';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -122,6 +125,7 @@ async function applySettings(): Promise<void> {
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
   videoUpscaling.apply(settings.enableVideoUpscaling);
+  addNicoRankButton.apply(settings.showNicoRankButton);
 }
 ```
 
@@ -213,6 +217,7 @@ export function apply(enabled: boolean): void {
 **Current page-specific features**:
 - `restoreClassicVideoLayout`: Only on `/watch/*` pages
 - `videoUpscaling`: Only on `/watch/*` pages
+- `addNicoRankButton`: Only on `/video_top` page
 - `hidePremiumSection`, `hideOnAirAnime`: Primarily on video_top page, but check for target elements on all pages
 
 ## TypeScript Configuration
@@ -503,6 +508,23 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - [Anime4K-WebGPU GitHub](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)
 - [NPM Package](https://www.npmjs.com/package/anime4k-webgpu)
 - [Web Demo](https://anime4k-webgpu-demo.fly.dev/)
+
+### 5. Add Nico Rank Button
+**Location**: `src/content/features/addNicoRankButton.ts`
+- Adds a "ニコラン" button to the left sidebar on video_top page
+- Links to https://nico-rank.com/ (external anime ranking aggregator)
+- **Custom Icon**: Uses inline SVG podium icon (1st, 2nd, 3rd place) matching Niconico's icon style
+- **Implementation details**:
+  - Finds "ランキング" link in sidebar using `.css-1i9dz1a` selector
+  - Creates identical menu item structure using same CSS classes
+  - Inserts button immediately after the ranking link's parent element
+  - Handles both expanded (`.css-1i3qj3a`) and collapsed (`.css-gzpr6t`) sidebar states
+- **Idempotent**: Uses `data-bn-nico-rank-button` marker on link and `data-bn-nico-rank-container` marker on container
+- **Cleanup**: Removes all buttons and containers when disabled
+- Only active on `/video_top` page
+- Default: **ON**
+
+**Why this feature exists**: nico-rank.com aggregates rankings from multiple sources and provides a cleaner UI for discovering popular anime content on Niconico.
 
 ## Implementation Notes
 
