@@ -65,7 +65,6 @@ export interface BetterNiconicoSettings {
   hidePremiumSection: boolean;
   hideOnAirAnime: boolean;
   restoreClassicVideoLayout: boolean;
-  enableDarkMode: boolean;
   enableVideoUpscaling: boolean;
 }
 
@@ -73,7 +72,6 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hidePremiumSection: true,
   hideOnAirAnime: true,
   restoreClassicVideoLayout: false,
-  enableDarkMode: false,
   enableVideoUpscaling: false,
 };
 
@@ -116,12 +114,10 @@ export function apply(enabled: boolean): void {
 import * as hidePremiumSection from './features/hidePremiumSection';
 import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
-import * as darkMode from './features/darkMode';
 import * as videoUpscaling from './features/videoUpscaling';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
-  darkMode.apply(settings.enableDarkMode);
   hidePremiumSection.apply(settings.hidePremiumSection);
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
@@ -217,7 +213,6 @@ export function apply(enabled: boolean): void {
 **Current page-specific features**:
 - `restoreClassicVideoLayout`: Only on `/watch/*` pages
 - `videoUpscaling`: Only on `/watch/*` pages
-- `darkMode`: Supports `/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*` pages
 - `hidePremiumSection`, `hideOnAirAnime`: Primarily on video_top page, but check for target elements on all pages
 
 ## TypeScript Configuration
@@ -356,68 +351,7 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - Only active on `/watch/*` pages
 - Default: **OFF**
 
-### 4. Dark Mode
-**Location**: `src/content/features/darkMode.ts` and `src/content/styles/darkMode.css`
-- Transforms Niconico's UI into a dark color scheme on multiple pages
-- **Supported Pages**: `/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*`
-- **Implementation**: Overrides Niconico's CSS variables by adding `bn-dark-mode` class to `<html>` element, using a base color palette with CSS relative color syntax
-- **Base Color Palette** (defined in darkMode.css):
-  - `--bgcolor1`: `#252525` (primary background)
-  - `--bgcolor2`: `#333` (secondary background)
-  - `--bgcolor3`: `#666` (tertiary background)
-  - `--textcolor1`: `#fff` (primary text)
-  - `--textcolor2`: `#ddd` (secondary text)
-  - `--textcolor3`: `#aaa` (tertiary text)
-  - `--accent1`, `--accent2`, `--hover1`, `--hover2` for accents and hover states
-- **CSS Architecture**:
-  - Uses **CSS relative color syntax** (`rgb(from var(--textcolor1) r g b / 80%)`) to dynamically generate transparency variants from base colors
-  - Maps base colors to Niconico's official CSS variables (monotone, transparent-white, transparent-gray, etc.)
-  - Inverts monotone colors (l0 ↔ l100, l5 ↔ l95, etc.)
-  - Adjusts layer backgrounds, text colors, icons, and UI elements
-  - Preserves brand colors (Niconico logo, premium gold, etc.)
-  - **Three-section structure** (based on niconico-peppermint-extension):
-    1. **Sidebar styles** - Global sidebar dark mode (`sidebar.styl` equivalent)
-    2. **video_top styles** - Page-specific dark mode (`videotop.styl` equivalent)
-    3. **Common styles** - Shared across all pages (`global.styl` equivalent)
-- **Visual Enhancements**:
-  - Custom scrollbar styling for dark theme
-  - Slight image opacity reduction (0.95) for eye comfort, except video thumbnails
-  - Enhanced shadows for better depth perception
-- **Idempotent**: Checks for class existence before adding/removing
-- **Page-Specific Behavior**: Active on supported pages (`/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*`)
-  - Uses `isDarkModeSupported()` to check `window.location.pathname`
-  - Automatically disabled on unsupported pages regardless of user setting
-- **CSS Variables Overridden**:
-  - Monotone colors (15 variables)
-  - Transparent colors (17 variables using relative color syntax)
-  - Layer/background colors (30 variables)
-  - Text colors (27 variables)
-  - Action/button colors (25 variables)
-  - Icon colors (19 variables)
-  - Borders, forms, tooltips, tabs, shadows
-- **CRITICAL - Reference Implementation**: The dark mode CSS is based on [niconico-peppermint-extension](https://github.com/castella-cake/niconico-peppermint-extension)
-  - When fixing dark mode issues, **always reference this repository first**
-  - Key reference files:
-    - `entrypoints/style/modules/darkmode/pages/all/sidebar.styl` - For sidebar styling issues
-    - `entrypoints/style/modules/darkmode/pages/all/videotop.styl` - For video_top page issues
-    - `entrypoints/style/modules/darkmode/pages/all/global.styl` - For common styling issues
-    - `entrypoints/style/modules/darkmode/pages/modernPageScheme.styl` - For CSS variable mappings
-  - The reference uses Stylus syntax, convert to standard CSS when adapting
-- **CSS-in-JS Challenges**: Niconico uses CSS-in-JS with dynamically generated class names (e.g., `.css-144b5v4`, `.css-d9fec`)
-  - These class names are **critical** for targeting specific elements
-  - When dark mode styling fails, inspect the actual DOM to find current CSS-in-JS class names
-  - Use browser DevTools to identify the correct selectors
-  - Reference implementation provides comprehensive list of known CSS-in-JS classes
-- **Sidebar Critical Selector**: The left sidebar on video_top requires this specific selector pattern:
-  ```css
-  #VideoMenuDrawer-app > div > div > div,
-  .NC-VideoMenuDrawerPlaceHolder > .NC-VideoMenuDrawerPlaceHolder-wrapper
-  ```
-  - This exact pattern is essential for sidebar background styling
-  - Other selectors like `.css-144b5v4` or `.css-9kofbd` alone are insufficient
-- Default: **OFF**
-
-### 5. Video Upscaling
+### 4. Video Upscaling
 **Location**: `src/content/features/videoUpscaling.ts`
 **Library**: [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU) (NPM: `anime4k-webgpu`)
 - Real-time video upscaling using WebGPU compute shaders for anime content
