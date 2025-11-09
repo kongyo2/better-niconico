@@ -2,80 +2,117 @@
 /*
  * ニコニコ動画の公式CSS変数を上書きしてダークモードを実装
  * HTML要素に .bn-dark-mode クラスが追加されたときに適用される
+ *
+ * サポート対象ページ:
+ * - 動画視聴ページ (/watch/*)
+ * - 動画トップページ (/video_top*)
+ * - タグページ (/tag/*)
+ * - 検索ページ (/search/*)
+ * - ランキングページ (/ranking*)
  */
 
 html.bn-dark-mode {
   /* ========================================
-   * 基本カラーパレット (Monotone)
+   * ベースカラーパレット
    * ======================================== */
 
-  /* モノトーンカラーの反転 */
-  --colors-monotone--l0: hsl(0 0% 100%);
-  --colors-monotone--l5: hsl(0 0% 95%);
-  --colors-monotone--l10: hsl(0 0% 95%);
-  --colors-monotone--l15: hsl(0 0% 90%);
-  --colors-monotone--l20: hsl(0 0% 90%);
-  --colors-monotone--l25: hsl(0 0% 85%);
-  --colors-monotone--l30: hsl(0 0% 80%);
-  --colors-monotone--l40: hsl(0 0% 70%);
-  --colors-monotone--l50: hsl(0 0% 60%);
-  --colors-monotone--l60: hsl(0 0% 50%);
-  --colors-monotone--l70: hsl(0 0% 40%);
-  --colors-monotone--l80: hsl(0 0% 30%);
-  --colors-monotone--l90: hsl(0 0% 20%);
-  --colors-monotone--l95: hsl(0 0% 10%);
-  --colors-monotone--l100: hsl(0 0% 0%);
+  /* 基本背景色 */
+  --bgcolor1: #252525;
+  /* サブ背景色1 */
+  --bgcolor2: #333;
+  /* サブ背景色2 */
+  --bgcolor3: #666;
+  /* サブ背景色3 */
+  --bgcolor4: #aaa;
+  /* テキスト色1（最も明るい） */
+  --textcolor1: #fff;
+  /* テキスト色2（中間） */
+  --textcolor2: #ddd;
+  /* テキスト色3（暗め） */
+  --textcolor3: #aaa;
+  /* アクセント色1 */
+  --accent1: #444;
+  /* アクセント色2 */
+  --accent2: #888;
+  /* ホバー色1 */
+  --hover1: #666;
+  /* ホバー色2 */
+  --hover2: #aaa;
+
+  /* ========================================
+   * 基本カラーパレット (Monotone)
+   * 相対色構文を使用して動的に生成
+   * ======================================== */
+
+  /* モノトーンカラー */
+  --colors-monotone--l100: var(--textcolor1);
+  --colors-monotone--l95: var(--textcolor1);
+  --colors-monotone--l90: var(--textcolor1);
+  --colors-monotone--l80: var(--textcolor2);
+  --colors-monotone--l70: var(--textcolor2);
+  --colors-monotone--l60: var(--textcolor2);
+  --colors-monotone--l50: var(--textcolor3);
+  --colors-monotone--l40: var(--bgcolor4);
+  --colors-monotone--l30: var(--bgcolor4);
+  --colors-monotone--l25: var(--bgcolor3);
+  --colors-monotone--l20: var(--bgcolor3);
+  --colors-monotone--l15: var(--bgcolor2);
+  --colors-monotone--l10: var(--bgcolor2);
+  --colors-monotone--l5: var(--bgcolor1);
+  --colors-monotone--l0: var(--bgcolor1);
 
   /* ========================================
    * 透明度カラー (Transparent)
+   * 相対色構文を使用して、ベースカラーから透明度を変えた色を生成
    * ======================================== */
 
-  /* 白と黒の透明度を反転 */
-  --colors-transparent-white--a100: hsl(0 0% 10% / 100%);
-  --colors-transparent-white--a95: hsl(0 0% 10% / 95%);
-  --colors-transparent-white--a80: hsl(0 0% 10% / 80%);
-  --colors-transparent-white--a60: hsl(0 0% 10% / 60%);
-  --colors-transparent-white--a40: hsl(0 0% 10% / 40%);
-  --colors-transparent-white--a20: hsl(0 0% 10% / 20%);
-  --colors-transparent-white--a10: hsl(0 0% 10% / 10%);
-  --colors-transparent-white--a5: hsl(0 0% 10% / 5%);
+  /* 白の透明度（相対色構文） */
+  --colors-transparent-white--a100: rgb(from var(--textcolor1) r g b / 100%);
+  --colors-transparent-white--a95: rgb(from var(--textcolor1) r g b / 95%);
+  --colors-transparent-white--a80: rgb(from var(--textcolor1) r g b / 80%);
+  --colors-transparent-white--a60: rgb(from var(--textcolor1) r g b / 60%);
+  --colors-transparent-white--a40: rgb(from var(--textcolor1) r g b / 40%);
+  --colors-transparent-white--a20: rgb(from var(--textcolor1) r g b / 20%);
+  --colors-transparent-white--a10: rgb(from var(--textcolor1) r g b / 10%);
+  --colors-transparent-white--a5: rgb(from var(--textcolor1) r g b / 5%);
 
-  --colors-transparent-gray--a100: hsl(0 0% 95% / 100%);
-  --colors-transparent-gray--a95: hsl(0 0% 95% / 95%);
-  --colors-transparent-gray--a80: hsl(0 0% 95% / 80%);
-  --colors-transparent-gray--a60: hsl(0 0% 95% / 60%);
-  --colors-transparent-gray--a40: hsl(0 0% 95% / 40%);
-  --colors-transparent-gray--a20: hsl(0 0% 95% / 20%);
-  --colors-transparent-gray--a10: hsl(0 0% 95% / 10%);
-  --colors-transparent-gray--a5: hsl(0 0% 95% / 5%);
+  /* グレーの透明度（相対色構文） */
+  --colors-transparent-gray--a100: rgb(from var(--bgcolor1) r g b / 100%);
+  --colors-transparent-gray--a95: rgb(from var(--bgcolor1) r g b / 95%);
+  --colors-transparent-gray--a80: rgb(from var(--bgcolor1) r g b / 80%);
+  --colors-transparent-gray--a60: rgb(from var(--bgcolor1) r g b / 60%);
+  --colors-transparent-gray--a40: rgb(from var(--bgcolor1) r g b / 40%);
+  --colors-transparent-gray--a20: rgb(from var(--bgcolor1) r g b / 20%);
+  --colors-transparent-gray--a10: rgb(from var(--bgcolor1) r g b / 10%);
+  --colors-transparent-gray--a5: rgb(from var(--bgcolor1) r g b / 5%);
 
   /* ========================================
    * レイヤーカラー (Layer)
    * ======================================== */
 
   /* 背景色 */
-  --colors-layer-background: hsl(0 0% 8%);
+  --colors-layer-background: var(--bgcolor1);
 
   /* サーフェス - 高強調 */
-  --colors-layer-surface-high-em: hsl(0 0% 15%);
-  --colors-layer-surface-high-em-black: hsl(0 0% 100%);
-  --colors-layer-surface-high-em-white: hsl(0 0% 0%);
+  --colors-layer-surface-high-em: var(--bgcolor2);
+  --colors-layer-surface-high-em-black: var(--textcolor1);
+  --colors-layer-surface-high-em-white: var(--bgcolor1);
 
   /* サーフェス - 中強調 */
-  --colors-layer-surface-medium-em: hsl(0 0% 18%);
-  --colors-layer-surface-medium-em-inv: hsl(0 0% 95%);
-  --colors-layer-surface-medium-em-black: hsl(0 0% 95%);
-  --colors-layer-surface-medium-em-white: hsl(0 0% 10%);
+  --colors-layer-surface-medium-em: var(--bgcolor3);
+  --colors-layer-surface-medium-em-inv: var(--textcolor1);
+  --colors-layer-surface-medium-em-black: var(--textcolor1);
+  --colors-layer-surface-medium-em-white: var(--bgcolor2);
 
   /* サーフェス - 低強調 */
-  --colors-layer-surface-low-em: hsl(0 0% 25%);
-  --colors-layer-surface-low-em-black: hsl(0 0% 80%);
-  --colors-layer-surface-lower-em: hsl(0 0% 35%);
+  --colors-layer-surface-low-em: var(--bgcolor3);
+  --colors-layer-surface-low-em-black: var(--bgcolor4);
+  --colors-layer-surface-lower-em: var(--bgcolor4);
 
   /* オーバーレイ */
-  --colors-layer-surface-overlay: hsl(0 0% 95% / 80%);
-  --colors-layer-surface-overlay-black: hsl(0 0% 95% / 80%);
-  --colors-layer-content-overlay: hsl(0 0% 10% / 80%);
+  --colors-layer-surface-overlay: var(--colors-transparent-gray--a80);
+  --colors-layer-surface-overlay-black: var(--colors-transparent-gray--a80);
+  --colors-layer-content-overlay: var(--colors-transparent-gray--a80);
 
   /* スケルトン (ローディング) */
   --colors-layer-skeleton: linear-gradient(to right, #0000, #ffffff1a, #0000);
@@ -85,130 +122,130 @@ html.bn-dark-mode {
    * ======================================== */
 
   /* レイヤー上のテキスト - 高強調 */
-  --colors-text-on-layer-high-em: hsl(0 0% 95%);
-  --colors-text-on-layer-high-em-inv: hsl(0 0% 10%);
-  --colors-text-on-layer-high-em-black: hsl(0 0% 95%);
-  --colors-text-on-layer-high-em-white: hsl(0 0% 10%);
+  --colors-text-on-layer-high-em: var(--textcolor1);
+  --colors-text-on-layer-high-em-inv: var(--bgcolor2);
+  --colors-text-on-layer-high-em-black: var(--textcolor1);
+  --colors-text-on-layer-high-em-white: var(--bgcolor2);
 
   /* レイヤー上のテキスト - 中強調 */
-  --colors-text-on-layer-medium-em: hsl(0 0% 95% / 80%);
-  --colors-text-on-layer-medium-em-inv: hsl(0 0% 10% / 80%);
+  --colors-text-on-layer-medium-em: var(--colors-transparent-white--a80);
+  --colors-text-on-layer-medium-em-inv: var(--colors-transparent-gray--a80);
 
   /* レイヤー上のテキスト - 低強調 */
-  --colors-text-on-layer-low-em: hsl(0 0% 95% / 60%);
-  --colors-text-on-layer-lower-em: hsl(0 0% 95% / 40%);
+  --colors-text-on-layer-low-em: var(--colors-transparent-white--a60);
+  --colors-text-on-layer-lower-em: var(--colors-transparent-white--a40);
 
   /* 訪問済みリンク */
-  --colors-text-on-layer-visited: hsl(0 0% 60%);
+  --colors-text-on-layer-visited: var(--bgcolor4);
 
   /* ラベル上のテキスト */
-  --colors-text-on-label-white: hsl(0 0% 0%);
-  --colors-text-on-label-gray: hsl(0 0% 100%);
+  --colors-text-on-label-white: var(--bgcolor1);
+  --colors-text-on-label-gray: var(--textcolor1);
 
   /* ========================================
    * アクションカラー (Button / Interactive)
    * ======================================== */
 
   /* ベースアクション */
-  --colors-action-base: hsl(0 0% 95% / 10%);
-  --colors-action-base-hover: hsl(0 0% 95% / 20%);
-  --colors-action-text-on-base: hsl(0 0% 95%);
-  --colors-action-text-on-base_disabled: hsl(0 0% 40%);
+  --colors-action-base: var(--colors-transparent-white--a10);
+  --colors-action-base-hover: var(--colors-transparent-white--a20);
+  --colors-action-text-on-base: var(--textcolor1);
+  --colors-action-text-on-base_disabled: var(--bgcolor4);
 
   /* プライマリアクション */
-  --colors-action-primary: hsl(0 0% 95% / 95%);
-  --colors-action-primary-hover: hsl(0 0% 95% / 80%);
-  --colors-action-text-on-primary: hsl(0 0% 10%);
+  --colors-action-primary: var(--colors-transparent-white--a95);
+  --colors-action-primary-hover: var(--colors-transparent-white--a80);
+  --colors-action-text-on-primary: var(--bgcolor2);
 
   /* ターシャリアクション */
-  --colors-action-tertiary-hover: hsl(0 0% 95% / 10%);
-  --colors-action-text-on-tertiary: hsl(0 0% 70%);
-  --colors-action-tertiary-inv-hover: hsl(0 0% 10% / 5%);
-  --colors-action-text-on-tertiary-inv: hsl(0 0% 60%);
+  --colors-action-tertiary-hover: var(--colors-transparent-white--a10);
+  --colors-action-text-on-tertiary: var(--bgcolor4);
+  --colors-action-tertiary-inv-hover: var(--colors-transparent-gray--a5);
+  --colors-action-text-on-tertiary-inv: var(--bgcolor4);
 
   /* ターシャリ - ホワイト */
-  --colors-action-tertiary-white-base: hsl(0 0% 95% / 20%);
-  --colors-action-tertiary-white-hover: hsl(0 0% 95% / 40%);
-  --colors-action-text-on-tertiary-white: hsl(0 0% 10% / 95%);
+  --colors-action-tertiary-white-base: var(--colors-transparent-white--a20);
+  --colors-action-tertiary-white-hover: var(--colors-transparent-white--a40);
+  --colors-action-text-on-tertiary-white: var(--colors-transparent-gray--a95);
 
   /* UIボーダー */
-  --colors-action-ui-border: hsl(0 0% 50%);
+  --colors-action-ui-border: var(--bgcolor4);
 
   /* タグのヘルプ */
-  --colors-action-tag-help: hsl(0 0% 40%);
-  --colors-action-tag-help-hover: hsl(0 0% 60%);
+  --colors-action-tag-help: var(--bgcolor4);
+  --colors-action-tag-help-hover: var(--bgcolor4);
 
   /* ========================================
    * アイコンカラー (Icon)
    * ======================================== */
 
   /* ベースアイコン */
-  --colors-icon-base: hsl(0 0% 10%);
-  --colors-icon-base-disabled: hsl(0 0% 70%);
+  --colors-icon-base: var(--textcolor1);
+  --colors-icon-base-disabled: var(--bgcolor4);
 
   /* プライマリアイコン */
-  --colors-icon-primary: hsl(0 0% 70%);
-  --colors-icon-primary-white: hsl(0 0% 10%);
+  --colors-icon-primary: var(--bgcolor4);
+  --colors-icon-primary-white: var(--textcolor1);
 
   /* ビデオ説明アイコン */
-  --colors-icon-video-description: hsl(0 0% 50%);
+  --colors-icon-video-description: var(--bgcolor4);
 
   /* 視聴ページコントローラーアイコン */
-  --colors-icon-watch-controller-base: hsl(0 0% 30%);
-  --colors-icon-watch-controller-hover: hsl(0 0% 5%);
-  --colors-icon-watch-controller-disabled: hsl(0 0% 70%);
+  --colors-icon-watch-controller-base: var(--bgcolor3);
+  --colors-icon-watch-controller-hover: var(--bgcolor1);
+  --colors-icon-watch-controller-disabled: var(--bgcolor4);
 
   /* ヘッダー検索アイコン */
-  --colors-icon-header-search-base: hsl(0 0% 70%);
+  --colors-icon-header-search-base: var(--bgcolor4);
 
   /* ニコるアイコン */
-  --colors-icon-nicoru-on-background: hsl(0 0% 90%);
-  --colors-icon-nicoru-off-background: hsl(0 0% 90%);
-  --colors-icon-nicoru-off-stroke: hsl(0 0% 50%);
+  --colors-icon-nicoru-on-background: var(--bgcolor2);
+  --colors-icon-nicoru-off-background: var(--bgcolor2);
+  --colors-icon-nicoru-off-stroke: var(--bgcolor4);
 
   /* ========================================
    * ボーダーカラー (Border)
    * ======================================== */
 
-  --colors-border-base: hsl(0 0% 95% / 10%);
-  --colors-border-high-em: hsl(0 0% 95% / 5%);
+  --colors-border-base: var(--colors-transparent-white--a10);
+  --colors-border-high-em: var(--colors-transparent-white--a5);
   --colors-border-color-command: rgb(255 255 255 / 0.3);
 
   /* ========================================
    * 入力フォーム (Input Form)
    * ======================================== */
 
-  --colors-input-form-background: hsl(0 0% 95% / 5%);
-  --colors-input-form-placeholder: hsl(0 0% 80%);
-  --colors-input-form-input-text: hsl(0 0% 10%);
+  --colors-input-form-background: var(--colors-transparent-white--a5);
+  --colors-input-form-placeholder: var(--bgcolor4);
+  --colors-input-form-input-text: var(--textcolor1);
 
   /* ========================================
    * その他のUI要素
    * ======================================== */
 
   /* ツールチップ */
-  --colors-tooltip-background: hsl(0 0% 90%);
-  --colors-tooltip-text-on-background: hsl(0 0% 10%);
+  --colors-tooltip-background: var(--bgcolor3);
+  --colors-tooltip-text-on-background: var(--textcolor1);
 
   /* スナックバー */
-  --colors-snackbar-base: hsl(0 0% 10%);
-  --colors-snackbar-text-on-base: hsl(0 0% 95%);
+  --colors-snackbar-base: var(--textcolor1);
+  --colors-snackbar-text-on-base: var(--bgcolor2);
 
   /* タブ */
-  --colors-tab-base: hsl(0 0% 95% / 10%);
-  --colors-tab-base-hover: hsl(0 0% 95% / 20%);
-  --colors-tab-base-active: hsl(0 0% 10% / 95%);
-  --colors-tab-object-on-base: hsl(0 0% 10%);
-  --colors-tab-object-on-base-hover: hsl(0 0% 10%);
-  --colors-tab-object-on-base-active: hsl(0 0% 95%);
-  --colors-tab-text-on-base: hsl(0 0% 10%);
-  --colors-tab-text-on-base-hover: hsl(0 0% 10%);
-  --colors-tab-text-on-base-active: hsl(0 0% 95%);
-  --colors-tab-text-on-base-disabled: hsl(0 0% 40%);
+  --colors-tab-base: var(--colors-transparent-white--a10);
+  --colors-tab-base-hover: var(--colors-transparent-white--a20);
+  --colors-tab-base-active: var(--colors-transparent-white--a95);
+  --colors-tab-object-on-base: var(--textcolor1);
+  --colors-tab-object-on-base-hover: var(--textcolor1);
+  --colors-tab-object-on-base-active: var(--bgcolor2);
+  --colors-tab-text-on-base: var(--textcolor1);
+  --colors-tab-text-on-base-hover: var(--textcolor1);
+  --colors-tab-text-on-base-active: var(--bgcolor2);
+  --colors-tab-text-on-base-disabled: var(--bgcolor4);
 
   /* シャドウ (暗い背景用に調整) */
-  --shadows-base: 0 0 8px 0 rgba(0, 0, 0, 0.6);
-  --shadows-base-bottom: 0 4px 8px -4px rgba(0, 0, 0, 0.6);
+  --shadows-base: 0 0 8px 0 rgba(0, 0, 0, 0.8);
+  --shadows-base-bottom: 0 4px 8px -4px rgba(0, 0, 0, 0.8);
 
   /* ========================================
    * サービス固有カラー (維持)
@@ -216,17 +253,19 @@ html.bn-dark-mode {
    * ======================================== */
 
   /* ニコニコ動画ロゴは白のままにする */
-  --colors-service-color-nicovideo-logo: hsl(0 0% 0%);
+  --colors-service-color-nicovideo-logo: var(--textcolor1);
 }
 
 /* ========================================
  * 追加の視覚的調整
  * ======================================== */
 
-html.bn-dark-mode body {
+html.bn-dark-mode body,
+html.bn-dark-mode .BaseLayout-main,
+html.bn-dark-mode .BaseLayout {
   /* ボディの背景色を確実に適用 */
-  background-color: hsl(0 0% 8%);
-  color: hsl(0 0% 95%);
+  background-color: var(--bgcolor1);
+  color: var(--textcolor1);
 }
 
 /* スクロールバーのスタイリング (Chrome/Edge) */
@@ -235,12 +274,12 @@ html.bn-dark-mode ::-webkit-scrollbar {
 }
 
 html.bn-dark-mode ::-webkit-scrollbar-thumb {
-  background-color: hsl(0 0% 30%);
+  background-color: var(--bgcolor3);
   border-radius: 4px;
 }
 
 html.bn-dark-mode ::-webkit-scrollbar-thumb:hover {
-  background-color: hsl(0 0% 40%);
+  background-color: var(--bgcolor4);
 }
 
 /* 画像の明るさを少し抑える (目に優しく) */
@@ -255,4 +294,362 @@ html.bn-dark-mode img:hover {
 /* ビデオサムネイルは完全な明るさを維持 */
 html.bn-dark-mode img[src*="nicovideo.cdn.nimg.jp"] {
   opacity: 1;
+}
+
+/* ========================================
+ * video_top ページ専用のスタイル
+ * ======================================== */
+
+/* 動画カードのフッター */
+html.bn-dark-mode .RecommendVideoContainer-footer {
+  color: var(--textcolor3);
+}
+
+/* カラムタイトル */
+html.bn-dark-mode .ColumnTitle-linkText {
+  color: var(--textcolor2);
+}
+
+/* タグ付き動画アイテム */
+html.bn-dark-mode .TagWithVideoItem-articleLink {
+  background: linear-gradient(90deg, hsla(0, 0%, 96%, 0), var(--bgcolor1) 20px);
+}
+
+/* 履歴ボタン */
+html.bn-dark-mode .VideoIntroductionPlayerContainer-historyButton {
+  background-color: var(--accent1);
+  border: 2px solid var(--accent2);
+  color: var(--textcolor2);
+}
+
+html.bn-dark-mode .VideoIntroductionPlayerContainer-historyButton:hover,
+html.bn-dark-mode .VideoIntroductionPlayerContainer-historyButton_isActive {
+  background-color: var(--bgcolor3);
+}
+
+/* ジャンルトップページヘッダー */
+html.bn-dark-mode .GenreTopPageHeader {
+  background: var(--bgcolor2);
+  border-top: 4px solid var(--accent1);
+}
+
+html.bn-dark-mode .GenreTopPageHeader-prefix {
+  color: var(--textcolor2);
+}
+
+html.bn-dark-mode .GenreTopPageHeader > h1 {
+  color: var(--textcolor1);
+}
+
+/* 代表タグ */
+html.bn-dark-mode .RepresentedTag {
+  background: var(--accent1);
+  border: 1px solid var(--accent2);
+}
+
+html.bn-dark-mode .RepresentedTag_active {
+  background: #007cff;
+  border-color: transparent;
+  color: #fff;
+}
+
+/* トレンドタグコンテナ */
+html.bn-dark-mode .TrendyTagsContainer-expands {
+  background-image: linear-gradient(180deg, rgba(250, 250, 250, 0), var(--bgcolor1) 18px);
+}
+
+html.bn-dark-mode .TrendyTagsWithVideosContainer-more {
+  background: linear-gradient(90deg, hsla(0, 0%, 96%, 0), var(--bgcolor1) 20px);
+}
+
+/* ランキング動画コンテナ */
+html.bn-dark-mode .RankingVideosContainer .NC-VideoCardWrapper::after {
+  border-bottom: 2px solid var(--accent2);
+}
+
+/* フォロー中の動画 */
+html.bn-dark-mode .FollowingVideosContainer-ownerName {
+  color: var(--textcolor1);
+}
+
+/* ホットタグ */
+html.bn-dark-mode .HotTagsContainer-list {
+  color: var(--textcolor2);
+}
+
+html.bn-dark-mode .RankingVideosContainer .ColumnTitle-subTitle {
+  color: var(--textcolor2);
+}
+
+/* 動画ジャンルリスト */
+html.bn-dark-mode .VideoTopGenreListContainer,
+html.bn-dark-mode .RankingGenreListContainer {
+  background-color: var(--bgcolor2);
+}
+
+html.bn-dark-mode .VideoTopGenreListContainer-item,
+html.bn-dark-mode .RankingGenreListContainer-item {
+  background: var(--bgcolor2);
+  border: 1px solid var(--accent2);
+}
+
+html.bn-dark-mode .VideoTopGenreListContainer-item.is-current,
+html.bn-dark-mode .RankingGenreListContainer-item.is-current {
+  background: var(--textcolor2);
+}
+
+html.bn-dark-mode .VideoTopGenreListContainer-item.is-current > a,
+html.bn-dark-mode .RankingGenreListContainer-item.is-current > a {
+  color: var(--bgcolor1) !important;
+}
+
+html.bn-dark-mode .VideoTopGenreListContainer-item > a,
+html.bn-dark-mode .RankingGenreListContainer-item > a {
+  color: var(--textcolor2);
+}
+
+/* 検索ボックス */
+html.bn-dark-mode .SearchBox-form {
+  background: var(--accent1) !important;
+  box-shadow: inset 0 0 0 1px var(--accent2) !important;
+}
+
+html.bn-dark-mode .SearchBox-query {
+  color: var(--textcolor1) !important;
+}
+
+html.bn-dark-mode .SearchBox-option {
+  background-color: var(--bgcolor2) !important;
+  color: var(--textcolor1) !important;
+}
+
+html.bn-dark-mode .SearchBox-option[data-active="true"] {
+  background-color: var(--bgcolor4) !important;
+  color: var(--textcolor2);
+}
+
+/* 動画カード */
+html.bn-dark-mode .NC-Card .NC-CardTitle,
+html.bn-dark-mode .NewsNotificationList-item,
+html.bn-dark-mode .LiveWindowContainer-metaTitle {
+  color: var(--textcolor2) !important;
+}
+
+/* フッターフィードバック */
+html.bn-dark-mode .FooterContainer-feedback {
+  background-color: var(--bgcolor2) !important;
+  border: 1px solid var(--bgcolor2) !important;
+}
+
+html.bn-dark-mode .NC-VideoCard_onHoverMeta .NC-Card-main:hover .NC-VideoCard-secondary::before,
+html.bn-dark-mode .NC-VideoCard_onHoverMeta .NC-Card-main:hover .NC-VideoCard-secondary {
+  background-color: var(--bgcolor2) !important;
+}
+
+/* メンテナンス */
+html.bn-dark-mode .UnderMaintenance-title {
+  color: var(--textcolor2);
+}
+
+/* 広告背景 */
+html.bn-dark-mode .Ads,
+html.bn-dark-mode .Ads300x250WebPcSideFollow .Ads > *,
+html.bn-dark-mode .Ads728x90WebPcFooter {
+  background: var(--bgcolor2);
+}
+
+html.bn-dark-mode .Ads300x250WebPcPrime .Ads > * {
+  background: var(--bgcolor2);
+  border: 1px solid var(--accent1);
+}
+
+/* ランキング */
+html.bn-dark-mode .ForYouRankingContainer-rankingTitleSub {
+  color: var(--textcolor2);
+}
+
+html.bn-dark-mode .ForYouRankingContainer-rankingTitle > a {
+  background: var(--bgcolor2);
+  border-color: var(--accent1);
+}
+
+/* ========================================
+ * 全ページ共通のスタイル
+ * ======================================== */
+
+/* ホームのステージ背景 */
+html.bn-dark-mode .StageBackground {
+  background: var(--bgcolor1);
+}
+
+/* あなたへのおすすめ */
+html.bn-dark-mode .PersonalFrameContainer {
+  background: var(--bgcolor1);
+  border: 2px solid var(--accent1);
+}
+
+html.bn-dark-mode .PersonalFrameContainer-body,
+html.bn-dark-mode .NicoNewsContainer-photoNews {
+  background: var(--bgcolor2);
+}
+
+/* ピックアップ */
+html.bn-dark-mode .ContentsPickupCard {
+  background: var(--bgcolor2);
+}
+
+html.bn-dark-mode .ContentsPickupCard-metaPickupComment,
+html.bn-dark-mode .ContentsDigestFrame-description,
+html.bn-dark-mode .ContentsDigestFrame-cardMetaTitle,
+html.bn-dark-mode .LiveWindowContainer-metaDescription {
+  color: var(--textcolor3);
+}
+
+html.bn-dark-mode .PersonalFrameContainer-close > svg {
+  fill: var(--accent2);
+}
+
+/* もっと見る */
+html.bn-dark-mode .SeeMoreLink-text {
+  background-color: var(--bgcolor2);
+  color: var(--textcolor2);
+  border: 1px solid var(--accent2);
+}
+
+html.bn-dark-mode .SeeMoreLink-text > svg {
+  fill: var(--textcolor2);
+}
+
+/* 検索 */
+html.bn-dark-mode .CrossSearch-form {
+  background: var(--accent1);
+  border: 1px solid var(--accent2);
+}
+
+html.bn-dark-mode .CrossSearch-input::placeholder {
+  color: var(--textcolor2);
+}
+
+html.bn-dark-mode .CrossSearch-input {
+  color: var(--textcolor1);
+}
+
+html.bn-dark-mode .CrossSearch-rowSelector {
+  background-color: var(--bgcolor3);
+  border: 1px solid var(--accent2);
+}
+
+html.bn-dark-mode .suggestBox {
+  border-top: 2px solid var(--accent1);
+}
+
+html.bn-dark-mode .suggestBoxInner {
+  border: 1px solid var(--accent1);
+  background-color: var(--bgcolor2);
+}
+
+html.bn-dark-mode .suggestBoxInner li {
+  border-top: 1px dotted var(--accent1);
+  color: var(--textcolor1);
+}
+
+html.bn-dark-mode .suggestBoxInner li a {
+  color: var(--textcolor1);
+}
+
+html.bn-dark-mode .suggestBoxInner li.active,
+html.bn-dark-mode .suggestBoxInner li.active a {
+  background: var(--hover1) !important;
+  color: var(--textcolor1) !important;
+}
+
+/* ボーダー削除 */
+html.bn-dark-mode .TopPage-middleBillboardAdSection {
+  border: 0;
+}
+
+html.bn-dark-mode .TopPage-stageArea {
+  border-top: 0 solid var(--textcolor2);
+}
+
+/* フッター色変更 */
+html.bn-dark-mode .TopPage-footer {
+  background: #2f2f2f;
+}
+
+/* ニコニ広告カード */
+html.bn-dark-mode .NicoAdContainer-card[data-nicoad-grade="silver"] {
+  background-color: #3b3d3d;
+}
+
+html.bn-dark-mode .NicoAdContainer-card[data-nicoad-grade="gold"] {
+  background-color: #3b3a38;
+}
+
+/* ライブ */
+html.bn-dark-mode .LiveWindowContainer {
+  background-color: var(--bgcolor2);
+  border: 1px solid #3f3f3f;
+}
+
+/* オーロラビジョン */
+html.bn-dark-mode .AuroraVisionCard {
+  background-color: var(--bgcolor2);
+}
+
+html.bn-dark-mode .AuroraVisionCard-metaCatch {
+  color: var(--textcolor1);
+}
+
+/* ニュース */
+html.bn-dark-mode .Tabs-tab {
+  background-color: var(--accent1);
+  color: var(--textcolor1);
+}
+
+html.bn-dark-mode .NicoNewsContainer-commentCount {
+  background-color: var(--bgcolor2);
+  border: 1px solid var(--accent1);
+}
+
+/* 下側 */
+html.bn-dark-mode .RealEventInformationAreaContainer > section > h1 {
+  color: var(--textcolor2);
+}
+
+html.bn-dark-mode .RealEventInformationAreaContainer > * {
+  border-top: 4px solid var(--accent1);
+}
+
+/* ページボタン */
+html.bn-dark-mode .Paginator-item {
+  background-color: var(--bgcolor2);
+  border: 1px solid var(--accent2);
+}
+
+html.bn-dark-mode .Paginator-item_current {
+  background-color: var(--bgcolor3);
+  border: 1px solid var(--bgcolor3);
+}
+
+html.bn-dark-mode .Paginator-item_current > a:not(:hover) {
+  color: var(--textcolor3);
+}
+
+html.bn-dark-mode .Paginator-item_current > a:hover {
+  color: var(--textcolor1);
+}
+
+/* おすすめメニュー */
+html.bn-dark-mode .ThumbnailVideoMenu {
+  background: var(--bgcolor2);
+}
+
+html.bn-dark-mode .ThumbnailVideoMenu > * {
+  color: var(--textcolor1);
+}
+
+html.bn-dark-mode .ThumbnailVideoMenu > *:hover {
+  background: var(--hover1);
+  color: var(--textcolor1);
 }

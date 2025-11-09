@@ -212,7 +212,7 @@ export function apply(enabled: boolean): void {
 
 **Current page-specific features**:
 - `restoreClassicVideoLayout`: Only on `/watch/*` pages
-- `darkMode`: Only on `/watch/*` pages
+- `darkMode`: Supports `/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*` pages
 - `hidePremiumSection`, `hideOnAirAnime`: Primarily on video_top page, but check for target elements on all pages
 
 ## TypeScript Configuration
@@ -343,30 +343,41 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 
 ### 4. Dark Mode
 **Location**: `src/content/features/darkMode.ts` and `src/content/styles/darkMode.css`
-- Transforms Niconico's UI into a dark color scheme on video watch pages
-- **Implementation**: Overrides Niconico's 330+ CSS variables by adding `bn-dark-mode` class to `<html>` element
-- **CSS Architecture**: Uses CSS variable cascading to override official design tokens
+- Transforms Niconico's UI into a dark color scheme on multiple pages
+- **Supported Pages**: `/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*`
+- **Implementation**: Overrides Niconico's CSS variables by adding `bn-dark-mode` class to `<html>` element, using a base color palette with CSS relative color syntax
+- **Base Color Palette** (defined in darkMode.css):
+  - `--bgcolor1`: `#252525` (primary background)
+  - `--bgcolor2`: `#333` (secondary background)
+  - `--bgcolor3`: `#666` (tertiary background)
+  - `--textcolor1`: `#fff` (primary text)
+  - `--textcolor2`: `#ddd` (secondary text)
+  - `--textcolor3`: `#aaa` (tertiary text)
+  - `--accent1`, `--accent2`, `--hover1`, `--hover2` for accents and hover states
+- **CSS Architecture**:
+  - Uses **CSS relative color syntax** (`rgb(from var(--textcolor1) r g b / 80%)`) to dynamically generate transparency variants from base colors
+  - Maps base colors to Niconico's official CSS variables (monotone, transparent-white, transparent-gray, etc.)
   - Inverts monotone colors (l0 ↔ l100, l5 ↔ l95, etc.)
-  - Inverts transparent white/gray alpha values
   - Adjusts layer backgrounds, text colors, icons, and UI elements
   - Preserves brand colors (Niconico logo, premium gold, etc.)
-- **Color Palette**: Dark background (hsl(0 0% 8%)) with inverted lightness values
+  - Includes page-specific styles for video_top and tag pages
 - **Visual Enhancements**:
   - Custom scrollbar styling for dark theme
   - Slight image opacity reduction (0.95) for eye comfort, except video thumbnails
   - Enhanced shadows for better depth perception
 - **Idempotent**: Checks for class existence before adding/removing
-- **Page-Specific Behavior**: Only active on `/watch/*` pages
-  - Uses `isWatchPage()` to check `window.location.pathname`
-  - Automatically disabled on other pages (video_top, etc.) regardless of user setting
+- **Page-Specific Behavior**: Active on supported pages (`/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*`)
+  - Uses `isDarkModeSupported()` to check `window.location.pathname`
+  - Automatically disabled on unsupported pages regardless of user setting
 - **CSS Variables Overridden**:
   - Monotone colors (15 variables)
-  - Transparent colors (17 variables)
+  - Transparent colors (17 variables using relative color syntax)
   - Layer/background colors (30 variables)
   - Text colors (27 variables)
   - Action/button colors (25 variables)
   - Icon colors (19 variables)
   - Borders, forms, tooltips, tabs, shadows
+- **Page-Specific Styles**: Additional CSS rules for video_top and tag pages to handle specific UI elements not covered by the general CSS variable overrides
 - Default: **OFF**
 
 ## Implementation Notes
