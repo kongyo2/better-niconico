@@ -66,6 +66,7 @@ export interface BetterNiconicoSettings {
   hideOnAirAnime: boolean;
   restoreClassicVideoLayout: boolean;
   enableDarkMode: boolean;
+  enableVideoUpscaling: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
@@ -73,6 +74,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideOnAirAnime: true,
   restoreClassicVideoLayout: false,
   enableDarkMode: false,
+  enableVideoUpscaling: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -115,6 +117,7 @@ import * as hidePremiumSection from './features/hidePremiumSection';
 import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
 import * as darkMode from './features/darkMode';
+import * as videoUpscaling from './features/videoUpscaling';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -122,6 +125,7 @@ async function applySettings(): Promise<void> {
   hidePremiumSection.apply(settings.hidePremiumSection);
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
+  videoUpscaling.apply(settings.enableVideoUpscaling);
 }
 ```
 
@@ -212,6 +216,7 @@ export function apply(enabled: boolean): void {
 
 **Current page-specific features**:
 - `restoreClassicVideoLayout`: Only on `/watch/*` pages
+- `videoUpscaling`: Only on `/watch/*` pages
 - `darkMode`: Supports `/watch/*`, `/video_top*`, `/tag/*`, `/search/*`, `/ranking*` pages
 - `hidePremiumSection`, `hideOnAirAnime`: Primarily on video_top page, but check for target elements on all pages
 
@@ -401,6 +406,159 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
   - This exact pattern is essential for sidebar background styling
   - Other selectors like `.css-144b5v4` or `.css-9kofbd` alone are insufficient
 - Default: **OFF**
+
+### 5. Video Upscaling
+**Location**: `src/content/features/videoUpscaling.ts`
+**Library**: [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU) (NPM: `anime4k-webgpu`)
+- Real-time video upscaling using WebGPU compute shaders for anime content
+- Upscales video from native resolution to 2x using AI-powered enhancement
+- **Requirements**: WebGPU-compatible browser (Chrome 113+, Edge 113+)
+- **Performance**: ~3ms per frame on modern GPUs (RTX 3070Ti/4090) for 720p input
+- Only active on `/watch/*` pages
+- Default: **OFF**
+
+**CRITICAL Implementation Details**:
+
+1. **Niconico's Video Player Structure**:
+   - Player contains **3 video elements**:
+     - **Main content video** (blob: URL) - the actual video to upscale
+     - **Ad video** (inside `#nv_watch_VideoAdContainer`) - must exclude
+     - **Placeholder video** (empty, no src) - must exclude
+   - Videos are `position: absolute` inside nested aspect-ratio containers
+   - Main content video may not appear until ads finish playing
+
+2. **Video Element Detection**:
+   ```typescript
+   function isAdVideo(video: HTMLVideoElement): boolean {
+     const adContainer = document.getElementById('nv_watch_VideoAdContainer');
+     return adContainer?.contains(video) ?? false;
+   }
+
+   function isValidContentVideo(video: HTMLVideoElement): boolean {
+     return (
+       video.src !== '' &&
+       video.videoWidth > 0 &&
+       video.videoHeight > 0 &&
+       !isAdVideo(video)
+     );
+   }
+   ```
+   - **NEVER** use `document.querySelector('video')` - it may select ad/placeholder
+   - **ALWAYS** validate video has src, dimensions, and is not in ad container
+
+3. **Canvas Positioning**:
+   - Canvas must **exactly** replace video visually
+   - Copy **all** computed styles from video element:
+   ```typescript
+   canvas.style.cssText = `
+     position: ${computedStyle.position};
+     top: ${computedStyle.top};
+     left: ${computedStyle.left};
+     right: ${computedStyle.right};
+     bottom: ${computedStyle.bottom};
+     width: ${computedStyle.width};
+     height: ${computedStyle.height};
+     object-fit: ${computedStyle.objectFit};
+     transform: ${computedStyle.transform};
+     z-index: ${computedStyle.zIndex};
+   `;
+   ```
+   - Insert canvas as video's next sibling in same parent
+   - Canvas className should match video's className
+
+4. **Anime4K-WebGPU API Usage**:
+   ```typescript
+   import { render, ModeA } from 'anime4k-webgpu';
+
+   await render({
+     video,
+     canvas,
+     pipelineBuilder: (device, inputTexture) => {
+       return [
+         new ModeA({
+           device,
+           inputTexture,
+           nativeDimensions: { width: video.videoWidth, height: video.videoHeight },
+           targetDimensions: { width: canvas.width, height: canvas.height },
+         }),
+       ];
+     },
+     signal: abortController.signal, // For cleanup
+   });
+   ```
+   - `render()` function automatically:
+     - Waits for video `HAVE_FUTURE_DATA` state
+     - Sets up WebGPU render pipeline
+     - Starts render loop using `requestVideoFrameCallback`
+     - Copies video frames to canvas continuously
+   - **DO NOT** manually implement render loop
+   - **DO NOT** wait for `loadeddata` event (render() handles it)
+   - Use `AbortController.signal` for clean cleanup
+
+5. **Preset Modes**:
+   - **ModeA** (used by default): Clamp Highlights → Restore (CNNVL) → Upscale (CNNx2VL/CNNx2M)
+   - **ModeB**: Clamp Highlights → Upscale (CNNx2M) → Auto Downscale
+   - **ModeC**: Denoise (Bilateral Mean) → Upscale (CNNx2VL) → Sharpen (Deblur)
+   - Can chain custom pipelines: `CNNx2UL` (upscale) → `GANUUL` (restore)
+
+6. **Cleanup Requirements**:
+   ```typescript
+   function cleanupUpscaling() {
+     // 1. Abort render loop
+     abortController?.abort();
+
+     // 2. Remove canvas
+     canvas?.remove();
+
+     // 3. Restore video display
+     video.style.display = '';
+
+     // 4. Clear all video markers
+     videos.forEach(v => v.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE));
+   }
+   ```
+   - AbortController stops the render loop
+   - Canvas must be removed from DOM
+   - Video display must be restored
+   - All marker attributes must be cleared
+
+7. **WebGPU Support Detection**:
+   ```typescript
+   if (!navigator.gpu) {
+     console.error('WebGPU not supported');
+     return;
+   }
+
+   const adapter = await navigator.gpu.requestAdapter();
+   if (!adapter) {
+     console.error('WebGPU adapter not available');
+     return;
+   }
+   ```
+   - Cache WebGPU support check (expensive operation)
+   - Show user-friendly error if not supported
+   - **Minimum**: Chrome/Edge 113+, requires GPU with WebGPU support
+
+8. **Bundle Size**:
+   - Anime4K-WebGPU adds **~3.4 MB** to bundle (minified)
+   - Contains WebGPU shaders and CNN/GAN neural network weights
+   - This is expected and necessary for AI upscaling
+
+**Idempotency**:
+- Uses `data-bn-upscaling="active"` marker on video element
+- Checks marker before starting upscaling
+- Prevents duplicate canvas creation
+- Safe to call `apply(true)` multiple times
+
+**Error Handling**:
+- Gracefully handles AbortError (normal cleanup, don't log)
+- Logs other errors and cleans up canvas/video state
+- Continues working if video changes (page navigation, playlist)
+
+**Reference**:
+- [Anime4K-WebGPU GitHub](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)
+- [NPM Package](https://www.npmjs.com/package/anime4k-webgpu)
+- [Web Demo](https://anime4k-webgpu-demo.fly.dev/)
 
 ## Implementation Notes
 

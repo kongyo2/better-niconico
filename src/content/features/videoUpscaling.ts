@@ -1,8 +1,16 @@
 /**
  * Anime4K-WebGPUを使用した動画アップスケーリング機能
  * watch ページでのみ動作します
- * 
+ *
  * 参考: https://github.com/Anime4KWebBoost/Anime4K-WebGPU
+ *
+ * IMPORTANT IMPLEMENTATION NOTES:
+ * - Niconico's video player contains multiple <video> elements (main content, ads, placeholders)
+ * - Videos are absolutely positioned inside nested containers with aspect ratio control
+ * - Ad videos are inside #nv_watch_VideoAdContainer and must be excluded
+ * - Main content video uses blob: URLs and may not appear until ads finish
+ * - Canvas must replace video in the exact same position with same styling
+ * - The render() function from anime4k-webgpu handles its own render loop using requestVideoFrameCallback
  */
 
 import { render, ModeA } from 'anime4k-webgpu';
@@ -18,6 +26,9 @@ const CANVAS_MARKER = 'data-bn-canvas';
 
 // WebGPU対応状態のキャッシュ（初回チェック後は再利用）
 let webGPUSupportCache: boolean | null = null;
+
+// アクティブなレンダリングコントローラー（クリーンアップ用）
+let activeRenderController: AbortController | null = null;
 
 /**
  * 動画視聴ページかどうかを判定
@@ -58,33 +69,65 @@ async function isWebGPUSupported(): Promise<boolean> {
 }
 
 /**
- * 動画要素を取得
+ * 動画要素が広告かどうかを判定
+ */
+function isAdVideo(video: HTMLVideoElement): boolean {
+  // 広告コンテナ内の動画は除外
+  const adContainer = document.getElementById('nv_watch_VideoAdContainer');
+  if (adContainer && adContainer.contains(video)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 有効な動画要素かどうかを判定
+ * - src が存在する
+ * - videoWidth と videoHeight が 0 より大きい
+ * - 広告動画ではない
+ */
+function isValidContentVideo(video: HTMLVideoElement): boolean {
+  return (
+    video.src !== '' &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0 &&
+    !isAdVideo(video)
+  );
+}
+
+/**
+ * メインコンテンツの動画要素を取得
+ * - 複数の video 要素から、実際のコンテンツ動画を特定
+ * - 広告動画は除外
+ * - 空のプレースホルダー動画は除外
  */
 function getVideoElement(): HTMLVideoElement | null {
-  // ニコニコ動画のvideo要素を探す
-  const videos = Array.from(document.querySelectorAll('video'));
-
-  // プレイヤーエリア内のvideo要素を優先
+  // プレイヤーエリア内のすべてのvideo要素を取得
   const playerArea = document.querySelector('.grid-area_\\[player\\]');
-  if (playerArea) {
-    const videoInPlayer = playerArea.querySelector('video') as HTMLVideoElement;
-    if (videoInPlayer) {
-      return videoInPlayer;
-    }
+  if (!playerArea) {
+    return null;
   }
 
-  // フォールバック: 最初のvideo要素
-  if (videos.length > 0) {
-    return videos[0];
+  const videos = Array.from(playerArea.querySelectorAll('video')) as HTMLVideoElement[];
+
+  // 有効なコンテンツ動画を探す（広告とプレースホルダーを除外）
+  for (const video of videos) {
+    if (isValidContentVideo(video)) {
+      return video;
+    }
   }
 
   return null;
 }
 
 /**
- * Canvas要素を作成してvideo要素と同じ位置に配置
+ * Canvas要素を作成してvideo要素と全く同じ位置・スタイルで配置
+ * - videoと同じ親要素に配置
+ * - videoと同じ絶対位置
+ * - videoと同じサイズとスタイル
  */
-function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement {
+function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
+  // 既存のcanvasがあれば再利用
   let canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;
 
   if (!canvas) {
@@ -92,31 +135,41 @@ function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement {
     canvas.id = CANVAS_ID;
     canvas.setAttribute(CANVAS_MARKER, 'true');
 
-    // videoの親要素に挿入
-    if (video.parentElement) {
-      video.parentElement.insertBefore(canvas, video.nextSibling);
+    // videoの親要素に挿入（videoの直後）
+    if (!video.parentElement) {
+      console.error('[Better Niconico] Video element has no parent');
+      return null;
     }
+
+    // videoの次の要素として挿入
+    video.parentElement.insertBefore(canvas, video.nextSibling);
   }
 
-  // canvasのサイズとスタイルを設定
+  // videoの現在の計算済みスタイルを取得
   const computedStyle = window.getComputedStyle(video);
 
-  // 2倍のアップスケーリング（ModeAが自動的に最適な倍率を選択）
+  // アップスケーリング倍率（2倍）
   const targetWidth = video.videoWidth * 2;
   const targetHeight = video.videoHeight * 2;
 
+  // Canvas内部の解像度を設定
   canvas.width = targetWidth;
   canvas.height = targetHeight;
 
-  // videoと同じスタイルを適用してレイアウトを維持
+  // Canvasの表示スタイルをvideoと完全に一致させる
+  // position: absolute を維持し、videoと同じ配置とサイズにする
   canvas.style.cssText = `
-    position: ${video.style.position || 'relative'};
+    position: ${computedStyle.position};
+    top: ${computedStyle.top};
+    left: ${computedStyle.left};
+    right: ${computedStyle.right};
+    bottom: ${computedStyle.bottom};
     width: ${computedStyle.width};
     height: ${computedStyle.height};
-    object-fit: ${computedStyle.objectFit || 'contain'};
+    object-fit: ${computedStyle.objectFit};
+    transform: ${computedStyle.transform};
     display: block;
-    max-width: 100%;
-    max-height: 100%;
+    z-index: ${computedStyle.zIndex};
   `;
 
   // videoのクラスをコピー（レイアウトを維持）
@@ -127,28 +180,38 @@ function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement {
 
 /**
  * 動画がロード完了するまで待機
+ * anime4k-webgpu の render() 関数は内部で HAVE_FUTURE_DATA を待つが、
+ * canvas作成前に基本的な準備が整っているか確認する
  */
 async function waitForVideoReady(video: HTMLVideoElement): Promise<boolean> {
   // すでにロード済みの場合
-  if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+  if (video.readyState >= video.HAVE_METADATA && video.videoWidth && video.videoHeight) {
     return true;
   }
 
   // ロード完了を待機（タイムアウト付き）
   return new Promise<boolean>((resolve) => {
+    let resolved = false;
+
     const handler = () => {
-      video.removeEventListener('loadeddata', handler);
+      if (resolved) return;
+      resolved = true;
+      video.removeEventListener('loadedmetadata', handler);
+
       if (video.videoWidth && video.videoHeight) {
         resolve(true);
       } else {
         resolve(false);
       }
     };
-    video.addEventListener('loadeddata', handler);
+
+    video.addEventListener('loadedmetadata', handler);
 
     // タイムアウト（10秒）
     setTimeout(() => {
-      video.removeEventListener('loadeddata', handler);
+      if (resolved) return;
+      resolved = true;
+      video.removeEventListener('loadedmetadata', handler);
       resolve(false);
     }, 10000);
   });
@@ -164,7 +227,9 @@ async function enableUpscaling(): Promise<void> {
 
   const video = getVideoElement();
   if (!video) {
-    return; // 動画要素が見つからない場合は静かに終了（MutationObserverで再試行される）
+    // 動画要素が見つからない場合は静かに終了
+    // MutationObserverで再試行される
+    return;
   }
 
   // すでに有効化されている場合は何もしない（冪等性）
@@ -188,14 +253,27 @@ async function enableUpscaling(): Promise<void> {
 
   try {
     const canvas = createUpscaledCanvas(video);
+    if (!canvas) {
+      console.error('[Better Niconico] Failed to create canvas element');
+      return;
+    }
 
     console.log('[Better Niconico] Starting video upscaling with Anime4K-WebGPU', {
       nativeResolution: `${video.videoWidth}x${video.videoHeight}`,
       targetResolution: `${canvas.width}x${canvas.height}`,
     });
 
+    // 前回のレンダリングコントローラーがあれば中止
+    if (activeRenderController) {
+      activeRenderController.abort();
+    }
+
+    // 新しいAbortControllerを作成
+    activeRenderController = new AbortController();
+
     // Anime4K-WebGPUのrender関数でアップスケーリングを開始
     // ModeAプリセット: Clamp Highlights → Restore (CNNVL) → Upscale (CNNx2VL/CNNx2M)
+    // render()関数は自動的にrequestVideoFrameCallbackを使ってレンダリングループを開始する
     await render({
       video,
       canvas,
@@ -215,9 +293,11 @@ async function enableUpscaling(): Promise<void> {
           }),
         ];
       },
+      signal: activeRenderController.signal,
     });
 
     // video要素を非表示にしてcanvasを表示
+    // render()関数が開始した後に行う
     video.style.display = 'none';
     canvas.style.display = 'block';
 
@@ -226,6 +306,12 @@ async function enableUpscaling(): Promise<void> {
 
     console.log('[Better Niconico] Video upscaling enabled successfully');
   } catch (error) {
+    // AbortErrorは正常なクリーンアップなのでログに出さない
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('[Better Niconico] Video upscaling stopped (cleanup)');
+      return;
+    }
+
     console.error('[Better Niconico] Failed to enable video upscaling:', error);
 
     // エラー時のクリーンアップ
@@ -237,6 +323,12 @@ async function enableUpscaling(): Promise<void> {
  * アップスケーリングのクリーンアップ
  */
 function cleanupUpscaling(video: HTMLVideoElement | null): void {
+  // レンダリングを停止（AbortControllerでrender()のループを停止）
+  if (activeRenderController) {
+    activeRenderController.abort();
+    activeRenderController = null;
+  }
+
   // canvas要素を削除
   const canvas = document.getElementById(CANVAS_ID);
   if (canvas) {
@@ -247,6 +339,16 @@ function cleanupUpscaling(video: HTMLVideoElement | null): void {
   if (video) {
     video.style.display = '';
     video.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE);
+  }
+
+  // すべてのvideoのマーカーをクリア（念のため）
+  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  if (playerArea) {
+    const videos = playerArea.querySelectorAll('video');
+    videos.forEach((v) => {
+      (v as HTMLVideoElement).style.display = '';
+      v.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE);
+    });
   }
 }
 
