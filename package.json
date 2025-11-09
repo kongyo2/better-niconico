@@ -1,6 +1,6 @@
 {
   "name": "better-niconico",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "ニコニコ動画のレイアウトと細部を改善する拡張機能",
   "type": "module",
   "scripts": {
