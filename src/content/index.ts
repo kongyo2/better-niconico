@@ -10,6 +10,7 @@ import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
 import * as videoUpscaling from './features/videoUpscaling';
 import * as addNicoRankButton from './features/addNicoRankButton';
+import * as squareProfileIcons from './features/squareProfileIcons';
 
 /**
  * 設定を読み込む
@@ -50,6 +51,7 @@ async function applySettings(): Promise<void> {
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
   videoUpscaling.apply(settings.enableVideoUpscaling);
   addNicoRankButton.apply(settings.showNicoRankButton);
+  squareProfileIcons.apply(settings.squareProfileIcons);
 }
 
 /**

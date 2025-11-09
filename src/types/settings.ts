@@ -11,6 +11,8 @@ export interface BetterNiconicoSettings {
   enableVideoUpscaling: boolean;
   // サイドバーにnico-rank.comへのボタンを追加
   showNicoRankButton: boolean;
+  // プロフィールアイコンを丸型から四角型に変更
+  squareProfileIcons: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -20,6 +22,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   restoreClassicVideoLayout: false,
   enableVideoUpscaling: false,
   showNicoRankButton: true,
+  squareProfileIcons: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

@@ -67,6 +67,7 @@ export interface BetterNiconicoSettings {
   restoreClassicVideoLayout: boolean;
   enableVideoUpscaling: boolean;
   showNicoRankButton: boolean;
+  squareProfileIcons: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
@@ -75,6 +76,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   restoreClassicVideoLayout: false,
   enableVideoUpscaling: false,
   showNicoRankButton: true,
+  squareProfileIcons: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -118,6 +120,7 @@ import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
 import * as videoUpscaling from './features/videoUpscaling';
 import * as addNicoRankButton from './features/addNicoRankButton';
+import * as squareProfileIcons from './features/squareProfileIcons';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -126,6 +129,7 @@ async function applySettings(): Promise<void> {
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
   videoUpscaling.apply(settings.enableVideoUpscaling);
   addNicoRankButton.apply(settings.showNicoRankButton);
+  squareProfileIcons.apply(settings.squareProfileIcons);
 }
 ```
 
@@ -219,6 +223,9 @@ export function apply(enabled: boolean): void {
 - `videoUpscaling`: Only on `/watch/*` pages
 - `addNicoRankButton`: Only on `/video_top` page
 - `hidePremiumSection`, `hideOnAirAnime`: Primarily on video_top page, but check for target elements on all pages
+
+**Global features** (apply to all pages):
+- `squareProfileIcons`: CSS-based, affects all profile icons site-wide
 
 ## TypeScript Configuration
 
@@ -526,7 +533,92 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 
 **Why this feature exists**: nico-rank.com aggregates rankings from multiple sources and provides a cleaner UI for discovering popular anime content on Niconico.
 
+### 6. Square Profile Icons
+**Location**: `src/content/features/squareProfileIcons.ts`
+**Reference**: Based on [niconico-classic](https://github.com/Bymnet1845/niconico-classic)
+- Changes profile icons from circular to rounded square (border-radius: 4px)
+- **Implementation approach**: CSS-based using body class toggle
+  - Adds/removes `.bn-square-icons` class on `<body>` element
+  - CSS rules target icons when body has this class
+- **Target elements**:
+  - Header icons: `.common-header-1hpqfmt`, `.common-header-ws8uen`, `.common-header-1h5huqo`, `.common-header-n6q0ln`, `.common-header-1cb8wce`
+  - Content icons: `.bdr_full` (generic circular icon class used throughout Niconico)
+- **CSS implementation** (`src/content/index.css`):
+  ```css
+  body.bn-square-icons {
+    --bn-icon-border-radius: 4px;
+  }
+
+  body.bn-square-icons .nico-CommonHeaderRoot .common-header-1hpqfmt,
+  body.bn-square-icons .nico-CommonHeaderRoot .common-header-ws8uen,
+  body.bn-square-icons .nico-CommonHeaderRoot .common-header-1h5huqo,
+  body.bn-square-icons .nico-CommonHeaderRoot .common-header-n6q0ln,
+  body.bn-square-icons .nico-CommonHeaderRoot .common-header-1cb8wce,
+  body.bn-square-icons .bdr_full {
+    border-radius: var(--bn-icon-border-radius) !important;
+  }
+  ```
+- **Idempotent**: Safe to call multiple times (checks for class existence)
+- **Performance**: Very efficient - single class toggle, no DOM iteration
+- **Scope**: Applies to all pages (header icons visible site-wide)
+- Default: **OFF**
+
+**Why CSS-based approach**:
+- No DOM iteration required (high performance)
+- Automatically applies to dynamically loaded icons
+- Easy to enable/disable (single class toggle)
+- Consistent with niconico-classic implementation pattern
+
 ## Implementation Notes
+
+### CSS-Based vs DOM Manipulation Features
+
+There are two main approaches for implementing features:
+
+**1. CSS-Based Features** (Preferred for styling changes):
+- Use body class toggle (e.g., `body.bn-square-icons`)
+- Define CSS rules that apply when class is present
+- **Advantages**:
+  - Highest performance (no DOM iteration)
+  - Automatically applies to dynamically loaded content
+  - Simple to implement and maintain
+  - Easy to debug (inspect body classes in DevTools)
+- **When to use**: Visual styling changes, icon shapes, colors, layouts that can be controlled via CSS
+- **Example**: `squareProfileIcons` feature
+
+```typescript
+// Feature module
+export function apply(enabled: boolean): void {
+  if (enabled) {
+    document.body.classList.add('bn-feature-class');
+  } else {
+    document.body.classList.remove('bn-feature-class');
+  }
+}
+```
+
+```css
+/* CSS file */
+body.bn-feature-class .target-selector {
+  /* Your styles here */
+}
+```
+
+**2. DOM Manipulation Features** (For structural changes):
+- Query and modify DOM elements directly
+- **Advantages**:
+  - Can hide/show/move elements
+  - Can inject new HTML elements
+  - Full control over DOM structure
+- **Disadvantages**:
+  - More complex (requires idempotency checks)
+  - May need MutationObserver awareness
+  - Higher performance cost if iterating many elements
+- **When to use**: Hiding sections, adding buttons, restructuring layout, injecting new elements
+- **Examples**: `hidePremiumSection`, `addNicoRankButton`, `restoreClassicVideoLayout`
+
+**Hybrid Approach**:
+Some features use both approaches. For example, `restoreClassicVideoLayout` manipulates DOM to move elements but also modifies CSS Grid properties for layout.
 
 ### DOM Manipulation Best Practices
 

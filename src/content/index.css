@@ -5,4 +5,23 @@
   transition: opacity 0.3s ease-out, height 0.3s ease-out;
 }
 
+/* プロフィールアイコンを四角型にする */
+body.bn-square-icons {
+  /* ヘッダーのプロフィールアイコン（niconico-classicと同じセレクタ） */
+  --bn-icon-border-radius: 4px;
+}
+
+body.bn-square-icons .nico-CommonHeaderRoot .common-header-1hpqfmt,
+body.bn-square-icons .nico-CommonHeaderRoot .common-header-ws8uen,
+body.bn-square-icons .nico-CommonHeaderRoot .common-header-1h5huqo,
+body.bn-square-icons .nico-CommonHeaderRoot .common-header-n6q0ln,
+body.bn-square-icons .nico-CommonHeaderRoot .common-header-1cb8wce {
+  border-radius: var(--bn-icon-border-radius) !important;
+}
+
+/* コンテンツ内の円形アイコン（汎用） */
+body.bn-square-icons .bdr_full {
+  border-radius: var(--bn-icon-border-radius) !important;
+}
+
 /* 追加のカスタムスタイルをここに記述 */
