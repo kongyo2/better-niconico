@@ -53,6 +53,7 @@ function updateUI(settings: BetterNiconicoSettings): void {
   const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
   const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
   const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
+  const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
     hidePremiumCheckbox.checked = settings.hidePremiumSection;
@@ -69,6 +70,10 @@ function updateUI(settings: BetterNiconicoSettings): void {
   if (enableVideoUpscalingCheckbox) {
     enableVideoUpscalingCheckbox.checked = settings.enableVideoUpscaling;
   }
+
+  if (showNicoRankButtonCheckbox) {
+    showNicoRankButtonCheckbox.checked = settings.showNicoRankButton;
+  }
 }
 
 /**
@@ -79,12 +84,14 @@ function getSettingsFromUI(): BetterNiconicoSettings {
   const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
   const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
   const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
+  const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
     hideOnAirAnime: hideOnAirAnimeCheckbox?.checked ?? DEFAULT_SETTINGS.hideOnAirAnime,
     restoreClassicVideoLayout: restoreClassicVideoLayoutCheckbox?.checked ?? DEFAULT_SETTINGS.restoreClassicVideoLayout,
     enableVideoUpscaling: enableVideoUpscalingCheckbox?.checked ?? DEFAULT_SETTINGS.enableVideoUpscaling,
+    showNicoRankButton: showNicoRankButtonCheckbox?.checked ?? DEFAULT_SETTINGS.showNicoRankButton,
   };
 }
 
@@ -102,6 +109,7 @@ async function initialize(): Promise<void> {
     const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
     const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
     const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
+    const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
@@ -129,6 +137,14 @@ async function initialize(): Promise<void> {
 
     if (enableVideoUpscalingCheckbox) {
       enableVideoUpscalingCheckbox.addEventListener('change', async () => {
+        const newSettings = getSettingsFromUI();
+        await saveSettings(newSettings);
+        showStatusMessage('設定を保存しました');
+      });
+    }
+
+    if (showNicoRankButtonCheckbox) {
+      showNicoRankButtonCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         await saveSettings(newSettings);
         showStatusMessage('設定を保存しました');

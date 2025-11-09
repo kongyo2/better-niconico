@@ -9,6 +9,8 @@ export interface BetterNiconicoSettings {
   restoreClassicVideoLayout: boolean;
   // 動画アップスケーリング（Anime4K-WebGPU）を有効化
   enableVideoUpscaling: boolean;
+  // サイドバーにnico-rank.comへのボタンを追加
+  showNicoRankButton: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -17,6 +19,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideOnAirAnime: true,
   restoreClassicVideoLayout: false,
   enableVideoUpscaling: false,
+  showNicoRankButton: true,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
