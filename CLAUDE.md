@@ -328,6 +328,8 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 
 ### 3. Restore Classic Video Layout
 **Location**: `src/content/features/restoreClassicVideoLayout.ts`
+**Reference**: Based on [niconico-classic](https://github.com/Bymnet1845/niconico-classic)
+
 - Moves video information (title, tags, uploader) above the video player
 - **Keeps at bottom**: "動画の詳細情報" section and everything below it (including parent/child works, advertisements, and recommendation shelves) remain below the player
 - **Implementation approach**:
@@ -339,6 +341,14 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
   - Modifies CSS Grid's `grid-template-areas` to: `'"bottom sidebar" "player sidebar" "bn-bottom sidebar"'`
   - Sets `grid-template-rows: 'auto auto auto'` (NOT `min-content` - see critical note below)
   - Sets `align-items: start` on parent and `align-self: start` on grid items
+- **Fullscreen Mode Handling** (CRITICAL):
+  - **Detection**: Uses Fullscreen API (`document.fullscreenElement`) as primary detection method, with DOM-based detection (`.grid-area_[player] > .w_[100dvw].h_[100dvh]` element) as fallback
+  - **Event-driven approach**: Uses `fullscreenchange` event listener to reliably catch fullscreen transitions (MutationObserver alone is insufficient)
+  - **When entering fullscreen**: Automatically reverts to default layout to prevent black screen bug
+  - **During fullscreen**: Skips applying classic layout modifications to avoid breaking fullscreen video display
+  - **After exiting fullscreen**: Automatically re-applies classic layout if setting is enabled (100ms delay for DOM updates)
+  - **State management**: Maintains `currentEnabled` variable to track user settings across fullscreen transitions
+  - **Listener setup**: `setupFullscreenListener()` is called once on first `apply()` call to register the event handler
 - **Cleanup**: When disabled, moves sections back to original container, restores Tailwind classes, resets all styles, and removes created elements
 - **CRITICAL**: The sidebar spans all 3 rows and is ~5460px tall. Without `max-height`, it dominates grid row sizing. Using `min-content` causes each row to become massive (1600-1900px) creating huge gaps above and below the player. The `auto` + `max-height` solution allows proper layout.
 - **IMPORTANT**: Niconico uses CSS Grid with `grid-template-areas`, so DOM element reordering alone does not affect visual layout
@@ -768,10 +778,22 @@ When working with CSS Grid layouts, especially with items that span multiple row
   - Grid template rows should be `auto auto auto`, not `min-content`
   - Sidebar should have `max-height` constraint
   - Tailwind grid classes (`grid-tr_`, `grid-template-areas_`, `grid-tc_`) should be removed before applying inline styles
+- **If fullscreen video shows black screen with classic layout enabled**:
+  - Verify `isFullscreenMode()` uses Fullscreen API (`document.fullscreenElement`) as primary detection
+  - Ensure `setupFullscreenListener()` is properly registering `fullscreenchange` event listener
+  - Check that `fullscreenchange` handler calls `restoreDefaultLayout()` when entering fullscreen
+  - Confirm console logs show: `[Better Niconico] 全画面表示に入りました。レイアウトをデフォルトに戻します。`
+  - After exiting fullscreen, verify logs show: `[Better Niconico] 全画面表示から抜けました。` and `[Better Niconico] クラシックレイアウトを再適用します。`
+  - The event-driven approach is essential - MutationObserver alone cannot reliably catch fullscreen transitions
+  - Reference: [niconico-classic](https://github.com/Bymnet1845/niconico-classic/blob/develop/style/video-common.css#L142-L156)
 
 ### General Notes
 
-- **MutationObserver**: Essential for Niconico because content loads dynamically. Observer watches for new DOM nodes and re-applies settings.
+- **MutationObserver**: Essential for Niconico because content loads dynamically. Observer watches for new DOM nodes and re-applies settings. However, MutationObserver alone is **insufficient for all DOM changes** - some transitions (like fullscreen mode) require dedicated event listeners.
+- **When to use event listeners vs MutationObserver**:
+  - Use **event listeners** for: User-triggered state changes (fullscreen, resize, focus), browser API events, media events
+  - Use **MutationObserver** for: Dynamic content loading, DOM element additions/removals by the site
+  - Example: Fullscreen transitions require `fullscreenchange` event listener; MutationObserver cannot reliably detect the transition moment
 - **Chrome Storage Sync**: Settings sync across devices where user is logged into Chrome
 - **Error Handling**: Always check `chrome.runtime.lastError` in Chrome API callbacks
 - **Typing**: Avoid `any`, use `unknown` or proper types. Import types from `vite` when needed (e.g., `NormalizedOutputOptions`)

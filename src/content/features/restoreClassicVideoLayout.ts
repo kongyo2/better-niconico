@@ -11,9 +11,32 @@ const LAYOUT_DEFAULT = 'default';
 const BOTTOM_CONTAINER_ID = 'bn-bottom-sections';
 const BOTTOM_CONTAINER_MARKER = 'data-bn-bottom-container';
 
+// 現在の設定状態を保持（全画面表示から抜けた後の再適用に使用）
+let currentEnabled = false;
+
+// 全画面表示イベントリスナーのセットアップ状態
+let listenerSetup = false;
+
 // 動画視聴ページかどうかを判定
 function isWatchPage(): boolean {
   return window.location.pathname.startsWith('/watch/');
+}
+
+/**
+ * 全画面表示中かどうかを判定
+ * Fullscreen APIを使用した確実な検出 + フォールバック
+ */
+function isFullscreenMode(): boolean {
+  // Fullscreen APIを使った検出（最も確実）
+  if (document.fullscreenElement) {
+    return true;
+  }
+
+  // フォールバック: DOM要素ベースの検出
+  // 全画面表示時には .grid-area_[player] の直下に .w_[100dvw].h_[100dvh] という要素が出現する
+  // 参考: https://github.com/Bymnet1845/niconico-classic
+  const fullscreenElement = document.querySelector('.grid-area_\\[player\\] > .w_\\[100dvw\\].h_\\[100dvh\\]');
+  return fullscreenElement !== null;
 }
 
 /**
@@ -51,6 +74,13 @@ function getOrCreateBottomContainer(gridParent: HTMLElement): HTMLElement {
  */
 function restoreClassicLayout(): void {
   if (!isWatchPage()) {
+    return;
+  }
+
+  // 全画面表示中の場合は、レイアウト変更をスキップ
+  // 全画面表示中にグリッドレイアウトを変更すると画面が真っ暗になるため
+  if (isFullscreenMode()) {
+    console.log('[Better Niconico] 全画面表示中のため、クラシックレイアウトの適用をスキップします');
     return;
   }
 
@@ -227,11 +257,57 @@ function restoreDefaultLayout(): void {
 }
 
 /**
+ * 全画面表示イベントのリスナーをセットアップ
+ * 全画面表示への遷移を確実に捕捉し、レイアウトを適切に切り替える
+ */
+function setupFullscreenListener(): void {
+  if (!isWatchPage()) {
+    return;
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) {
+      // 全画面表示に入った - 強制的にデフォルトレイアウトに戻す
+      console.log('[Better Niconico] 全画面表示に入りました。レイアウトをデフォルトに戻します。');
+      restoreDefaultLayout();
+    } else {
+      // 全画面表示から抜けた - 設定がONなら自動的にクラシックレイアウトを再適用
+      console.log('[Better Niconico] 全画面表示から抜けました。');
+      if (currentEnabled) {
+        // DOM更新を待つために少し遅延させる
+        setTimeout(() => {
+          console.log('[Better Niconico] クラシックレイアウトを再適用します。');
+          restoreClassicLayout();
+        }, 100);
+      }
+    }
+  });
+
+  console.log('[Better Niconico] 全画面表示イベントリスナーをセットアップしました');
+}
+
+/**
  * 設定を適用する
  * @param enabled - true: クラシックレイアウト, false: デフォルトレイアウト
  */
 export function apply(enabled: boolean): void {
+  // 現在の設定状態を保存
+  currentEnabled = enabled;
+
+  // 初回のみ全画面表示イベントリスナーをセットアップ
+  if (!listenerSetup && isWatchPage()) {
+    setupFullscreenListener();
+    listenerSetup = true;
+  }
+
   if (enabled) {
+    // 全画面表示中は適用しない（fullscreenchangeイベントで処理）
+    if (isFullscreenMode()) {
+      console.log('[Better Niconico] 全画面表示中のため、クラシックレイアウトの適用をスキップします');
+      return;
+    }
+
+    // 通常時はクラシックレイアウトを適用
     restoreClassicLayout();
   } else {
     restoreDefaultLayout();
