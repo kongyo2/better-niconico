@@ -52,7 +52,6 @@ function updateUI(settings: BetterNiconicoSettings): void {
   const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
   const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
   const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
-  const enableDarkModeCheckbox = document.getElementById('enableDarkMode') as HTMLInputElement;
   const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
@@ -67,10 +66,6 @@ function updateUI(settings: BetterNiconicoSettings): void {
     restoreClassicVideoLayoutCheckbox.checked = settings.restoreClassicVideoLayout;
   }
 
-  if (enableDarkModeCheckbox) {
-    enableDarkModeCheckbox.checked = settings.enableDarkMode;
-  }
-
   if (enableVideoUpscalingCheckbox) {
     enableVideoUpscalingCheckbox.checked = settings.enableVideoUpscaling;
   }
@@ -83,14 +78,12 @@ function getSettingsFromUI(): BetterNiconicoSettings {
   const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
   const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
   const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
-  const enableDarkModeCheckbox = document.getElementById('enableDarkMode') as HTMLInputElement;
   const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
     hideOnAirAnime: hideOnAirAnimeCheckbox?.checked ?? DEFAULT_SETTINGS.hideOnAirAnime,
     restoreClassicVideoLayout: restoreClassicVideoLayoutCheckbox?.checked ?? DEFAULT_SETTINGS.restoreClassicVideoLayout,
-    enableDarkMode: enableDarkModeCheckbox?.checked ?? DEFAULT_SETTINGS.enableDarkMode,
     enableVideoUpscaling: enableVideoUpscalingCheckbox?.checked ?? DEFAULT_SETTINGS.enableVideoUpscaling,
   };
 }
@@ -108,7 +101,6 @@ async function initialize(): Promise<void> {
     const hidePremiumCheckbox = document.getElementById('hidePremiumSection') as HTMLInputElement;
     const hideOnAirAnimeCheckbox = document.getElementById('hideOnAirAnime') as HTMLInputElement;
     const restoreClassicVideoLayoutCheckbox = document.getElementById('restoreClassicVideoLayout') as HTMLInputElement;
-    const enableDarkModeCheckbox = document.getElementById('enableDarkMode') as HTMLInputElement;
     const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
@@ -129,14 +121,6 @@ async function initialize(): Promise<void> {
 
     if (restoreClassicVideoLayoutCheckbox) {
       restoreClassicVideoLayoutCheckbox.addEventListener('change', async () => {
-        const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
-      });
-    }
-
-    if (enableDarkModeCheckbox) {
-      enableDarkModeCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         await saveSettings(newSettings);
         showStatusMessage('設定を保存しました');
