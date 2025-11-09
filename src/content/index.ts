@@ -8,7 +8,6 @@ import { DEFAULT_SETTINGS, STORAGE_KEY } from '../types/settings';
 import * as hidePremiumSection from './features/hidePremiumSection';
 import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
-import * as darkMode from './features/darkMode';
 import * as videoUpscaling from './features/videoUpscaling';
 
 /**
@@ -45,7 +44,6 @@ async function applySettings(): Promise<void> {
   const settings = await loadSettings();
 
   // 各機能を適用
-  darkMode.apply(settings.enableDarkMode);
   hidePremiumSection.apply(settings.hidePremiumSection);
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
