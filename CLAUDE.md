@@ -360,7 +360,10 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
   - Inverts monotone colors (l0 ↔ l100, l5 ↔ l95, etc.)
   - Adjusts layer backgrounds, text colors, icons, and UI elements
   - Preserves brand colors (Niconico logo, premium gold, etc.)
-  - Includes page-specific styles for video_top and tag pages
+  - **Three-section structure** (based on niconico-peppermint-extension):
+    1. **Sidebar styles** - Global sidebar dark mode (`sidebar.styl` equivalent)
+    2. **video_top styles** - Page-specific dark mode (`videotop.styl` equivalent)
+    3. **Common styles** - Shared across all pages (`global.styl` equivalent)
 - **Visual Enhancements**:
   - Custom scrollbar styling for dark theme
   - Slight image opacity reduction (0.95) for eye comfort, except video thumbnails
@@ -377,7 +380,26 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
   - Action/button colors (25 variables)
   - Icon colors (19 variables)
   - Borders, forms, tooltips, tabs, shadows
-- **Page-Specific Styles**: Additional CSS rules for video_top and tag pages to handle specific UI elements not covered by the general CSS variable overrides
+- **CRITICAL - Reference Implementation**: The dark mode CSS is based on [niconico-peppermint-extension](https://github.com/castella-cake/niconico-peppermint-extension)
+  - When fixing dark mode issues, **always reference this repository first**
+  - Key reference files:
+    - `entrypoints/style/modules/darkmode/pages/all/sidebar.styl` - For sidebar styling issues
+    - `entrypoints/style/modules/darkmode/pages/all/videotop.styl` - For video_top page issues
+    - `entrypoints/style/modules/darkmode/pages/all/global.styl` - For common styling issues
+    - `entrypoints/style/modules/darkmode/pages/modernPageScheme.styl` - For CSS variable mappings
+  - The reference uses Stylus syntax, convert to standard CSS when adapting
+- **CSS-in-JS Challenges**: Niconico uses CSS-in-JS with dynamically generated class names (e.g., `.css-144b5v4`, `.css-d9fec`)
+  - These class names are **critical** for targeting specific elements
+  - When dark mode styling fails, inspect the actual DOM to find current CSS-in-JS class names
+  - Use browser DevTools to identify the correct selectors
+  - Reference implementation provides comprehensive list of known CSS-in-JS classes
+- **Sidebar Critical Selector**: The left sidebar on video_top requires this specific selector pattern:
+  ```css
+  #VideoMenuDrawer-app > div > div > div,
+  .NC-VideoMenuDrawerPlaceHolder > .NC-VideoMenuDrawerPlaceHolder-wrapper
+  ```
+  - This exact pattern is essential for sidebar background styling
+  - Other selectors like `.css-144b5v4` or `.css-9kofbd` alone are insufficient
 - Default: **OFF**
 
 ## Implementation Notes
@@ -561,6 +583,24 @@ When working with CSS Grid layouts, especially with items that span multiple row
 2. Test toggling settings on/off multiple times
 3. Test on pages with dynamic content loading (scroll, click tabs)
 4. Check that unrelated sections remain unaffected
+
+**CRITICAL: MCP Chrome Testing Limitations**:
+- Claude Code has access to a **plain Chrome browser via MCP tools** for automated testing
+- This Chrome instance is a **dedicated, isolated environment** that **CANNOT load Chrome extensions**
+- Extension injection into MCP Chrome is **technically impossible** - it's designed for automated testing only
+- This MCP Chrome is **completely separate** from the user's regular Chrome browser
+- The user **cannot inject extensions** into the MCP Chrome either
+- **Only the user** can test the extension in their own Chrome browser (which Claude cannot access)
+- Therefore, Claude **cannot verify** actual extension behavior, UI changes, or feature functionality
+- Claude can only:
+  - Read/analyze code and CSS
+  - Make code changes based on user descriptions
+  - Build the extension (`npm run build`)
+  - View static snapshots/screenshots provided by the user
+- **User must manually test** all changes in their own Chrome browser after:
+  1. Running `npm run build` (or using `npm run dev` for auto-rebuild)
+  2. Reloading the extension in `chrome://extensions/`
+  3. Refreshing the target nicovideo.jp page
 
 **Common Issues**:
 - If a feature "stops working", check if MutationObserver is triggering too frequently

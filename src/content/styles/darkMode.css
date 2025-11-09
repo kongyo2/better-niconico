@@ -39,6 +39,12 @@ html.bn-dark-mode {
   /* ホバー色2 */
   --hover2: #aaa;
 
+  /* ニコるレベル別カラー */
+  --nicoru1: rgba(252, 216, 66, 0.1);
+  --nicoru2: rgba(252, 216, 66, 0.2);
+  --nicoru3: rgba(252, 216, 66, 0.4);
+  --nicoru4: rgba(252, 216, 66, 0.6);
+
   /* ========================================
    * 基本カラーパレット (Monotone)
    * 相対色構文を使用して動的に生成
@@ -114,8 +120,14 @@ html.bn-dark-mode {
   --colors-layer-surface-overlay-black: var(--colors-transparent-gray--a80);
   --colors-layer-content-overlay: var(--colors-transparent-gray--a80);
 
+  /* アクセントサーフェス */
+  --colors-layer-surface-accent-azure: var(--colors-azure--l50);
+
   /* スケルトン (ローディング) */
   --colors-layer-skeleton: linear-gradient(to right, #0000, #ffffff1a, #0000);
+
+  /* ヘッダー通知 */
+  --colors-layer-header-notification-warning: var(--colors-lust--l70);
 
   /* ========================================
    * テキストカラー (Text)
@@ -138,6 +150,11 @@ html.bn-dark-mode {
   /* 訪問済みリンク */
   --colors-text-on-layer-visited: var(--bgcolor4);
 
+  /* アクセントテキスト */
+  --colors-text-on-layer-accent-azure: var(--colors-azure--l50);
+  --colors-text-on-layer-accent-lust: var(--colors-lust--l50);
+  --colors-text-on-layer-premium: #d9a300;
+
   /* ラベル上のテキスト */
   --colors-text-on-label-white: var(--bgcolor1);
   --colors-text-on-label-gray: var(--textcolor1);
@@ -157,11 +174,41 @@ html.bn-dark-mode {
   --colors-action-primary-hover: var(--colors-transparent-white--a80);
   --colors-action-text-on-primary: var(--bgcolor2);
 
+  /* プライマリアクション - Azure */
+  --colors-action-primary-azure: var(--colors-azure--l50);
+  --colors-action-primary-azure-hover: var(--colors-azure--l40);
+  --colors-action-text-on-primary-azure: var(--colors-azure--l95);
+
+  /* プライマリアクション - Premium */
+  --colors-action-primary-premium: var(--colors-marigold--l40);
+  --colors-action-primary-premium-hover: var(--colors-marigold--l30);
+  --colors-action-text-on-primary-premium: var(--colors-azure--l95);
+
+  /* プライマリアクション - Channel */
+  --colors-action-primary-channel: #ffe248;
+  --colors-action-primary-channel-hover: #ffd700;
+  --colors-action-text-on-primary-channel: var(--bgcolor2);
+
+  /* プライマリアクション - Dアニメ */
+  --colors-action-primary-d-anime: var(--colors-pumpkin--l50);
+  --colors-action-primary-d-anime-hover: var(--colors-pumpkin--l40);
+  --colors-action-text-on-primary-d-anime: var(--textcolor1);
+
   /* ターシャリアクション */
   --colors-action-tertiary-hover: var(--colors-transparent-white--a10);
   --colors-action-text-on-tertiary: var(--bgcolor4);
   --colors-action-tertiary-inv-hover: var(--colors-transparent-gray--a5);
   --colors-action-text-on-tertiary-inv: var(--bgcolor4);
+
+  /* ターシャリアクション - Azure */
+  --colors-action-tertiary-azure-hover: var(--colors-azure--l20);
+  --colors-action-text-on-tertiary-azure: var(--colors-azure--l50);
+  --colors-action-tertiary-azure-inv-hover: var(--colors-azure--l90);
+  --colors-action-text-on-tertiary-azure-inv: var(--colors-azure--l50);
+
+  /* ターシャリアクション - Premium */
+  --colors-action-tertiary-premium-hover: var(--colors-marigold--l20);
+  --colors-action-text-on-tertiary-premium: #d9a300;
 
   /* ターシャリ - ホワイト */
   --colors-action-tertiary-white-base: var(--colors-transparent-white--a20);
@@ -175,6 +222,9 @@ html.bn-dark-mode {
   --colors-action-tag-help: var(--bgcolor4);
   --colors-action-tag-help-hover: var(--bgcolor4);
 
+  /* タグのニコニ大辞典 */
+  --colors-action-tag-nico-dic-hover: var(--colors-lust--l25);
+
   /* ========================================
    * アイコンカラー (Icon)
    * ======================================== */
@@ -186,6 +236,11 @@ html.bn-dark-mode {
   /* プライマリアイコン */
   --colors-icon-primary: var(--bgcolor4);
   --colors-icon-primary-white: var(--textcolor1);
+  --colors-icon-primary-azure: var(--colors-azure--l50);
+
+  /* ロックアイコン */
+  --colors-icon-lock: var(--colors-marigold--l40);
+  --colors-icon-unlock: var(--bgcolor4);
 
   /* ビデオ説明アイコン */
   --colors-icon-video-description: var(--bgcolor4);
@@ -200,6 +255,7 @@ html.bn-dark-mode {
 
   /* ニコるアイコン */
   --colors-icon-nicoru-on-background: var(--bgcolor2);
+  --colors-icon-nicoru-on-stroke: #fcd842;
   --colors-icon-nicoru-off-background: var(--bgcolor2);
   --colors-icon-nicoru-off-stroke: var(--bgcolor4);
 
@@ -248,12 +304,72 @@ html.bn-dark-mode {
   --shadows-base-bottom: 0 4px 8px -4px rgba(0, 0, 0, 0.8);
 
   /* ========================================
-   * サービス固有カラー (維持)
-   * これらの色はブランドカラーなので変更しない
+   * サービス固有カラー
+   * ブランドカラーなので基本的に維持するが、一部ダークモード用に調整
    * ======================================== */
 
-  /* ニコニコ動画ロゴは白のままにする */
+  /* ニコニコ動画ロゴ */
   --colors-service-color-nicovideo-logo: var(--textcolor1);
+
+  /* ニコニコ生放送 */
+  --colors-service-color-live: #ff0033;
+
+  /* プレミアム会員 */
+  --colors-service-color-premium: #d9a300;
+  --colors-service-color-paid: #ffe248;
+
+  /* チャンネル */
+  --colors-service-color-ch: var(--bgcolor4);
+  --colors-service-color-ch-yellow: #ffe248;
+  --colors-service-color-ch-yellow-high-em: #ffd700;
+
+  /* ニコニコ大辞典 */
+  --colors-service-color-nicodic: var(--colors-lust--l40);
+
+  /* ニコるカラー（レベル別） */
+  --colors-service-color-nicoru-yellow-a10: var(--nicoru1);
+  --colors-service-color-nicoru-yellow-a20: var(--nicoru2);
+  --colors-service-color-nicoru-yellow-a40: var(--nicoru3);
+  --colors-service-color-nicoru-yellow-a60: var(--nicoru4);
+
+  /* ニコニ広告 */
+  --colors-service-color-nicoad-gold: #dca000;
+  --colors-service-color-nicoad-silver: #bec8c8;
+  --colors-service-color-nicoad-gray: #889c9c;
+
+  /* コメントリストのニコる */
+  --colors-comment-list-nicoru-lv1: var(--colors-service-color-nicoru-yellow-a10);
+  --colors-comment-list-nicoru-lv2: var(--colors-service-color-nicoru-yellow-a20);
+  --colors-comment-list-nicoru-lv3: var(--colors-service-color-nicoru-yellow-a40);
+  --colors-comment-list-nicoru-lv4: var(--colors-service-color-nicoru-yellow-a60);
+
+  /* ランキンググレード */
+  --colors-ranking-grade-gold: #c2940a;
+  --colors-ranking-grade-silver: #1466b8;
+  --colors-ranking-grade-bronze: #b86614;
+  --colors-ranking-grade-others: #7f7f7f;
+
+  /* 実績テキスト */
+  --colors-achievement-text-legend: #f2b90d;
+  --colors-achievement-text-star: #eb4799;
+  --colors-achievement-text-hope: #4799eb;
+  --colors-achievement-text-pleasure: #66b814;
+}
+
+/* ========================================
+ * Tailwind任意値クラスのオーバーライド
+ * ======================================== */
+
+html.bn-dark-mode .\:bg-c_transparentWhite\.A95 {
+  background-color: var(--colors-transparent-white--a95) !important;
+}
+
+html.bn-dark-mode .\:fill_transparentGray\.A95 {
+  fill: var(--colors-transparent-gray--a95) !important;
+}
+
+html.bn-dark-mode .\:c_transparentGray\.A95 {
+  color: var(--colors-transparent-gray--a95) !important;
 }
 
 /* ========================================
@@ -297,7 +413,97 @@ html.bn-dark-mode img[src*="nicovideo.cdn.nimg.jp"] {
 }
 
 /* ========================================
+ * 左サイドバー (Sidebar) - 全ページ共通
+ * 参考: niconico-peppermint-extension/sidebar.styl
+ * ======================================== */
+
+/* サイドバーの背景 - 重要なセレクター */
+html.bn-dark-mode #VideoMenuDrawer-app > div > div > div,
+html.bn-dark-mode .NC-VideoMenuDrawerPlaceHolder > .NC-VideoMenuDrawerPlaceHolder-wrapper {
+  background: var(--bgcolor2) !important;
+}
+
+/* サイドバー内のCSS-in-JS要素 */
+html.bn-dark-mode .css-16zug1i {
+  color: var(--accent2) !important;
+}
+
+html.bn-dark-mode .css-10iwwxw {
+  background: var(--bgcolor1) !important;
+}
+
+html.bn-dark-mode .css-qkib1w * {
+  fill: var(--textcolor1) !important;
+}
+
+html.bn-dark-mode .css-d9fec {
+  color: var(--textcolor1) !important;
+}
+
+html.bn-dark-mode .css-d9fec:hover,
+html.bn-dark-mode .css-owmlql:hover {
+  color: var(--textcolor2) !important;
+}
+
+html.bn-dark-mode .css-d9fec:hover svg path,
+html.bn-dark-mode .css-owmlql:hover svg path {
+  fill: var(--textcolor2) !important;
+}
+
+html.bn-dark-mode .css-1tjdbbb {
+  color: var(--textcolor1) !important;
+}
+
+html.bn-dark-mode .css-1tjdbbb svg path,
+html.bn-dark-mode .css-1rgc6aq svg path {
+  fill: var(--textcolor1) !important;
+}
+
+html.bn-dark-mode .css-1tjdbbb:hover,
+html.bn-dark-mode .css-1rgc6aq:hover {
+  color: var(--textcolor2) !important;
+  background: var(--accent2) !important;
+}
+
+html.bn-dark-mode .css-1tjdbbb:hover svg path,
+html.bn-dark-mode .css-1rgc6aq:hover svg path {
+  fill: var(--textcolor2) !important;
+}
+
+html.bn-dark-mode .css-1rgc6aq {
+  color: var(--textcolor1) !important;
+  background: var(--accent1) !important;
+}
+
+html.bn-dark-mode .css-144b5v4 button > svg > path,
+html.bn-dark-mode .css-14y3bdu > svg > path,
+html.bn-dark-mode .css-54sd46:hover svg path,
+html.bn-dark-mode .css-ns7xss:hover svg path,
+html.bn-dark-mode .css-1xvl3dk:hover svg path,
+html.bn-dark-mode .css-16zbbkw:hover svg path {
+  fill: var(--textcolor1);
+}
+
+html.bn-dark-mode .css-16zbbkw svg path,
+html.bn-dark-mode .css-ns7xss svg path {
+  fill: var(--textcolor3);
+}
+
+html.bn-dark-mode .css-16zbbkw {
+  color: var(--textcolor3) !important;
+}
+
+html.bn-dark-mode .css-54sd46:hover,
+html.bn-dark-mode .css-ns7xss:hover,
+html.bn-dark-mode .css-1xvl3dk:hover,
+html.bn-dark-mode .css-16zbbkw:hover {
+  background: var(--hover1);
+  color: var(--textcolor1) !important;
+}
+
+/* ========================================
  * video_top ページ専用のスタイル
+ * 参考: niconico-peppermint-extension/videotop.styl
  * ======================================== */
 
 /* 動画カードのフッター */
@@ -313,6 +519,12 @@ html.bn-dark-mode .ColumnTitle-linkText {
 /* タグ付き動画アイテム */
 html.bn-dark-mode .TagWithVideoItem-articleLink {
   background: linear-gradient(90deg, hsla(0, 0%, 96%, 0), var(--bgcolor1) 20px);
+}
+
+/* 動画サムネイル上のタグバッジ */
+html.bn-dark-mode .TagItem-link {
+  background-color: var(--bgcolor3) !important;
+  color: var(--textcolor1) !important;
 }
 
 /* 履歴ボタン */
@@ -463,7 +675,7 @@ html.bn-dark-mode .Ads300x250WebPcPrime .Ads > * {
   border: 1px solid var(--accent1);
 }
 
-/* ランキング */
+/* ランキング - 「このタグランキングをもっと見る」ボタン */
 html.bn-dark-mode .ForYouRankingContainer-rankingTitleSub {
   color: var(--textcolor2);
 }
@@ -471,6 +683,7 @@ html.bn-dark-mode .ForYouRankingContainer-rankingTitleSub {
 html.bn-dark-mode .ForYouRankingContainer-rankingTitle > a {
   background: var(--bgcolor2);
   border-color: var(--accent1);
+  color: var(--textcolor1) !important;
 }
 
 /* ========================================
