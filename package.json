@@ -32,5 +32,8 @@
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
     "vite-tsconfig-paths": "^5.1.4"
+  },
+  "dependencies": {
+    "anime4k-webgpu": "^1.0.0"
   }
 }
