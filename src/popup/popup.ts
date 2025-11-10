@@ -55,6 +55,7 @@ function updateUI(settings: BetterNiconicoSettings): void {
   const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
   const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
   const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
+  const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
     hidePremiumCheckbox.checked = settings.hidePremiumSection;
@@ -79,6 +80,10 @@ function updateUI(settings: BetterNiconicoSettings): void {
   if (squareProfileIconsCheckbox) {
     squareProfileIconsCheckbox.checked = settings.squareProfileIcons;
   }
+
+  if (hideSupporterButtonCheckbox) {
+    hideSupporterButtonCheckbox.checked = settings.hideSupporterButton;
+  }
 }
 
 /**
@@ -91,6 +96,7 @@ function getSettingsFromUI(): BetterNiconicoSettings {
   const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
   const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
   const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
+  const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
@@ -99,6 +105,7 @@ function getSettingsFromUI(): BetterNiconicoSettings {
     enableVideoUpscaling: enableVideoUpscalingCheckbox?.checked ?? DEFAULT_SETTINGS.enableVideoUpscaling,
     showNicoRankButton: showNicoRankButtonCheckbox?.checked ?? DEFAULT_SETTINGS.showNicoRankButton,
     squareProfileIcons: squareProfileIconsCheckbox?.checked ?? DEFAULT_SETTINGS.squareProfileIcons,
+    hideSupporterButton: hideSupporterButtonCheckbox?.checked ?? DEFAULT_SETTINGS.hideSupporterButton,
   };
 }
 
@@ -118,6 +125,7 @@ async function initialize(): Promise<void> {
     const enableVideoUpscalingCheckbox = document.getElementById('enableVideoUpscaling') as HTMLInputElement;
     const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
     const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
+    const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
@@ -161,6 +169,14 @@ async function initialize(): Promise<void> {
 
     if (squareProfileIconsCheckbox) {
       squareProfileIconsCheckbox.addEventListener('change', async () => {
+        const newSettings = getSettingsFromUI();
+        await saveSettings(newSettings);
+        showStatusMessage('設定を保存しました');
+      });
+    }
+
+    if (hideSupporterButtonCheckbox) {
+      hideSupporterButtonCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         await saveSettings(newSettings);
         showStatusMessage('設定を保存しました');

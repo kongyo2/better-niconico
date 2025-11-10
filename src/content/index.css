@@ -184,4 +184,22 @@ body.bn-square-icons .ChannelIcon {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
+/* サポーターボタンを非表示 */
+body.bn-hide-supporter {
+  /* 現在のニコニコ動画: creator-support.nicovideo.jpへのリンク */
+  a[href*="creator-support.nicovideo.jp"] {
+    display: none !important;
+  }
+
+  /* 旧バージョン: NC-CreatorSupportAccepting クラス（後方互換性） */
+  .NC-CreatorSupportAccepting {
+    display: none !important;
+  }
+
+  /* サポーター勧誘コンテナ */
+  .CreatorSupportAppealContainer {
+    display: none !important;
+  }
+}
+
 /* 追加のカスタムスタイルをここに記述 */

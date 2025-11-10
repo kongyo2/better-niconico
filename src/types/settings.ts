@@ -13,6 +13,8 @@ export interface BetterNiconicoSettings {
   showNicoRankButton: boolean;
   // プロフィールアイコンを丸型から四角型に変更
   squareProfileIcons: boolean;
+  // サポーターボタンを非表示
+  hideSupporterButton: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   enableVideoUpscaling: false,
   showNicoRankButton: true,
   squareProfileIcons: false,
+  hideSupporterButton: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

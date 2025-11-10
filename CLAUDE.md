@@ -71,6 +71,7 @@ export interface BetterNiconicoSettings {
   enableVideoUpscaling: boolean;
   showNicoRankButton: boolean;
   squareProfileIcons: boolean;
+  hideSupporterButton: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
@@ -80,6 +81,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   enableVideoUpscaling: false,
   showNicoRankButton: true,
   squareProfileIcons: false,
+  hideSupporterButton: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -124,6 +126,7 @@ import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout
 import * as videoUpscaling from './features/videoUpscaling';
 import * as addNicoRankButton from './features/addNicoRankButton';
 import * as squareProfileIcons from './features/squareProfileIcons';
+import * as hideSupporterButton from './features/hideSupporterButton';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -133,6 +136,7 @@ async function applySettings(): Promise<void> {
   videoUpscaling.apply(settings.enableVideoUpscaling);
   addNicoRankButton.apply(settings.showNicoRankButton);
   squareProfileIcons.apply(settings.squareProfileIcons);
+  hideSupporterButton.apply(settings.hideSupporterButton);
 }
 ```
 
@@ -229,6 +233,7 @@ export function apply(enabled: boolean): void {
 
 **Global features** (apply to all pages):
 - `squareProfileIcons`: CSS-based, affects all profile icons site-wide
+- `hideSupporterButton`: CSS-based, hides supporter buttons and appeals on all pages
 
 ## TypeScript Configuration
 
@@ -603,6 +608,49 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - Test across multiple Niconico services (video, live, seiga, channel) to ensure comprehensive coverage
 - The `--radii-m` CSS variable is used on video pages for consistency with Niconico's design system
 
+### 7. Hide Supporter Button
+**Location**: `src/content/features/hideSupporterButton.ts`
+**Reference**: Based on [niconico-peppermint-extension](https://github.com/castella-cake/niconico-peppermint-extension)
+- Hides "サポート" (Support) button and supporter appeal messages on watch pages
+- **Implementation approach**: CSS-based using body class toggle
+  - Adds/removes `.bn-hide-supporter` class on `<body>` element
+  - CSS rules hide supporter-related elements when body has this class
+- **Comprehensive Coverage**: The CSS (`src/content/index.css`) targets:
+  - **Current Niconico**: `a[href*="creator-support.nicovideo.jp"]` - Main supporter button link
+  - **Legacy support**: `.NC-CreatorSupportAccepting` - Older class name (backward compatibility)
+  - **Appeal containers**: `.CreatorSupportAppealContainer` - Supporter recruitment banners
+- **CSS implementation** (`src/content/index.css`):
+  ```css
+  body.bn-hide-supporter {
+    /* 現在のニコニコ動画: creator-support.nicovideo.jpへのリンク */
+    a[href*="creator-support.nicovideo.jp"] {
+      display: none !important;
+    }
+
+    /* 旧バージョン: NC-CreatorSupportAccepting クラス（後方互換性） */
+    .NC-CreatorSupportAccepting {
+      display: none !important;
+    }
+
+    /* サポーター勧誘コンテナ */
+    .CreatorSupportAppealContainer {
+      display: none !important;
+    }
+  }
+  ```
+- **Idempotent**: Safe to call multiple times (checks for class existence)
+- **Performance**: Very efficient - single class toggle, no DOM iteration
+- **Scope**: Applies to all pages where supporter elements appear
+- Default: **OFF**
+
+**Why CSS-based approach**:
+- No DOM iteration required (high performance)
+- Automatically applies to dynamically loaded supporter elements
+- Easy to enable/disable (single class toggle)
+- Multiple selectors ensure coverage across different Niconico UI versions
+
+**Why this feature exists**: Some users prefer a cleaner interface without creator support prompts. This feature provides that option while respecting user choice (default OFF).
+
 ## Implementation Notes
 
 ### CSS-Based vs DOM Manipulation Features
@@ -618,7 +666,7 @@ There are two main approaches for implementing features:
   - Simple to implement and maintain
   - Easy to debug (inspect body classes in DevTools)
 - **When to use**: Visual styling changes, icon shapes, colors, layouts that can be controlled via CSS
-- **Example**: `squareProfileIcons` feature
+- **Examples**: `squareProfileIcons`, `hideSupporterButton` features
 
 ```typescript
 // Feature module
