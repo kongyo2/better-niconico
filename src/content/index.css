@@ -7,10 +7,10 @@
 
 /* プロフィールアイコンを四角型にする */
 body.bn-square-icons {
-  /* ヘッダーのプロフィールアイコン（niconico-classicと同じセレクタ） */
   --bn-icon-border-radius: 4px;
 }
 
+/* ヘッダーのプロフィールアイコン（niconico-classicと同じセレクタ） */
 body.bn-square-icons .nico-CommonHeaderRoot .common-header-1hpqfmt,
 body.bn-square-icons .nico-CommonHeaderRoot .common-header-ws8uen,
 body.bn-square-icons .nico-CommonHeaderRoot .common-header-1h5huqo,
@@ -19,8 +19,20 @@ body.bn-square-icons .nico-CommonHeaderRoot .common-header-1cb8wce {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
-/* コンテンツ内の円形アイコン（汎用） */
-body.bn-square-icons .bdr_full {
+/* コンテンツ内のプロフィールアイコン（ユーザーアイコン・チャンネルアイコン） */
+/* src属性でプロフィールアイコンを特定（niconico-classicと同じ方法） */
+body.bn-square-icons .bdr_full[src^="https\://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/"],
+body.bn-square-icons .bdr_full[src^="https\://secure-dcdn.cdn.nimg.jp/comch/channel-icon/"],
+body.bn-square-icons .bdr_full[src*="/nicoaccount/usericon/"],
+body.bn-square-icons .bdr_full[src*="/comch/channel-icon/"] {
+  border-radius: var(--bn-icon-border-radius) !important;
+}
+
+/* data-src属性（遅延読み込み）やsrcset属性を持つプロフィールアイコンにも対応 */
+body.bn-square-icons img.bdr_full[data-src*="nicoaccount/usericon/"],
+body.bn-square-icons img.bdr_full[data-src*="comch/channel-icon/"],
+body.bn-square-icons img.bdr_full[srcset*="nicoaccount/usericon/"],
+body.bn-square-icons img.bdr_full[srcset*="comch/channel-icon/"] {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
