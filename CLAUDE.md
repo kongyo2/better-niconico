@@ -23,6 +23,9 @@ npm run preview
 # Generate PNG icons from SVG source
 npm run generate-icons
 
+# Clean build artifacts
+npm run clean
+
 # Linting
 npm run lint              # Silent mode
 npm run lint:strict       # Fail on warnings
@@ -540,27 +543,52 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - **Implementation approach**: CSS-based using body class toggle
   - Adds/removes `.bn-square-icons` class on `<body>` element
   - CSS rules target icons when body has this class
-- **Target elements**:
-  - Header icons: `.common-header-1hpqfmt`, `.common-header-ws8uen`, `.common-header-1h5huqo`, `.common-header-n6q0ln`, `.common-header-1cb8wce`
-  - Content icons: `.bdr_full` (generic circular icon class used throughout Niconico)
+- **Comprehensive Coverage**: The CSS (`src/content/index.css`) targets icons across **all Niconico services**:
+  - **Header icons**: Common header profile icons
+  - **Video pages**: Content icons with `.bdr_full` class, uses `--radii-m` variable for consistency
+  - **Generic images**: All img elements with usericon/channel-icon URLs (class-agnostic)
+  - **Niconico Seiga** (静画): Community pages, timeline, user pages, work pages
+  - **Creator Support Tool**: Registration and tool pages
+  - **Niconico Garage**: Common and individual pages
+  - **Niconico Channel**: Common and subscription pages
+  - **Niconico Live** (生放送): Follow, history, search, top, and watch pages with program cards
+  - **Niconico Solid** (立体): Work pages with Vue.js data attributes
+  - **Point/Subscription pages**: User icons in various contexts
+  - **Search pages**: Uploader icons in search results
+- **Selector Strategy**:
+  - Primary: `.bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/"]` and channel icon variants
+  - Fallback: Generic `img[src*="nicoaccount/usericon/"]` for class-agnostic matching
+  - Page-specific: CSS module classes like `.___program-provider-icon___bSlNt` for Niconico Live
+  - Vue components: `[data-v-*]` attribute selectors for Seiga/Solid pages
 - **CSS implementation** (`src/content/index.css`):
   ```css
   body.bn-square-icons {
     --bn-icon-border-radius: 4px;
   }
 
+  /* Header icons */
   body.bn-square-icons .nico-CommonHeaderRoot .common-header-1hpqfmt,
   body.bn-square-icons .nico-CommonHeaderRoot .common-header-ws8uen,
-  body.bn-square-icons .nico-CommonHeaderRoot .common-header-1h5huqo,
-  body.bn-square-icons .nico-CommonHeaderRoot .common-header-n6q0ln,
-  body.bn-square-icons .nico-CommonHeaderRoot .common-header-1cb8wce,
-  body.bn-square-icons .bdr_full {
+  /* ... additional header selectors ... */
+
+  /* Content icons with .bdr_full class */
+  body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/"],
+  body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/comch/channel-icon/"] {
     border-radius: var(--bn-icon-border-radius) !important;
   }
+
+  /* Generic fallback (class-agnostic) */
+  body.bn-square-icons img[src*="nicoaccount/usericon/"],
+  body.bn-square-icons img[src*="comch/channel-icon/"] {
+    border-radius: var(--bn-icon-border-radius) !important;
+  }
+
+  /* Page-specific selectors for Seiga, Live, Channel, etc. */
+  /* ... 100+ additional selectors for comprehensive coverage ... */
   ```
 - **Idempotent**: Safe to call multiple times (checks for class existence)
 - **Performance**: Very efficient - single class toggle, no DOM iteration
-- **Scope**: Applies to all pages (header icons visible site-wide)
+- **Scope**: Applies to all pages across all Niconico services
 - Default: **OFF**
 
 **Why CSS-based approach**:
@@ -568,6 +596,12 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - Automatically applies to dynamically loaded icons
 - Easy to enable/disable (single class toggle)
 - Consistent with niconico-classic implementation pattern
+
+**Implementation Notes**:
+- When adding support for new Niconico pages, inspect the page's icon elements and add the appropriate CSS selectors to `src/content/index.css`
+- Use browser DevTools to identify icon class names and URL patterns
+- Test across multiple Niconico services (video, live, seiga, channel) to ensure comprehensive coverage
+- The `--radii-m` CSS variable is used on video pages for consistency with Niconico's design system
 
 ## Implementation Notes
 
