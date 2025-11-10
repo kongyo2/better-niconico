@@ -41,28 +41,6 @@ function getSidebarContainer(): HTMLElement | null {
 }
 
 /**
- * ランキングリンクを探す
- */
-function findRankingLink(): HTMLAnchorElement | null {
-  const links = document.querySelectorAll<HTMLAnchorElement>('a.css-1i9dz1a');
-  for (const link of links) {
-    if (link.textContent?.trim() === 'ランキング' && link.href.includes('/ranking')) {
-      return link;
-    }
-  }
-  return null;
-}
-
-/**
- * 既存のボタンが追加されているかチェック
- * 展開時と折りたたみ時の両方をチェック
- */
-function hasButtonBeenAdded(): boolean {
-  const existingButtons = document.querySelectorAll(`[${BUTTON_MARKER}]`);
-  return existingButtons.length > 0;
-}
-
-/**
  * ランキングの親要素の次の兄弟要素にボタンが追加されているかチェック
  */
 function hasButtonAfterRanking(rankingParent: HTMLElement): boolean {
@@ -109,68 +87,6 @@ function createNicoRankButton(): HTMLElement {
   link.appendChild(containerDiv);
   
   return link;
-}
-
-/**
- * ランキングリンクの親要素を探す（展開時と折りたたみ時の両方に対応）
- */
-function findRankingParent(): HTMLElement | null {
-  const rankingLink = findRankingLink();
-  if (!rankingLink) {
-    return null;
-  }
-  
-  // 展開時と折りたたみ時の両方のクラス名をチェック
-  const parent = rankingLink.closest('.css-1i3qj3a, .css-gzpr6t') as HTMLElement;
-  return parent;
-}
-
-/**
- * ボタンを追加する（展開時と折りたたみ時の両方に対応）
- */
-function addNicoRankButton(): void {
-  // video_topページでない場合は何もしない
-  if (!isVideoTopPage()) {
-    return;
-  }
-  
-  // サイドバーコンテナを取得
-  const sidebarContainer = getSidebarContainer();
-  if (!sidebarContainer) {
-    return;
-  }
-  
-  // ランキングリンクの親要素を探す
-  const rankingParent = findRankingParent();
-  if (!rankingParent) {
-    return;
-  }
-  
-  // ランキングの親要素の後にすでにボタンが追加されている場合はスキップ
-  if (hasButtonAfterRanking(rankingParent)) {
-    return;
-  }
-  
-  // ランキングの親要素の後に新しいメニュー項目コンテナを作成
-  // 展開時と折りたたみ時の両方のクラス名に対応
-  const menuContainer = document.createElement('div');
-  // 現在のランキングの親要素のクラス名をコピー（展開時と折りたたみ時の両方に対応）
-  menuContainer.className = rankingParent.className;
-  menuContainer.setAttribute(CONTAINER_MARKER, 'true');
-  
-  // ボタンを作成
-  const button = createNicoRankButton();
-  menuContainer.appendChild(button);
-  
-  // ランキングの親要素の後に挿入
-  const nextSibling = rankingParent.nextElementSibling;
-  if (nextSibling) {
-    rankingParent.parentElement?.insertBefore(menuContainer, nextSibling);
-  } else {
-    rankingParent.parentElement?.appendChild(menuContainer);
-  }
-  
-  console.log('[Better Niconico] ニコランボタンを追加しました');
 }
 
 /**
