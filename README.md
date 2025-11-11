@@ -3,6 +3,7 @@
 ニコニコ動画のレイアウトと細部を改善する Chrome 拡張機能です。(開発中)
 
 ユーザーが各機能を個別にオン/オフできるカスタマイズ可能な拡張機能として設計されています。
+
 Chrome Webstore: https://chromewebstore.google.com/detail/plgkkapmiakgdndngkacndmgkehcfdgf?utm_source=item-share-cb
 
 ## インストール方法
