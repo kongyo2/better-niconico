@@ -49,6 +49,7 @@ export interface BetterNiconicoSettings {
   showNicoRankButton: boolean;
   squareProfileIcons: boolean;
   hideSupporterButton: boolean;
+  hideNicoAds: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
@@ -59,6 +60,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   showNicoRankButton: true,
   squareProfileIcons: false,
   hideSupporterButton: false,
+  hideNicoAds: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -111,6 +113,7 @@ import * as videoUpscaling from './features/videoUpscaling';
 import * as addNicoRankButton from './features/addNicoRankButton';
 import * as squareProfileIcons from './features/squareProfileIcons';
 import * as hideSupporterButton from './features/hideSupporterButton';
+import * as hideNicoAds from './features/hideNicoAds';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -121,6 +124,7 @@ async function applySettings(): Promise<void> {
   addNicoRankButton.apply(settings.showNicoRankButton);
   squareProfileIcons.apply(settings.squareProfileIcons);
   hideSupporterButton.apply(settings.hideSupporterButton);
+  hideNicoAds.apply(settings.hideNicoAds);
 }
 ```
 

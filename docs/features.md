@@ -13,6 +13,7 @@ This document describes all features implemented in Better Niconico, with detail
 | Nico Rank Button | `src/content/features/addNicoRankButton.ts` | DOM | ON |
 | Square Profile Icons | `src/content/features/squareProfileIcons.ts` | CSS | OFF |
 | Hide Supporter Button | `src/content/features/hideSupporterButton.ts` | CSS | OFF |
+| Hide Nico Ads | `src/content/features/hideNicoAds.ts` | DOM | OFF |
 
 ---
 
@@ -455,6 +456,75 @@ Some users prefer a cleaner interface without creator support prompts. This feat
 
 ---
 
+## 8. Hide Nico Ads
+
+**Location**: `src/content/features/hideNicoAds.ts`
+**Default**: OFF
+**Page**: `/watch/*` only
+
+### Description
+
+Hides the "ニコニ広告" (Nico Ads) section displayed below the video player. This section shows user-sponsored advertisements for other videos.
+
+### Implementation Approach
+
+**DOM manipulation using h1 heading detection**:
+- Finds h1 elements containing "ニコニ広告" text
+- Hides the closest parent `<section>` element
+- Works with both default and classic video layouts
+
+### Implementation Details
+
+The feature searches for the "ニコニ広告" heading and hides the entire section container:
+
+```typescript
+function findNicoAdSection(): HTMLElement | null {
+  const headings = document.querySelectorAll('h1');
+  for (const heading of headings) {
+    const text = heading.textContent || '';
+    if (text.includes('ニコニ広告')) {
+      const section = heading.closest('section');
+      if (section) {
+        return section as HTMLElement;
+      }
+    }
+  }
+  return null;
+}
+```
+
+### Safeguards
+
+- **Content validation**: Verifies section contains "ニコニ広告" text before hiding
+- **Graceful handling**: Silently skips if content not yet loaded (no console warnings)
+
+### Idempotency
+
+- Uses `data-bn-nicoad-hidden` marker attribute
+- Checks current display state before modifying
+- Safe to call multiple times via MutationObserver
+
+### Cleanup
+
+When disabled, restores original display state and removes marker attribute.
+
+### Watch Page Structure
+
+On watch pages, the Nico Ads section appears in the `.grid-area_[bottom]` container:
+- Default layout: Below "動画の詳細情報" section
+- Classic layout: Below "この動画の親作品・子作品" section (in `#bn-bottom-sections` area)
+
+The section uses these CSS classes:
+```
+section.bg-c_layer\.surfaceHighEm.bdr_m.ov_hidden.w_100%.p_x3
+```
+
+### Why This Feature Exists
+
+The Nico Ads section displays sponsored video advertisements that some users find distracting. This feature provides a cleaner viewing experience while maintaining the option to view sponsored content (default OFF).
+
+---
+
 ## Page-Specific Features
 
 Some features only apply to specific pages:
@@ -462,6 +532,7 @@ Some features only apply to specific pages:
 **Watch page only** (`/watch/*`):
 - Restore Classic Video Layout
 - Video Upscaling
+- Hide Nico Ads
 
 **Video top page only** (`/video_top`):
 - Add Nico Rank Button

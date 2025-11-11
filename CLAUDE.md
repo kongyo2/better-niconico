@@ -51,7 +51,7 @@ The extension has three main components:
 Detailed documentation is organized by topic:
 
 - **[Architecture](docs/architecture.md)** - Extension components, settings system, build configuration
-- **[Features](docs/features.md)** - All 7 features with implementation details
+- **[Features](docs/features.md)** - All 8 features with implementation details
 - **[Development](docs/development.md)** - Workflow, debugging, testing, commands reference
 - **[Implementation Guide](docs/implementation.md)** - Adding features, best practices, patterns
 
@@ -64,6 +64,7 @@ Detailed documentation is organized by topic:
 5. **Add Nico Rank Button** - Adds nico-rank.com link to sidebar
 6. **Square Profile Icons** - Changes circular icons to rounded squares
 7. **Hide Supporter Button** - Hides creator support prompts
+8. **Hide Nico Ads** - Hides "ニコニ広告" section below video player
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 

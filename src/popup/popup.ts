@@ -56,6 +56,7 @@ function updateUI(settings: BetterNiconicoSettings): void {
   const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
   const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
   const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
+  const hideNicoAdsCheckbox = document.getElementById('hideNicoAds') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
     hidePremiumCheckbox.checked = settings.hidePremiumSection;
@@ -84,6 +85,10 @@ function updateUI(settings: BetterNiconicoSettings): void {
   if (hideSupporterButtonCheckbox) {
     hideSupporterButtonCheckbox.checked = settings.hideSupporterButton;
   }
+
+  if (hideNicoAdsCheckbox) {
+    hideNicoAdsCheckbox.checked = settings.hideNicoAds;
+  }
 }
 
 /**
@@ -97,6 +102,7 @@ function getSettingsFromUI(): BetterNiconicoSettings {
   const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
   const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
   const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
+  const hideNicoAdsCheckbox = document.getElementById('hideNicoAds') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
@@ -106,6 +112,7 @@ function getSettingsFromUI(): BetterNiconicoSettings {
     showNicoRankButton: showNicoRankButtonCheckbox?.checked ?? DEFAULT_SETTINGS.showNicoRankButton,
     squareProfileIcons: squareProfileIconsCheckbox?.checked ?? DEFAULT_SETTINGS.squareProfileIcons,
     hideSupporterButton: hideSupporterButtonCheckbox?.checked ?? DEFAULT_SETTINGS.hideSupporterButton,
+    hideNicoAds: hideNicoAdsCheckbox?.checked ?? DEFAULT_SETTINGS.hideNicoAds,
   };
 }
 
@@ -126,6 +133,7 @@ async function initialize(): Promise<void> {
     const showNicoRankButtonCheckbox = document.getElementById('showNicoRankButton') as HTMLInputElement;
     const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
     const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
+    const hideNicoAdsCheckbox = document.getElementById('hideNicoAds') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
@@ -177,6 +185,14 @@ async function initialize(): Promise<void> {
 
     if (hideSupporterButtonCheckbox) {
       hideSupporterButtonCheckbox.addEventListener('change', async () => {
+        const newSettings = getSettingsFromUI();
+        await saveSettings(newSettings);
+        showStatusMessage('設定を保存しました');
+      });
+    }
+
+    if (hideNicoAdsCheckbox) {
+      hideNicoAdsCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         await saveSettings(newSettings);
         showStatusMessage('設定を保存しました');

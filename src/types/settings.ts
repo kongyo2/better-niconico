@@ -15,6 +15,8 @@ export interface BetterNiconicoSettings {
   squareProfileIcons: boolean;
   // サポーターボタンを非表示
   hideSupporterButton: boolean;
+  // ニコニ広告セクションを非表示
+  hideNicoAds: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -26,6 +28,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   showNicoRankButton: true,
   squareProfileIcons: false,
   hideSupporterButton: false,
+  hideNicoAds: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

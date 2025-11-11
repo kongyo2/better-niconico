@@ -12,6 +12,7 @@ import * as videoUpscaling from './features/videoUpscaling';
 import * as addNicoRankButton from './features/addNicoRankButton';
 import * as squareProfileIcons from './features/squareProfileIcons';
 import * as hideSupporterButton from './features/hideSupporterButton';
+import * as hideNicoAds from './features/hideNicoAds';
 
 /**
  * 設定を読み込む
@@ -54,6 +55,7 @@ async function applySettings(): Promise<void> {
   addNicoRankButton.apply(settings.showNicoRankButton);
   squareProfileIcons.apply(settings.squareProfileIcons);
   hideSupporterButton.apply(settings.hideSupporterButton);
+  hideNicoAds.apply(settings.hideNicoAds);
 }
 
 /**
