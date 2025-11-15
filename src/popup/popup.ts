@@ -1,6 +1,7 @@
 // Better Niconico Popup Script
 import type { BetterNiconicoSettings } from '../types/settings';
-import { STORAGE_KEY, DEFAULT_SETTINGS } from '../types/settings';
+import { DEFAULT_SETTINGS } from '../types/settings';
+import { loadSettings, saveSettings } from '../utils/storage';
 
 const statusMessage = document.getElementById('statusMessage') as HTMLDivElement;
 
@@ -16,33 +17,6 @@ function showStatusMessage(message: string, duration = 2000): void {
       statusMessage.classList.remove('show');
     }, duration);
   }
-}
-
-/**
- * 設定を読み込む
- */
-async function loadSettings(): Promise<BetterNiconicoSettings> {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get([STORAGE_KEY], (result) => {
-      const settings = result[STORAGE_KEY] as BetterNiconicoSettings | undefined;
-      resolve(settings || DEFAULT_SETTINGS);
-    });
-  });
-}
-
-/**
- * 設定を保存する
- */
-async function saveSettings(settings: BetterNiconicoSettings): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.sync.set({ [STORAGE_KEY]: settings }, () => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve();
-      }
-    });
-  });
 }
 
 /**
@@ -117,12 +91,22 @@ function getSettingsFromUI(): BetterNiconicoSettings {
 }
 
 /**
- * 初期化
+ * 初期化（Result型を使用）
  */
 async function initialize(): Promise<void> {
   try {
     // 設定を読み込んでUIに反映
-    const settings = await loadSettings();
+    const settingsResult = await loadSettings();
+
+    if (settingsResult.isErr()) {
+      console.error('[Better Niconico] 設定の読み込みに失敗しました:', settingsResult.error);
+      showStatusMessage('設定の読み込みに失敗しました', 3000);
+      // エラー時はデフォルト設定を使用
+      updateUI(DEFAULT_SETTINGS);
+      return;
+    }
+
+    const settings = settingsResult.value;
     updateUI(settings);
 
     // チェックボックスの変更を監視
@@ -138,64 +122,104 @@ async function initialize(): Promise<void> {
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (hideOnAirAnimeCheckbox) {
       hideOnAirAnimeCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (restoreClassicVideoLayoutCheckbox) {
       restoreClassicVideoLayoutCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (enableVideoUpscalingCheckbox) {
       enableVideoUpscalingCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (showNicoRankButtonCheckbox) {
       showNicoRankButtonCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (squareProfileIconsCheckbox) {
       squareProfileIconsCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (hideSupporterButtonCheckbox) {
       hideSupporterButtonCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 
     if (hideNicoAdsCheckbox) {
       hideNicoAdsCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
-        await saveSettings(newSettings);
-        showStatusMessage('設定を保存しました');
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
       });
     }
 

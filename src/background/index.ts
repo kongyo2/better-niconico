@@ -9,10 +9,19 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
     console.log('[Better Niconico] 拡張機能がインストールされました');
 
     // デフォルト設定の初期化（必要に応じて）
-    chrome.storage.sync.set({
-      initialized: true,
-      installedAt: new Date().toISOString(),
-    });
+    chrome.storage.sync.set(
+      {
+        initialized: true,
+        installedAt: new Date().toISOString(),
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.error('[Better Niconico] 初期化データの保存に失敗しました:', chrome.runtime.lastError);
+        } else {
+          console.log('[Better Niconico] 初期化データを保存しました');
+        }
+      },
+    );
   } else if (details.reason === 'update') {
     const previousVersion = details.previousVersion;
     const currentVersion = chrome.runtime.getManifest().version;

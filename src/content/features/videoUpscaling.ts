@@ -16,6 +16,17 @@
  */
 
 import { render, ModeA } from 'anime4k-webgpu';
+import { Result, ok, err } from 'neverthrow';
+import type { WebGPUError, VideoError } from '../../types/errors';
+import {
+  webgpuNotSupportedError,
+  webgpuAdapterUnavailableError,
+  webgpuInitializationFailedError,
+  webgpuRenderFailedError,
+  videoNotReadyError,
+  videoDimensionsInvalidError,
+  videoParentMissingError,
+} from '../../types/errors';
 
 // 処理済みマーカー属性
 const UPSCALING_MARKER = 'data-bn-upscaling';
@@ -29,8 +40,9 @@ const CANVAS_MARKER = 'data-bn-canvas';
 // WebGPU対応状態のキャッシュ（初回チェック後は再利用）
 let webGPUSupportCache: boolean | null = null;
 
-// アクティブなレンダリングコントローラー（クリーンアップ用）
-let activeRenderController: AbortController | null = null;
+// Note: anime4k-webgpu の render() 関数は signal パラメータをサポートしていません
+// render loop は requestVideoFrameCallback を使用しており、
+// canvas 要素を削除することで自動的に停止します
 
 // 現在処理中の動画のsrcを追跡（動画変更を検出するため）
 let currentVideoSrc: string | null = null;
@@ -78,32 +90,36 @@ function isFullscreenMode(): boolean {
 
 /**
  * WebGPU対応ブラウザかどうかを判定（結果をキャッシュ）
+ * Result型を返す
  */
-async function isWebGPUSupported(): Promise<boolean> {
+async function isWebGPUSupported(): Promise<Result<boolean, WebGPUError>> {
   // キャッシュがあればそれを返す
   if (webGPUSupportCache !== null) {
-    return webGPUSupportCache;
+    return ok(webGPUSupportCache);
   }
 
   if (!navigator.gpu) {
-    console.warn('[Better Niconico] WebGPU is not supported in this browser');
+    const error = webgpuNotSupportedError('WebGPU is not supported in this browser');
+    console.warn('[Better Niconico]', error.message);
     webGPUSupportCache = false;
-    return false;
+    return err(error);
   }
 
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
-      console.warn('[Better Niconico] WebGPU adapter not available');
+      const error = webgpuAdapterUnavailableError('WebGPU adapter not available');
+      console.warn('[Better Niconico]', error.message);
       webGPUSupportCache = false;
-      return false;
+      return err(error);
     }
     webGPUSupportCache = true;
-    return true;
+    return ok(true);
   } catch (error) {
-    console.warn('[Better Niconico] WebGPU initialization failed:', error);
+    const gpuError = webgpuInitializationFailedError('WebGPU initialization failed', error);
+    console.warn('[Better Niconico]', gpuError.message, error);
     webGPUSupportCache = false;
-    return false;
+    return err(gpuError);
   }
 }
 
@@ -193,11 +209,27 @@ function hasVideoChanged(video: HTMLVideoElement | null): boolean {
 
 /**
  * Canvas要素を作成してvideo要素と全く同じ位置・スタイルで配置
- * - videoと同じ親要素に配置
- * - videoと同じ絶対位置
- * - videoと同じサイズとスタイル
+ * Result型を返す
  */
-function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
+function createUpscaledCanvas(video: HTMLVideoElement): Result<HTMLCanvasElement, VideoError> {
+  // videoの親要素チェック
+  if (!video.parentElement) {
+    const error = videoParentMissingError('Video element has no parent');
+    console.error('[Better Niconico]', error.message);
+    return err(error);
+  }
+
+  // video dimensionsチェック
+  if (video.videoWidth <= 0 || video.videoHeight <= 0) {
+    const error = videoDimensionsInvalidError(
+      'Invalid video dimensions',
+      video.videoWidth,
+      video.videoHeight,
+    );
+    console.error('[Better Niconico]', error.message);
+    return err(error);
+  }
+
   // 既存のcanvasがあれば再利用
   let canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;
 
@@ -205,12 +237,6 @@ function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement | null
     canvas = document.createElement('canvas');
     canvas.id = CANVAS_ID;
     canvas.setAttribute(CANVAS_MARKER, 'true');
-
-    // videoの親要素に挿入（videoの直後）
-    if (!video.parentElement) {
-      console.error('[Better Niconico] Video element has no parent');
-      return null;
-    }
 
     // videoの次の要素として挿入
     video.parentElement.insertBefore(canvas, video.nextSibling);
@@ -246,30 +272,32 @@ function createUpscaledCanvas(video: HTMLVideoElement): HTMLCanvasElement | null
   // videoのクラスをコピー（レイアウトを維持）
   canvas.className = video.className;
 
-  return canvas;
+  return ok(canvas);
 }
 
 /**
  * 動画がロード完了するまで待機
- * anime4k-webgpu の render() 関数は内部で HAVE_FUTURE_DATA を待つが、
- * canvas作成前に基本的な準備が整っているか確認する
- * リトライロジック付きで、より確実に動画の準備を待つ
+ * Result型を返す
  */
-async function waitForVideoReady(video: HTMLVideoElement, retryCount = 0): Promise<boolean> {
+async function waitForVideoReady(
+  video: HTMLVideoElement,
+  retryCount = 0,
+): Promise<Result<boolean, VideoError>> {
   // すでにロード済みの場合
   if (video.readyState >= video.HAVE_METADATA && video.videoWidth && video.videoHeight) {
-    return true;
+    return ok(true);
   }
 
   // 最大3回までリトライ
   const maxRetries = 3;
   if (retryCount >= maxRetries) {
-    console.warn('[Better Niconico] Video ready check failed after max retries');
-    return false;
+    const error = videoNotReadyError('Video ready check failed after max retries', retryCount);
+    console.warn('[Better Niconico]', error.message);
+    return err(error);
   }
 
   // ロード完了を待機（タイムアウト付き）
-  return new Promise<boolean>((resolve) => {
+  return new Promise<Result<boolean, VideoError>>((resolve) => {
     let resolved = false;
 
     const handler = () => {
@@ -281,12 +309,13 @@ async function waitForVideoReady(video: HTMLVideoElement, retryCount = 0): Promi
       // 少し待ってから再度チェック（DOM更新を待つ）
       setTimeout(() => {
         if (video.videoWidth && video.videoHeight) {
-          resolve(true);
+          resolve(ok(true));
         } else if (retryCount < maxRetries) {
           // リトライ
           void waitForVideoReady(video, retryCount + 1).then(resolve);
         } else {
-          resolve(false);
+          const error = videoNotReadyError('Video dimensions not available', retryCount);
+          resolve(err(error));
         }
       }, 100);
     };
@@ -306,14 +335,15 @@ async function waitForVideoReady(video: HTMLVideoElement, retryCount = 0): Promi
         // リトライ
         void waitForVideoReady(video, retryCount + 1).then(resolve);
       } else {
-        resolve(false);
+        const error = videoNotReadyError('Video ready check timeout', retryCount);
+        resolve(err(error));
       }
     }, 10000);
   });
 }
 
 /**
- * アップスケーリングを有効化
+ * アップスケーリングを有効化（Result型を使用）
  */
 async function enableUpscaling(): Promise<void> {
   if (!isWatchPage()) {
@@ -355,43 +385,39 @@ async function enableUpscaling(): Promise<void> {
   }
 
   // WebGPU対応チェック（キャッシュされる）
-  const gpuSupported = await isWebGPUSupported();
-  if (!gpuSupported) {
-    console.error('[Better Niconico] Video upscaling requires WebGPU support');
+  const gpuSupportedResult = await isWebGPUSupported();
+  if (gpuSupportedResult.isErr()) {
+    console.error('[Better Niconico] Video upscaling requires WebGPU support:', gpuSupportedResult.error);
     return;
   }
 
   // 動画がロードされるまで待機
-  const videoReady = await waitForVideoReady(video);
-  if (!videoReady) {
-    console.warn('[Better Niconico] Video dimensions not available after timeout');
+  const videoReadyResult = await waitForVideoReady(video);
+  if (videoReadyResult.isErr()) {
+    console.warn('[Better Niconico] Video not ready:', videoReadyResult.error);
     return;
   }
 
+  // Canvas作成
+  const canvasResult = createUpscaledCanvas(video);
+  if (canvasResult.isErr()) {
+    console.error('[Better Niconico] Failed to create canvas:', canvasResult.error);
+    return;
+  }
+
+  const canvas = canvasResult.value;
+
+  console.log('[Better Niconico] Starting video upscaling with Anime4K-WebGPU', {
+    nativeResolution: `${video.videoWidth}x${video.videoHeight}`,
+    targetResolution: `${canvas.width}x${canvas.height}`,
+    videoSrc: video.src.substring(0, 50) + (video.src.length > 50 ? '...' : ''),
+  });
+
   try {
-    const canvas = createUpscaledCanvas(video);
-    if (!canvas) {
-      console.error('[Better Niconico] Failed to create canvas element');
-      return;
-    }
-
-    console.log('[Better Niconico] Starting video upscaling with Anime4K-WebGPU', {
-      nativeResolution: `${video.videoWidth}x${video.videoHeight}`,
-      targetResolution: `${canvas.width}x${canvas.height}`,
-      videoSrc: video.src.substring(0, 50) + (video.src.length > 50 ? '...' : ''),
-    });
-
-    // 前回のレンダリングコントローラーがあれば中止
-    if (activeRenderController) {
-      activeRenderController.abort();
-    }
-
-    // 新しいAbortControllerを作成
-    activeRenderController = new AbortController();
-
     // Anime4K-WebGPUのrender関数でアップスケーリングを開始
     // ModeAプリセット: Clamp Highlights → Restore (CNNVL) → Upscale (CNNx2VL/CNNx2M)
     // render()関数は自動的にrequestVideoFrameCallbackを使ってレンダリングループを開始する
+    // render loopはcanvas.remove()で自動的に停止される
     await render({
       video,
       canvas,
@@ -411,7 +437,6 @@ async function enableUpscaling(): Promise<void> {
           }),
         ];
       },
-      signal: activeRenderController.signal,
     });
 
     // video要素を非表示にしてcanvasを表示
@@ -434,7 +459,8 @@ async function enableUpscaling(): Promise<void> {
       return;
     }
 
-    console.error('[Better Niconico] Failed to enable video upscaling:', error);
+    const renderError = webgpuRenderFailedError('Failed to render video upscaling', error);
+    console.error('[Better Niconico]', renderError.message, error);
 
     // エラー時のクリーンアップ
     cleanupUpscaling(video);
@@ -448,13 +474,8 @@ async function enableUpscaling(): Promise<void> {
  * アップスケーリングのクリーンアップ
  */
 function cleanupUpscaling(video: HTMLVideoElement | null): void {
-  // レンダリングを停止（AbortControllerでrender()のループを停止）
-  if (activeRenderController) {
-    activeRenderController.abort();
-    activeRenderController = null;
-  }
-
   // canvas要素を削除
+  // これにより requestVideoFrameCallback のループが自動的に停止される
   const canvas = document.getElementById(CANVAS_ID);
   if (canvas) {
     canvas.remove();

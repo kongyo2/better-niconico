@@ -45,6 +45,8 @@ The extension has three main components:
 - **Settings System**: Centrally defined in `src/types/settings.ts`, stored in `chrome.storage.sync`
 - **Feature Pattern**: Each module exports `apply(enabled: boolean)` function
 - **Dynamic Content**: Uses MutationObserver to handle Niconico's dynamic page loading
+- **Error Handling**: Result types (neverthrow) instead of exceptions - **NEVER throw errors**
+- **Storage Utilities**: `src/utils/storage.ts` provides Result-based wrappers for Chrome Storage API
 
 ## Documentation
 
@@ -84,7 +86,79 @@ Quick overview (see [docs/implementation.md](docs/implementation.md) for details
 - **Vite** + **@crxjs/vite-plugin** (build system with HMR)
 - **Nodemon** (auto-rebuild on file changes)
 - **Oxlint** (fast Rust-based linter)
+- **neverthrow** (Result type for error handling)
 - **Anime4K-WebGPU** (video upscaling library)
+
+## Error Handling Architecture
+
+This project uses **neverthrow** for type-safe error handling with Result types.
+
+### Core Principles
+
+1. **NEVER throw exceptions** - Use `Result<T, E>` instead
+2. **Explicit error types** - Domain-specific errors in `src/types/errors.ts`
+3. **Type-safe propagation** - All failure paths visible in function signatures
+
+### Error Types (`src/types/errors.ts`)
+
+- `StorageError` - Chrome Storage API failures
+- `WebGPUError` - WebGPU initialization/rendering errors
+- `VideoError` - Video element detection/processing errors
+- `PageError` - DOM element not found errors
+- `MessageError` - Message passing errors
+
+### Result Pattern Examples
+
+**Storage operations:**
+```typescript
+import { loadSettings, saveSettings } from '../utils/storage';
+
+const result = await loadSettings();
+if (result.isErr()) {
+  console.error('Failed to load settings:', result.error);
+  // Use default settings
+  return;
+}
+const settings = result.value;
+```
+
+**Error propagation:**
+```typescript
+function processVideo(): Result<HTMLCanvasElement, VideoError> {
+  const canvasResult = createCanvas(video);
+  if (canvasResult.isErr()) {
+    return err(canvasResult.error);
+  }
+  return ok(canvasResult.value);
+}
+```
+
+**When adding new async operations**, wrap them with `ResultAsync` or return `Result<T, E>`.
+
+## anime4k-webgpu Integration Notes
+
+**CRITICAL**: The `render()` function from anime4k-webgpu does **NOT** support `signal` parameter for AbortController.
+
+```typescript
+// ✅ CORRECT - No signal parameter
+await render({
+  video,
+  canvas,
+  pipelineBuilder: (device, inputTexture) => [
+    new ModeA({
+      device,
+      inputTexture,
+      nativeDimensions: { width: video.videoWidth, height: video.videoHeight },
+      targetDimensions: { width: canvas.width, height: canvas.height },
+    }),
+  ],
+});
+
+// ❌ WRONG - signal is ignored
+await render({ ..., signal: controller.signal }); // Does nothing!
+```
+
+**Stopping the render loop**: Remove the canvas element with `canvas.remove()`. The `requestVideoFrameCallback` loop will stop automatically when the canvas is gone.
 
 ## Testing Limitation
 
