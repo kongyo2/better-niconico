@@ -11,7 +11,8 @@
  * - Supporter canvas: [data-name="supporterRenderer-stage"] canvas (ignored)
  * - Combines video and comment canvas into single canvas using requestAnimationFrame
  * - Uses canvas.captureStream() to create MediaStream for PiP video element
- * - Adds PiP button to video controls for user interaction
+ * - Adds PiP button to player control bar (before fullscreen button)
+ * - Button uses Niconico's native control bar styling for consistency
  * - Button shows/hides based on setting enabled state
  */
 
@@ -147,6 +148,7 @@ function getCommentCanvas(): Result<HTMLCanvasElement, PageError> {
 
 /**
  * PiPボタンを作成
+ * ニコニコ動画のコントロールバーのスタイルに合わせたボタンを作成
  */
 function createPiPButton(): HTMLButtonElement {
   const button = document.createElement('button');
@@ -156,44 +158,16 @@ function createPiPButton(): HTMLButtonElement {
   button.title = 'Picture-in-Picture';
   button.setAttribute('aria-label', 'Picture-in-Picture');
 
-  // PiP SVGアイコン
+  // ニコニコ動画のコントロールバーボタンと同じクラス名を使用
+  button.className = 'Pressable cursor_pointer';
+
+  // PiP SVGアイコン（サイズを調整）
   button.innerHTML = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-      <rect x="12" y="12" width="8" height="6" rx="1" fill="currentColor"/>
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="5" width="22" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+      <rect x="14" y="14" width="9" height="7" rx="1" fill="currentColor"/>
     </svg>
   `;
-
-  // スタイリング
-  button.style.cssText = `
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    transition: all 0.2s ease;
-    padding: 0;
-  `;
-
-  // ホバー効果
-  button.addEventListener('mouseenter', () => {
-    button.style.background = 'rgba(0, 0, 0, 0.9)';
-    button.style.transform = 'scale(1.1)';
-  });
-
-  button.addEventListener('mouseleave', () => {
-    button.style.background = 'rgba(0, 0, 0, 0.7)';
-    button.style.transform = 'scale(1)';
-  });
 
   // クリックイベント
   button.addEventListener('click', (e) => {
@@ -206,6 +180,7 @@ function createPiPButton(): HTMLButtonElement {
 
 /**
  * PiPボタンをDOMに追加
+ * プレイヤーコントロールバーの全画面表示ボタンの前に挿入
  */
 function addPiPButton(): void {
   // 既に存在する場合はスキップ
@@ -218,10 +193,30 @@ function addPiPButton(): void {
     return;
   }
 
-  pipButton = createPiPButton();
-  playerArea.appendChild(pipButton);
+  // 全画面表示ボタンを探す
+  const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
+    (btn) => btn.getAttribute('aria-label') === '全画面表示する',
+  );
 
-  console.log('[Better Niconico] PiPボタンを追加しました');
+  if (!fullscreenButton) {
+    console.warn('[Better Niconico] 全画面表示ボタンが見つかりません');
+    return;
+  }
+
+  // 全画面表示ボタンの親要素（コントロールバーのボタングループ）を取得
+  const controlBarButtonGroup = fullscreenButton.parentElement;
+  if (!controlBarButtonGroup) {
+    console.warn('[Better Niconico] コントロールバーのボタングループが見つかりません');
+    return;
+  }
+
+  // PiPボタンを作成
+  pipButton = createPiPButton();
+
+  // 全画面表示ボタンの前に挿入
+  controlBarButtonGroup.insertBefore(pipButton, fullscreenButton);
+
+  console.log('[Better Niconico] PiPボタンをコントロールバーに追加しました');
 }
 
 /**

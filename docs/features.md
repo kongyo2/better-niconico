@@ -635,27 +635,30 @@ await pipVideo.requestPictureInPicture();
 
 #### 6. PiP Button Integration
 
-The feature adds a PiP button to the video player:
+The feature adds a PiP button to the player control bar:
 
 ```typescript
+// Find the fullscreen button in the control bar
+const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
+  (btn) => btn.getAttribute('aria-label') === '全画面表示する',
+);
+
+// Get the control bar button group (parent of fullscreen button)
+const controlBarButtonGroup = fullscreenButton.parentElement;
+
+// Create PiP button with Niconico's native styling
 const button = document.createElement('button');
-button.style.cssText = `
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  width: 40px;
-  height: 40px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
-  z-index: 1000;
-`;
-playerArea.appendChild(button);
+button.className = 'Pressable cursor_pointer';
+button.setAttribute('aria-label', 'Picture-in-Picture');
+
+// Insert before fullscreen button
+controlBarButtonGroup.insertBefore(button, fullscreenButton);
 ```
 
-- **Position**: Bottom-right of player area (`position: absolute`)
-- **Z-index**: 1000 (above video, below controls)
-- **Icon**: SVG PiP icon (rectangle with smaller rectangle inside)
-- **Hover effect**: Scale 1.1 with darker background
+- **Position**: Integrated into player control bar, before fullscreen button
+- **Styling**: Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+- **Icon**: SVG PiP icon (rectangle with smaller rectangle inside), 28x28px
+- **Integration**: Seamlessly blends with native player controls
 
 #### 7. Cleanup and State Management
 
@@ -734,7 +737,7 @@ function getMainVideo(): Result<HTMLVideoElement, VideoError | PageError> {
 ### User Experience
 
 1. User enables PiP feature in settings
-2. PiP button appears on `/watch/*` pages (bottom-right of player)
+2. PiP button appears on `/watch/*` pages (in player control bar, before fullscreen button)
 3. User clicks button to enter PiP mode
 4. Video and comments are hidden, PiP window opens
 5. User can resize/reposition PiP window
