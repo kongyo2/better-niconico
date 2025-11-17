@@ -14,6 +14,7 @@ import * as addNicoRankButton from './features/addNicoRankButton';
 import * as squareProfileIcons from './features/squareProfileIcons';
 import * as hideSupporterButton from './features/hideSupporterButton';
 import * as hideNicoAds from './features/hideNicoAds';
+import * as pictureInPicture from './features/pictureInPicture';
 
 /**
  * 設定を適用する（Result型を使用）
@@ -33,6 +34,7 @@ async function applySettings(): Promise<void> {
     squareProfileIcons.apply(settings.squareProfileIcons);
     hideSupporterButton.apply(settings.hideSupporterButton);
     hideNicoAds.apply(settings.hideNicoAds);
+    pictureInPicture.apply(settings.enablePictureInPicture);
     return;
   }
 
@@ -47,6 +49,7 @@ async function applySettings(): Promise<void> {
   squareProfileIcons.apply(settings.squareProfileIcons);
   hideSupporterButton.apply(settings.hideSupporterButton);
   hideNicoAds.apply(settings.hideNicoAds);
+  pictureInPicture.apply(settings.enablePictureInPicture);
 }
 
 /**

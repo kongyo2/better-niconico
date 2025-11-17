@@ -17,6 +17,8 @@ export interface BetterNiconicoSettings {
   hideSupporterButton: boolean;
   // ニコニ広告セクションを非表示
   hideNicoAds: boolean;
+  // Picture-in-Picture機能を有効化
+  enablePictureInPicture: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   squareProfileIcons: false,
   hideSupporterButton: false,
   hideNicoAds: false,
+  enablePictureInPicture: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

@@ -31,6 +31,7 @@ function updateUI(settings: BetterNiconicoSettings): void {
   const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
   const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
   const hideNicoAdsCheckbox = document.getElementById('hideNicoAds') as HTMLInputElement;
+  const enablePictureInPictureCheckbox = document.getElementById('enablePictureInPicture') as HTMLInputElement;
 
   if (hidePremiumCheckbox) {
     hidePremiumCheckbox.checked = settings.hidePremiumSection;
@@ -63,6 +64,10 @@ function updateUI(settings: BetterNiconicoSettings): void {
   if (hideNicoAdsCheckbox) {
     hideNicoAdsCheckbox.checked = settings.hideNicoAds;
   }
+
+  if (enablePictureInPictureCheckbox) {
+    enablePictureInPictureCheckbox.checked = settings.enablePictureInPicture;
+  }
 }
 
 /**
@@ -77,6 +82,7 @@ function getSettingsFromUI(): BetterNiconicoSettings {
   const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
   const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
   const hideNicoAdsCheckbox = document.getElementById('hideNicoAds') as HTMLInputElement;
+  const enablePictureInPictureCheckbox = document.getElementById('enablePictureInPicture') as HTMLInputElement;
 
   return {
     hidePremiumSection: hidePremiumCheckbox?.checked ?? DEFAULT_SETTINGS.hidePremiumSection,
@@ -87,6 +93,7 @@ function getSettingsFromUI(): BetterNiconicoSettings {
     squareProfileIcons: squareProfileIconsCheckbox?.checked ?? DEFAULT_SETTINGS.squareProfileIcons,
     hideSupporterButton: hideSupporterButtonCheckbox?.checked ?? DEFAULT_SETTINGS.hideSupporterButton,
     hideNicoAds: hideNicoAdsCheckbox?.checked ?? DEFAULT_SETTINGS.hideNicoAds,
+    enablePictureInPicture: enablePictureInPictureCheckbox?.checked ?? DEFAULT_SETTINGS.enablePictureInPicture,
   };
 }
 
@@ -118,6 +125,7 @@ async function initialize(): Promise<void> {
     const squareProfileIconsCheckbox = document.getElementById('squareProfileIcons') as HTMLInputElement;
     const hideSupporterButtonCheckbox = document.getElementById('hideSupporterButton') as HTMLInputElement;
     const hideNicoAdsCheckbox = document.getElementById('hideNicoAds') as HTMLInputElement;
+    const enablePictureInPictureCheckbox = document.getElementById('enablePictureInPicture') as HTMLInputElement;
 
     if (hidePremiumCheckbox) {
       hidePremiumCheckbox.addEventListener('change', async () => {
@@ -212,6 +220,19 @@ async function initialize(): Promise<void> {
 
     if (hideNicoAdsCheckbox) {
       hideNicoAdsCheckbox.addEventListener('change', async () => {
+        const newSettings = getSettingsFromUI();
+        const result = await saveSettings(newSettings);
+        if (result.isOk()) {
+          showStatusMessage('設定を保存しました');
+        } else {
+          console.error('[Better Niconico] 設定保存エラー:', result.error);
+          showStatusMessage('設定の保存に失敗しました', 3000);
+        }
+      });
+    }
+
+    if (enablePictureInPictureCheckbox) {
+      enablePictureInPictureCheckbox.addEventListener('change', async () => {
         const newSettings = getSettingsFromUI();
         const result = await saveSettings(newSettings);
         if (result.isOk()) {

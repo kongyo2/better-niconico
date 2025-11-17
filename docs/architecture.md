@@ -50,6 +50,7 @@ export interface BetterNiconicoSettings {
   squareProfileIcons: boolean;
   hideSupporterButton: boolean;
   hideNicoAds: boolean;
+  enablePictureInPicture: boolean;
 }
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
@@ -61,6 +62,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   squareProfileIcons: false,
   hideSupporterButton: false,
   hideNicoAds: false,
+  enablePictureInPicture: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
@@ -114,6 +116,7 @@ import * as addNicoRankButton from './features/addNicoRankButton';
 import * as squareProfileIcons from './features/squareProfileIcons';
 import * as hideSupporterButton from './features/hideSupporterButton';
 import * as hideNicoAds from './features/hideNicoAds';
+import * as pictureInPicture from './features/pictureInPicture';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -125,6 +128,7 @@ async function applySettings(): Promise<void> {
   squareProfileIcons.apply(settings.squareProfileIcons);
   hideSupporterButton.apply(settings.hideSupporterButton);
   hideNicoAds.apply(settings.hideNicoAds);
+  pictureInPicture.apply(settings.enablePictureInPicture);
 }
 ```
 
