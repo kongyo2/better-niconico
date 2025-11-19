@@ -19,6 +19,8 @@ export interface BetterNiconicoSettings {
   hideNicoAds: boolean;
   // Picture-in-Picture機能を有効化
   enablePictureInPicture: boolean;
+  // 動画スクリーンショット機能を有効化
+  enableVideoScreenshot: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideSupporterButton: false,
   hideNicoAds: false,
   enablePictureInPicture: false,
+  enableVideoScreenshot: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

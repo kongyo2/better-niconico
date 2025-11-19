@@ -15,6 +15,7 @@ This document describes all features implemented in Better Niconico, with detail
 | Hide Supporter Button | `src/content/features/hideSupporterButton.ts` | CSS | OFF |
 | Hide Nico Ads | `src/content/features/hideNicoAds.ts` | DOM | OFF |
 | Picture-in-Picture | `src/content/features/pictureInPicture.ts` | Canvas | OFF |
+| Video Screenshot | `src/content/features/videoScreenshot.ts` | Canvas | OFF |
 
 ---
 
@@ -825,6 +826,229 @@ Picture-in-Picture allows multitasking while watching videos. Unique to this imp
 
 ---
 
+## 10. Video Screenshot
+
+**Location**: `src/content/features/videoScreenshot.ts`
+**Default**: OFF
+**Page**: `/watch/*` only
+
+### Description
+
+Captures the current video frame with comment overlay and saves it as a PNG image. Adds a screenshot button to the video player control bar, allowing users to save the current moment of the video (including comments) as an image file.
+
+### CRITICAL Implementation Details
+
+#### 1. Button Integration
+
+The feature adds a screenshot button to the player control bar:
+
+```typescript
+// Find the fullscreen button in the control bar
+const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
+  (btn) => btn.getAttribute('aria-label') === '全画面表示する',
+);
+
+// Get the control bar button group (parent of fullscreen button)
+const controlBarButtonGroup = fullscreenButton.parentElement;
+
+// Create screenshot button with Niconico's native styling
+const button = document.createElement('button');
+button.className = 'Pressable cursor_pointer';
+button.setAttribute('aria-label', 'スクリーンショット');
+
+// Insert before fullscreen button
+controlBarButtonGroup.insertBefore(button, fullscreenButton);
+```
+
+- **Position**: Integrated into player control bar, before fullscreen button
+- **Styling**: Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+- **Icon**: SVG camera icon, 28x28px
+- **Integration**: Seamlessly blends with native player controls
+
+#### 2. Video Element Detection
+
+Uses the same detection logic as Picture-in-Picture feature:
+
+```typescript
+function isAdVideo(video: HTMLVideoElement): boolean {
+  const adContainer = document.getElementById('nv_watch_VideoAdContainer');
+  return adContainer?.contains(video) ?? false;
+}
+
+function isValidContentVideo(video: HTMLVideoElement): boolean {
+  return (
+    video.src !== '' &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0 &&
+    !isAdVideo(video)
+  );
+}
+```
+
+- **NEVER** use `document.querySelector('video')` - may select ad/placeholder
+- **ALWAYS** validate video has src, dimensions, and is not in ad container
+- Selects the video with the highest `readyState` among valid candidates
+
+#### 3. Canvas Composition
+
+Single-frame capture combining video, supporter view, and comments:
+
+```typescript
+// Create composite canvas
+const canvas = document.createElement('canvas');
+canvas.width = mainVideo.videoWidth;
+canvas.height = mainVideo.videoHeight;
+
+const ctx = canvas.getContext('2d');
+
+// Black background (letterboxing)
+ctx.fillStyle = '#000';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// Draw main video with aspect ratio preservation
+const videoSize = calcSize(mainVideo.videoWidth, mainVideo.videoHeight, canvas.width, canvas.height);
+ctx.drawImage(mainVideo, ...);
+
+// Draw supporter view if visible (with aspect ratio preservation)
+if (supporterCanvas && isVisible(supporterContainer)) {
+  const supporterSize = calcSize(supporterCanvas.width, supporterCanvas.height, canvas.width, canvas.height);
+  ctx.drawImage(supporterCanvas, ...);
+}
+
+// Draw comment canvas on top (with aspect ratio preservation)
+const commentSize = calcSize(commentCanvas.width, commentCanvas.height, canvas.width, canvas.height);
+ctx.drawImage(commentCanvas, ...);
+```
+
+- **Composition order**: Video → Supporter View → Comments (preserves proper layering)
+- **Aspect ratio**: Preserved with letterboxing (black bars) using `calcSize()` helper
+- **One-time operation**: No animation loop required (unlike PiP)
+
+#### 4. File Download
+
+```typescript
+canvas.toBlob((blob) => {
+  if (!blob) return;
+
+  const url = URL.createObjectURL(blob);
+
+  // Create temporary download link
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = generateFilename(mainVideo);
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+
+  // Cleanup
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}, 'image/png');
+```
+
+- **Format**: PNG (lossless, supports transparency)
+- **Filename**: `niconico_{videoId}_{HH-MM-SS}.png`
+  - Example: `niconico_sm9_00-01-23.png`
+- **Automatic download**: Browser's native download mechanism
+
+#### 5. Video ID and Timestamp Extraction
+
+```typescript
+function getVideoId(): string {
+  const match = window.location.pathname.match(/\/watch\/([^/?]+)/);
+  return match ? match[1] : 'video';
+}
+
+function formatTimestamp(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  return `${hours.toString().padStart(2, '0')}-${minutes.toString().padStart(2, '0')}-${secs.toString().padStart(2, '0')}`;
+}
+```
+
+- Extracts video ID from URL (`/watch/sm9` → `sm9`)
+- Formats current playback time as HH-MM-SS
+- Uses `-` as separator (safe for all filesystems)
+
+#### 6. Error Handling with Result Types
+
+All DOM queries use Result types for type-safe error handling:
+
+```typescript
+function getMainVideo(): Result<HTMLVideoElement, VideoError | PageError> {
+  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  if (!playerArea) {
+    return err(domElementNotFoundError('Player area not found', '.grid-area_[player]'));
+  }
+
+  // ... find valid video
+
+  if (!bestVideo) {
+    return err(videoElementNotFoundError('Valid content video not found'));
+  }
+
+  return ok(bestVideo);
+}
+```
+
+- **No exceptions thrown**: Always returns `Result<T, E>`
+- **Type-safe errors**: `VideoError`, `PageError` from `src/types/errors.ts`
+- **Graceful degradation**: Logs errors, skips capture if elements not found
+
+### Idempotency
+
+- **Button**: Uses `data-bn-screenshot-button` marker, checks existence before creating
+- **Safe re-application**: Calling `apply(true)` multiple times is safe
+
+### Browser Compatibility
+
+- **Canvas API**: All modern browsers
+- **Blob API**: Chrome 5+, Edge 12+, Safari 5.1+
+- **URL.createObjectURL()**: All modern browsers
+
+### Performance Considerations
+
+- **CPU usage**: Minimal (~1-2% for single capture)
+- **Memory**: ~10-20MB for canvas buffer (temporary)
+- **Battery impact**: Negligible (one-time operation)
+- **Why default OFF**: User preference for control bar clutter
+
+### User Experience
+
+1. User enables screenshot feature in settings
+2. Screenshot button appears on `/watch/*` pages (in player control bar, before fullscreen button)
+3. User clicks button to capture current frame
+4. PNG image downloads automatically with descriptive filename
+5. Image includes video frame and comment overlay
+
+### Why This Feature Exists
+
+Screenshots allow users to save memorable moments from videos, share them on social media, or use them for creative purposes. Including comments in the screenshot is essential for Niconico users, as comments are a core part of the viewing experience and often provide context or humor.
+
+### Comparison with Picture-in-Picture
+
+**Similarities**:
+- Both use canvas composition
+- Both support video + supporter view + comments
+- Both preserve aspect ratios with letterboxing
+- Both use same helper functions (`calcSize`, `getMainVideo`, etc.)
+
+**Differences**:
+
+| Feature | Picture-in-Picture | Video Screenshot |
+|---------|-------------------|------------------|
+| Operation | Continuous (60fps loop) | One-time capture |
+| Output | MediaStream → PiP window | PNG blob → File download |
+| Resource usage | Moderate (continuous) | Minimal (instant) |
+| User action | Toggle on/off | Single click per capture |
+| Default state | OFF | OFF |
+
+---
+
 ## Page-Specific Features
 
 Some features only apply to specific pages:
@@ -834,6 +1058,7 @@ Some features only apply to specific pages:
 - Video Upscaling
 - Hide Nico Ads
 - Picture-in-Picture
+- Video Screenshot
 
 **Video top page only** (`/video_top`):
 - Add Nico Rank Button

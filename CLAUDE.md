@@ -53,7 +53,7 @@ The extension has three main components:
 Detailed documentation is organized by topic:
 
 - **[Architecture](docs/architecture.md)** - Extension components, settings system, build configuration
-- **[Features](docs/features.md)** - All 9 features with implementation details
+- **[Features](docs/features.md)** - All 10 features with implementation details
 - **[Development](docs/development.md)** - Workflow, debugging, testing, commands reference
 - **[Implementation Guide](docs/implementation.md)** - Adding features, best practices, patterns
 
@@ -68,6 +68,7 @@ Detailed documentation is organized by topic:
 7. **Hide Supporter Button** - Hides creator support prompts
 8. **Hide Nico Ads** - Hides "ニコニ広告" section below video player
 9. **Picture-in-Picture** - Watch videos with comments in PiP mode
+10. **Video Screenshot** - Capture current video frame with comments as PNG image
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 
