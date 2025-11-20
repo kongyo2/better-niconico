@@ -55,8 +55,6 @@ Chrome Webstore: https://chromewebstore.google.com/detail/plgkkapmiakgdndngkacnd
 - **Picture-in-Picture機能** - 動画とコメントをPiP表示
 - **動画スクリーンショット機能** - 現在のフレーム（コメント付き）を画像保存
 
-詳細は [docs/features.md](docs/features.md) をご覧ください。
-
 ## 魔改造大歓迎！（ローカルで自由にやれよ！）
 
 （何々？開発者が気に入らない？ならフォークして自分用に魔改造しよう！ちゃんとフォークネットワークから切り離しておけよ？プルリク事故を起こしちゃ不味いので。）
