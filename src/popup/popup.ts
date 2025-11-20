@@ -105,10 +105,24 @@ function getSettingsFromUI(): BetterNiconicoSettings {
 }
 
 /**
+ * バージョン番号を表示
+ */
+function displayVersion(): void {
+  const versionElement = document.getElementById('version');
+  if (versionElement) {
+    const manifest = chrome.runtime.getManifest();
+    versionElement.textContent = `v${manifest.version}`;
+  }
+}
+
+/**
  * 初期化（Result型を使用）
  */
 async function initialize(): Promise<void> {
   try {
+    // バージョン番号を表示
+    displayVersion();
+
     // 設定を読み込んでUIに反映
     const settingsResult = await loadSettings();
 
