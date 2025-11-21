@@ -32,9 +32,56 @@ The extension has three main components:
 **Directory**: `src/popup/`
 
 - Popup displayed when clicking extension icon
-- Beautiful gradient design with toggle switches
+- Modern dark theme design with categorized tabs
+- Tab navigation: 動画 (Video) | UI/表示 (UI/Display) | システム (System)
+- Card-based layout with feature icons and descriptions
 - Reads and writes settings to `chrome.storage.sync`
 - Settings changes are immediately reflected on active pages
+
+#### Design System
+
+- **Color Scheme**: Dark theme with CSS custom properties
+  - Background: `#0f0f0f` (primary), `#1a1a1a` (secondary), `#252525` (tertiary)
+  - Accent: `#0099e5` (Niconico blue) with gradient support
+  - Text: White/gray hierarchy for readability
+- **Layout**: Fixed dimensions (360x520px) with scrollable content area
+- **Components**:
+  - Header: Logo icon, title, version badge, tab navigation
+  - Settings container: Scrollable card grid per category
+  - Footer: Status message, GitHub link
+- **Interactions**: Smooth transitions, hover effects, toggle switches
+
+#### Implementation Pattern
+
+The popup uses a category-based architecture (`src/popup/popup.ts`):
+
+```typescript
+type SettingCategory = 'video' | 'ui' | 'system';
+
+interface SettingConfig {
+  id: keyof BetterNiconicoSettings;
+  label: string;
+  description: string;
+  category: SettingCategory;
+  icon?: string; // SVG path data
+}
+
+const SETTINGS_CONFIG: SettingConfig[] = [
+  {
+    id: 'enableVideoUpscaling',
+    label: '動画アップスケーリング',
+    description: 'Anime4K-WebGPUを使用して動画を高画質化します',
+    category: 'video',
+    icon: 'M15 10l4.553...' // SVG path
+  },
+  // ...
+];
+```
+
+- **Dynamic rendering**: Settings cards generated from `SETTINGS_CONFIG` array
+- **Tab filtering**: Shows only settings matching active tab category
+- **Icon support**: Heroicons-style SVG icons (20x20px stroke)
+- **Instant persistence**: Changes auto-save to `chrome.storage.sync`
 
 ## Settings System Architecture
 

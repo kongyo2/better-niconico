@@ -58,18 +58,120 @@ async function applySettings(): Promise<void> {
 }
 ```
 
-#### 4. Add UI Toggle
+#### 4. Add to Settings Configuration
 
-Update `src/popup/popup.html`:
-- Copy existing `.setting-item` div
-- Update checkbox `id` and labels
+Update `src/popup/popup.ts` by adding to the `SETTINGS_CONFIG` array:
 
-#### 5. Add Popup Logic
+```typescript
+const SETTINGS_CONFIG: SettingConfig[] = [
+  // ... existing settings
+  {
+    id: 'myNewFeature',
+    label: '新機能のラベル',
+    description: '機能の説明文',
+    category: 'video', // or 'ui' or 'system'
+    icon: 'M4 6h16M4 12h16M4 18h16' // Optional: Heroicons SVG path (20x20 stroke)
+  },
+];
+```
 
-Update `src/popup/popup.ts`:
-- Update `updateUI()` to set checkbox state
-- Update `getSettingsFromUI()` to read checkbox state
-- Add event listener for the new checkbox
+**Category Guidelines**:
+- `'video'`: Video playback, enhancement, capture features (e.g., upscaling, PiP, screenshot)
+- `'ui'`: Visual appearance, layout, hiding elements (e.g., hide ads, square icons, classic layout)
+- `'system'`: Extension behavior, experimental features
+
+**Icon Guidelines** (optional):
+- Use [Heroicons](https://heroicons.com/) outline style (20x20px, stroke-based)
+- Provide only the SVG `<path>` `d` attribute value
+- If omitted, setting card displays without icon
+
+That's all! The popup UI automatically:
+- Renders the setting card in the appropriate tab
+- Handles toggle state persistence
+- Shows status messages on save
+
+## Popup UI Development
+
+### Architecture Overview
+
+The popup UI uses a modern, category-based architecture with the following structure:
+
+- **Tab System**: Three categories (Video, UI, System) organize settings logically
+- **Dynamic Rendering**: Settings cards generated from configuration array
+- **Icon Support**: Optional Heroicons-style SVG icons for visual clarity
+- **Dark Theme**: CSS custom properties for consistent, modern appearance
+
+### Settings Configuration Structure
+
+All popup settings are defined in a single `SETTINGS_CONFIG` array:
+
+```typescript
+interface SettingConfig {
+  id: keyof BetterNiconicoSettings;     // Must match settings.ts interface
+  label: string;                         // Display name (Japanese)
+  description: string;                   // Brief explanation (Japanese)
+  category: 'video' | 'ui' | 'system';  // Tab category
+  icon?: string;                         // Optional: SVG path d attribute
+}
+```
+
+### Category Organization
+
+**Video Tab** (`category: 'video'`):
+- Video enhancement features (upscaling, quality)
+- Video interaction features (PiP, screenshot)
+- Video layout modifications
+
+**UI/表示 Tab** (`category: 'ui'`):
+- Visual hiding/showing elements
+- Layout and appearance changes
+- Profile and UI customizations
+
+**System Tab** (`category: 'system'`):
+- Extension behavior settings
+- Advanced/experimental features
+- Developer options (future use)
+
+### Adding Icons to Settings
+
+Icons use the [Heroicons](https://heroicons.com/) outline icon set (20x20px, 2px stroke):
+
+1. Browse [Heroicons](https://heroicons.com/) and find an appropriate icon
+2. Copy the SVG `<path d="...">` attribute value
+3. Add to the `icon` property in `SETTINGS_CONFIG`
+
+**Example**:
+```typescript
+{
+  id: 'enableVideoUpscaling',
+  label: '動画アップスケーリング',
+  description: 'Anime4K-WebGPUを使用して動画を高画質化します',
+  category: 'video',
+  icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'
+}
+```
+
+**Icon not required**: Settings without icons display cleanly without the icon area.
+
+### Customizing Popup Appearance
+
+The popup's visual design is controlled by CSS custom properties in `src/popup/popup.css`:
+
+```css
+:root {
+  /* Colors */
+  --bg-primary: #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --accent-color: #0099e5;
+  /* ... more variables */
+}
+```
+
+**To customize**:
+- Modify CSS variables in `:root` selector
+- Adjust spacing with `--spacing-*` variables
+- Change border radius with `--radius-*` variables
+- Update transition speeds with `--transition-*` variables
 
 ### Page-Specific Features
 
