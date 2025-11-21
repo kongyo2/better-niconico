@@ -3,12 +3,10 @@
   "name": "Better Niconico",
   "description": "ニコニコ動画のレイアウトと細部を改善する拡張機能",
   "permissions": [
-    "storage",
-    "scripting"
+    "storage"
   ],
   "host_permissions": [
-    "*://*.nicovideo.jp/*",
-    "https://ext.nicovideo.jp/*"
+    "*://*.nicovideo.jp/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
@@ -21,11 +19,6 @@
     {
       "matches": ["*://*.nicovideo.jp/*"],
       "js": ["src/content/index.ts"],
-      "run_at": "document_end"
-    },
-    {
-      "matches": ["https://ext.nicovideo.jp/*"],
-      "js": ["src/content/downloadHelper.ts"],
       "run_at": "document_end"
     }
   ],

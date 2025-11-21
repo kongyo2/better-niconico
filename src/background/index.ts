@@ -39,30 +39,4 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-/**
- * Handle video download requests from content script
- */
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'downloadVideo') {
-    const videoId = request.videoId;
-    console.log('[Better Niconico] Download request for video:', videoId);
-
-    // Open ext.nicovideo.jp in new tab
-    // Content script (downloadHelper.ts) will automatically inject bookmarklet
-    const downloadUrl = `https://ext.nicovideo.jp/?${videoId}`;
-    chrome.tabs.create({ url: downloadUrl }, (newTab) => {
-      if (!newTab.id) {
-        console.error('[Better Niconico] Failed to create new tab');
-        sendResponse({ success: false, error: 'Failed to create tab' });
-        return;
-      }
-
-      console.log('[Better Niconico] Download tab opened:', downloadUrl);
-      sendResponse({ success: true });
-    });
-
-    return true; // Keep message channel open for async response
-  }
-});
-
 console.log('[Better Niconico] バックグラウンドサービスワーカーが初期化されました');

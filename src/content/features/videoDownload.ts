@@ -26,7 +26,7 @@ function getVideoId(): string | null {
 }
 
 /**
- * Send download request to background script
+ * Open nicozon download page directly
  */
 function handleDownloadClick(): void {
   const videoId = getVideoId();
@@ -35,24 +35,11 @@ function handleDownloadClick(): void {
     return;
   }
 
-  console.log(`${FEATURE_NAME} Sending download request for video:`, videoId);
+  console.log(`${FEATURE_NAME} Opening nicozon download page for video:`, videoId);
 
-  // Send message to background script to handle download
-  chrome.runtime.sendMessage(
-    { action: 'downloadVideo', videoId },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.error(`${FEATURE_NAME} Failed to send message:`, chrome.runtime.lastError);
-        return;
-      }
-
-      if (response?.success) {
-        console.log(`${FEATURE_NAME} Download initiated successfully`);
-      } else {
-        console.error(`${FEATURE_NAME} Download failed:`, response?.error);
-      }
-    }
-  );
+  // Open nicozon download page directly in new tab
+  const nicozonUrl = `https://www.nicozon.net/watch/${videoId}`;
+  window.open(nicozonUrl, '_blank');
 }
 
 /**
