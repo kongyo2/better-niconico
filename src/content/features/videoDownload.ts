@@ -7,10 +7,6 @@
  * @page /watch/* only
  */
 
-import { Result, ok, err } from 'neverthrow';
-import type { PageError } from '@/types/errors';
-import { domElementNotFoundError } from '@/types/errors';
-
 const FEATURE_NAME = '[Better Niconico - Video Download]';
 const BUTTON_MARKER = 'data-bn-download-button';
 
@@ -24,25 +20,21 @@ function isWatchPage(): boolean {
 /**
  * Get video ID from current URL
  */
-function getVideoId(): Result<string, PageError> {
+function getVideoId(): string | null {
   const match = window.location.pathname.match(/\/watch\/([^/?]+)/);
-  if (!match || !match[1]) {
-    return err(domElementNotFoundError('Video ID not found in URL', window.location.pathname));
-  }
-  return ok(match[1]);
+  return match?.[1] || null;
 }
 
 /**
  * Open download page in new tab
  */
 function handleDownloadClick(): void {
-  const videoIdResult = getVideoId();
-  if (videoIdResult.isErr()) {
-    console.error(`${FEATURE_NAME} ${videoIdResult.error.message}`);
+  const videoId = getVideoId();
+  if (!videoId) {
+    console.error(`${FEATURE_NAME} Video ID not found in URL`);
     return;
   }
 
-  const videoId = videoIdResult.value;
   const downloadUrl = `https://ext.nicovideo.jp/?${videoId}`;
 
   console.log(`${FEATURE_NAME} Opening download page:`, downloadUrl);
@@ -54,10 +46,17 @@ function handleDownloadClick(): void {
 /**
  * Create download button in player control bar
  */
-function createDownloadButton(): Result<HTMLButtonElement, PageError> {
+function createDownloadButton(): void {
+  // Check if button already exists
+  const existingButton = document.querySelector(`[${BUTTON_MARKER}]`);
+  if (existingButton) {
+    return;
+  }
+
   const playerArea = document.querySelector('.grid-area_\\[player\\]');
   if (!playerArea) {
-    return err(domElementNotFoundError('Player area not found', '.grid-area_[player]'));
+    // Player area not loaded yet, skip silently
+    return;
   }
 
   // Find fullscreen button to insert before it
@@ -66,21 +65,11 @@ function createDownloadButton(): Result<HTMLButtonElement, PageError> {
   );
 
   if (!fullscreenButton || !fullscreenButton.parentElement) {
-    return err(
-      domElementNotFoundError(
-        'Fullscreen button or its parent not found',
-        'button[aria-label="全画面表示する"]',
-      ),
-    );
+    // Control bar not loaded yet, skip silently
+    return;
   }
 
   const controlBarButtonGroup = fullscreenButton.parentElement;
-
-  // Check if button already exists
-  const existingButton = controlBarButtonGroup.querySelector(`[${BUTTON_MARKER}]`);
-  if (existingButton) {
-    return ok(existingButton as HTMLButtonElement);
-  }
 
   // Create download button
   const button = document.createElement('button');
@@ -106,7 +95,6 @@ function createDownloadButton(): Result<HTMLButtonElement, PageError> {
   controlBarButtonGroup.insertBefore(button, fullscreenButton);
 
   console.log(`${FEATURE_NAME} Download button created`);
-  return ok(button);
 }
 
 /**
@@ -131,10 +119,7 @@ export function apply(enabled: boolean): void {
   }
 
   if (enabled) {
-    const result = createDownloadButton();
-    if (result.isErr()) {
-      console.error(`${FEATURE_NAME} ${result.error.message}`);
-    }
+    createDownloadButton();
   } else {
     removeDownloadButton();
   }
