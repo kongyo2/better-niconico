@@ -26,7 +26,7 @@ function getVideoId(): string | null {
 }
 
 /**
- * Open download page in new tab
+ * Execute nicozon bookmarklet to download video
  */
 function handleDownloadClick(): void {
   const videoId = getVideoId();
@@ -35,12 +35,18 @@ function handleDownloadClick(): void {
     return;
   }
 
-  const downloadUrl = `https://ext.nicovideo.jp/?${videoId}`;
+  console.log(`${FEATURE_NAME} Executing nicozon bookmarklet for video:`, videoId);
 
-  console.log(`${FEATURE_NAME} Opening download page:`, downloadUrl);
-
-  // Open in new tab
-  window.open(downloadUrl, '_blank');
+  // Execute nicozon bookmarklet directly on current page
+  try {
+    const script = document.createElement('script');
+    script.setAttribute('charset', 'utf-8');
+    script.src = 'https://www.nicozon.net/js/bookmarklet.js';
+    document.body.appendChild(script);
+    console.log(`${FEATURE_NAME} Bookmarklet script injected`);
+  } catch (error) {
+    console.error(`${FEATURE_NAME} Failed to execute bookmarklet:`, error);
+  }
 }
 
 /**
