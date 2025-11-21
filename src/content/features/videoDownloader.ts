@@ -63,20 +63,63 @@ function getVideoId(): Result<string, PageError> {
 
 /**
  * Extract HLS master URL from system messages
+ * Uses pattern from reference implementation: nico_downloader
  */
 function extractHLSUrl(): Result<string, DownloadError> {
-  const systemMessages = document.querySelectorAll('.c_monotone\\.L80');
+  // Debug: Log all potential message containers
+  console.log(`${FEATURE_NAME} Searching for HLS URL in system messages...`);
 
-  for (const message of systemMessages) {
+  // Pattern 1: Reference implementation (nico_downloader)
+  // CSS: SystemMessageContainer-info
+  // Pattern: 動画の読み込みを開始しました。（URL）
+  const refMessages = document.getElementsByClassName('SystemMessageContainer-info');
+  console.log(`${FEATURE_NAME} Found ${refMessages.length} SystemMessageContainer-info elements`);
+
+  for (let i = 0; i < refMessages.length; i++) {
+    const text = refMessages[i].textContent || '';
+    console.log(`${FEATURE_NAME} Message ${i}:`, text.substring(0, 100));
+
+    if (text.match(/(動画の読み込みを開始しました。).*/)) {
+      // Extract URL by removing prefix and closing parenthesis
+      const url = text.replace('動画の読み込みを開始しました。（', '').replace('）', '');
+      if (url.startsWith('https://')) {
+        console.log(`${FEATURE_NAME} Found HLS URL (ref pattern):`, url);
+        return ok(url);
+      }
+    }
+  }
+
+  // Pattern 2: Fallback to previous implementation
+  // CSS: .c_monotone\.L80
+  // Pattern: 動画の初期化処理が完了しました (URL)
+  const fallbackMessages = document.querySelectorAll('.c_monotone\\.L80');
+  console.log(`${FEATURE_NAME} Found ${fallbackMessages.length} .c_monotone.L80 elements (fallback)`);
+
+  for (const message of fallbackMessages) {
     const text = message.textContent || '';
     const match = text.match(/動画の初期化処理が完了しました \((https:\/\/[^)]+)\)/);
     if (match && match[1]) {
-      console.log(`${FEATURE_NAME} Found HLS URL:`, match[1]);
+      console.log(`${FEATURE_NAME} Found HLS URL (fallback pattern):`, match[1]);
       return ok(match[1]);
     }
   }
 
-  return err(hlsUrlNotFoundError('HLS URL not found in system messages'));
+  // Pattern 3: Generic search for any URLs in system-like messages
+  const genericMessages = document.querySelectorAll('[class*="Message"], [class*="message"], [class*="System"], [class*="system"]');
+  console.log(`${FEATURE_NAME} Found ${genericMessages.length} generic message elements`);
+
+  for (const message of genericMessages) {
+    const text = message.textContent || '';
+    // Look for delivery.domand.nicovideo.jp URLs
+    const urlMatch = text.match(/https:\/\/delivery\.domand\.nicovideo\.jp\/[^\s)）]+/);
+    if (urlMatch) {
+      console.log(`${FEATURE_NAME} Found HLS URL (generic pattern):`, urlMatch[0]);
+      return ok(urlMatch[0]);
+    }
+  }
+
+  console.error(`${FEATURE_NAME} No HLS URL found. Checked ${refMessages.length + fallbackMessages.length + genericMessages.length} message elements.`);
+  return err(hlsUrlNotFoundError('HLS URL not found in system messages. Please ensure the video has loaded.'));
 }
 
 /**
