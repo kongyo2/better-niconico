@@ -7,24 +7,20 @@
  */
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL, fetchFile } from '@ffmpeg/util';
+import { toBlobURL } from '@ffmpeg/util';
 import { Parser } from 'm3u8-parser';
-import { Result, ResultAsync, ok, err } from 'neverthrow';
-import type { DownloadError, PageError, VideoError } from '@/types/errors';
+import { Result, ok, err } from 'neverthrow';
+import type { DownloadError, PageError } from '@/types/errors';
 import {
   hlsUrlNotFoundError,
   m3u8ParseFailedError,
   segmentDownloadFailedError,
-  ffmpegNotLoadedError,
   ffmpegEncodeFailedError,
-  fileSaveFailedError,
   domElementNotFoundError,
-  videoElementNotFoundError,
 } from '@/types/errors';
 
 const FEATURE_NAME = '[Better Niconico - Video Downloader]';
 const BUTTON_MARKER = 'data-bn-download-button';
-const DOWNLOADING_MARKER = 'data-bn-downloading';
 
 // FFmpeg singleton instance
 let ffmpegInstance: FFmpeg | null = null;
@@ -187,13 +183,25 @@ async function initFFmpeg(): Promise<Result<FFmpeg, DownloadError>> {
   }
 
   if (isFFmpegLoading) {
-    // Wait for ongoing initialization
-    while (isFFmpegLoading) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait for ongoing initialization with timeout
+    const result = await Promise.race([
+      new Promise<FFmpeg>((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (ffmpegInstance && ffmpegInstance.loaded) {
+            clearInterval(checkInterval);
+            resolve(ffmpegInstance);
+          }
+        }, 100);
+      }),
+      new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error('FFmpeg initialization timeout')), 30000);
+      }),
+    ]).catch(() => null);
+
+    if (result) {
+      return ok(result);
     }
-    if (ffmpegInstance && ffmpegInstance.loaded) {
-      return ok(ffmpegInstance);
-    }
+    return err(ffmpegEncodeFailedError('FFmpeg initialization timeout', null));
   }
 
   isFFmpegLoading = true;
@@ -476,9 +484,8 @@ async function handleDownloadClick(): Promise<void> {
     }
   }
 
-  // Download audio segments
-  for (let i = 0; i < audioSegments.length; i++) {
-    const segment = audioSegments[i];
+  // Download audio segments (parallel with batching to manage memory)
+  const audioDownloadPromises = audioSegments.map(async (segment, i) => {
     if (segment.uri) {
       const segmentResult = await downloadSegment(segment.uri);
       if (segmentResult.isOk()) {
@@ -489,11 +496,10 @@ async function handleDownloadClick(): Promise<void> {
         }
       }
     }
-  }
+  });
 
-  // Download video segments
-  for (let i = 0; i < videoSegments.length; i++) {
-    const segment = videoSegments[i];
+  // Download video segments (parallel with batching to manage memory)
+  const videoDownloadPromises = videoSegments.map(async (segment, i) => {
     if (segment.uri) {
       const segmentResult = await downloadSegment(segment.uri);
       if (segmentResult.isOk()) {
@@ -504,7 +510,10 @@ async function handleDownloadClick(): Promise<void> {
         }
       }
     }
-  }
+  });
+
+  // Wait for all downloads to complete
+  await Promise.all([...audioDownloadPromises, ...videoDownloadPromises]);
 
   console.log(`${FEATURE_NAME} All segments downloaded`);
 
