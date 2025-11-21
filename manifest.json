@@ -22,6 +22,11 @@
       "matches": ["*://*.nicovideo.jp/*"],
       "js": ["src/content/index.ts"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["https://ext.nicovideo.jp/*"],
+      "js": ["src/content/downloadHelper.ts"],
+      "run_at": "document_end"
     }
   ],
   "action": {
