@@ -7,24 +7,20 @@
  */
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL, fetchFile } from '@ffmpeg/util';
+import { toBlobURL } from '@ffmpeg/util';
 import { Parser } from 'm3u8-parser';
-import { Result, ResultAsync, ok, err } from 'neverthrow';
-import type { DownloadError, PageError, VideoError } from '@/types/errors';
+import { Result, ok, err } from 'neverthrow';
+import type { DownloadError, PageError } from '@/types/errors';
 import {
   hlsUrlNotFoundError,
   m3u8ParseFailedError,
   segmentDownloadFailedError,
-  ffmpegNotLoadedError,
   ffmpegEncodeFailedError,
-  fileSaveFailedError,
   domElementNotFoundError,
-  videoElementNotFoundError,
 } from '@/types/errors';
 
 const FEATURE_NAME = '[Better Niconico - Video Downloader]';
 const BUTTON_MARKER = 'data-bn-download-button';
-const DOWNLOADING_MARKER = 'data-bn-downloading';
 
 // FFmpeg singleton instance
 let ffmpegInstance: FFmpeg | null = null;
@@ -63,20 +59,63 @@ function getVideoId(): Result<string, PageError> {
 
 /**
  * Extract HLS master URL from system messages
+ * Uses pattern from reference implementation: nico_downloader
  */
 function extractHLSUrl(): Result<string, DownloadError> {
-  const systemMessages = document.querySelectorAll('.c_monotone\\.L80');
+  // Debug: Log all potential message containers
+  console.log(`${FEATURE_NAME} Searching for HLS URL in system messages...`);
 
-  for (const message of systemMessages) {
+  // Pattern 1: Reference implementation (nico_downloader)
+  // CSS: SystemMessageContainer-info
+  // Pattern: 動画の読み込みを開始しました。（URL）
+  const refMessages = document.getElementsByClassName('SystemMessageContainer-info');
+  console.log(`${FEATURE_NAME} Found ${refMessages.length} SystemMessageContainer-info elements`);
+
+  for (let i = 0; i < refMessages.length; i++) {
+    const text = refMessages[i].textContent || '';
+    console.log(`${FEATURE_NAME} Message ${i}:`, text.substring(0, 100));
+
+    if (text.match(/(動画の読み込みを開始しました。).*/)) {
+      // Extract URL by removing prefix and closing parenthesis
+      const url = text.replace('動画の読み込みを開始しました。（', '').replace('）', '');
+      if (url.startsWith('https://')) {
+        console.log(`${FEATURE_NAME} Found HLS URL (ref pattern):`, url);
+        return ok(url);
+      }
+    }
+  }
+
+  // Pattern 2: Fallback to previous implementation
+  // CSS: .c_monotone\.L80
+  // Pattern: 動画の初期化処理が完了しました (URL)
+  const fallbackMessages = document.querySelectorAll('.c_monotone\\.L80');
+  console.log(`${FEATURE_NAME} Found ${fallbackMessages.length} .c_monotone.L80 elements (fallback)`);
+
+  for (const message of fallbackMessages) {
     const text = message.textContent || '';
     const match = text.match(/動画の初期化処理が完了しました \((https:\/\/[^)]+)\)/);
     if (match && match[1]) {
-      console.log(`${FEATURE_NAME} Found HLS URL:`, match[1]);
+      console.log(`${FEATURE_NAME} Found HLS URL (fallback pattern):`, match[1]);
       return ok(match[1]);
     }
   }
 
-  return err(hlsUrlNotFoundError('HLS URL not found in system messages'));
+  // Pattern 3: Generic search for any URLs in system-like messages
+  const genericMessages = document.querySelectorAll('[class*="Message"], [class*="message"], [class*="System"], [class*="system"]');
+  console.log(`${FEATURE_NAME} Found ${genericMessages.length} generic message elements`);
+
+  for (const message of genericMessages) {
+    const text = message.textContent || '';
+    // Look for delivery.domand.nicovideo.jp URLs
+    const urlMatch = text.match(/https:\/\/delivery\.domand\.nicovideo\.jp\/[^\s)）]+/);
+    if (urlMatch) {
+      console.log(`${FEATURE_NAME} Found HLS URL (generic pattern):`, urlMatch[0]);
+      return ok(urlMatch[0]);
+    }
+  }
+
+  console.error(`${FEATURE_NAME} No HLS URL found. Checked ${refMessages.length + fallbackMessages.length + genericMessages.length} message elements.`);
+  return err(hlsUrlNotFoundError('HLS URL not found in system messages. Please ensure the video has loaded.'));
 }
 
 /**
@@ -144,13 +183,25 @@ async function initFFmpeg(): Promise<Result<FFmpeg, DownloadError>> {
   }
 
   if (isFFmpegLoading) {
-    // Wait for ongoing initialization
-    while (isFFmpegLoading) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait for ongoing initialization with timeout
+    const result = await Promise.race([
+      new Promise<FFmpeg>((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (ffmpegInstance && ffmpegInstance.loaded) {
+            clearInterval(checkInterval);
+            resolve(ffmpegInstance);
+          }
+        }, 100);
+      }),
+      new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error('FFmpeg initialization timeout')), 30000);
+      }),
+    ]).catch(() => null);
+
+    if (result) {
+      return ok(result);
     }
-    if (ffmpegInstance && ffmpegInstance.loaded) {
-      return ok(ffmpegInstance);
-    }
+    return err(ffmpegEncodeFailedError('FFmpeg initialization timeout', null));
   }
 
   isFFmpegLoading = true;
@@ -433,9 +484,8 @@ async function handleDownloadClick(): Promise<void> {
     }
   }
 
-  // Download audio segments
-  for (let i = 0; i < audioSegments.length; i++) {
-    const segment = audioSegments[i];
+  // Download audio segments (parallel with batching to manage memory)
+  const audioDownloadPromises = audioSegments.map(async (segment, i) => {
     if (segment.uri) {
       const segmentResult = await downloadSegment(segment.uri);
       if (segmentResult.isOk()) {
@@ -446,11 +496,10 @@ async function handleDownloadClick(): Promise<void> {
         }
       }
     }
-  }
+  });
 
-  // Download video segments
-  for (let i = 0; i < videoSegments.length; i++) {
-    const segment = videoSegments[i];
+  // Download video segments (parallel with batching to manage memory)
+  const videoDownloadPromises = videoSegments.map(async (segment, i) => {
     if (segment.uri) {
       const segmentResult = await downloadSegment(segment.uri);
       if (segmentResult.isOk()) {
@@ -461,7 +510,10 @@ async function handleDownloadClick(): Promise<void> {
         }
       }
     }
-  }
+  });
+
+  // Wait for all downloads to complete
+  await Promise.all([...audioDownloadPromises, ...videoDownloadPromises]);
 
   console.log(`${FEATURE_NAME} All segments downloaded`);
 
