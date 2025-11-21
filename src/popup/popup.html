@@ -5,174 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Better Niconico 設定</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="container">
+  <div class="app-container">
     <header class="header">
-      <h1 class="title">Better Niconico</h1>
-      <p class="subtitle">ニコニコ動画をあなた好みにカスタマイズ</p>
+      <div class="header-content">
+        <div class="logo-area">
+          <div class="logo-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="2"/>
+              <path d="M8 10C8 10 9 11 10 11C11 11 12 10 12 10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              <path d="M12 10C12 10 13 11 14 11C15 11 16 10 16 10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              <path d="M16 15C16 15 15 16 14 16H10C9 16 8 15 8 15" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h1 class="title">Better Niconico</h1>
+        </div>
+        <div class="version-badge" id="version">v1.0.0</div>
+      </div>
+      <div class="tabs">
+        <button class="tab-button active" data-tab="video">動画</button>
+        <button class="tab-button" data-tab="ui">UI/表示</button>
+        <button class="tab-button" data-tab="system">システム</button>
+      </div>
     </header>
 
-    <main class="settings">
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="hidePremiumSection" class="setting-label">
-            プレミアム会員セクションを非表示
-          </label>
-          <p class="setting-description">
-            「プレミアム会員なら動画が見放題！」のセクションを非表示にします
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="hidePremiumSection">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="hideOnAirAnime" class="setting-label">
-            TV放送中のアニメセクションを非表示
-          </label>
-          <p class="setting-description">
-            「TV放送中のアニメ」のセクションを非表示にします
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="hideOnAirAnime">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="restoreClassicVideoLayout" class="setting-label">
-            動画情報を上部に表示（クラシックレイアウト）
-          </label>
-          <p class="setting-description">
-            動画視聴ページで、タイトルやタグなどの情報を動画プレイヤーの上に表示します
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="restoreClassicVideoLayout">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="enableVideoUpscaling" class="setting-label">
-            動画アップスケーリング（Anime4K）
-          </label>
-          <p class="setting-description">
-            Anime4K-WebGPUを使用して動画を高画質にアップスケーリングします（WebGPU対応ブラウザが必要）
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="enableVideoUpscaling">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="showNicoRankButton" class="setting-label">
-            サイドバーにニコランボタンを表示
-          </label>
-          <p class="setting-description">
-            video_topページの左サイドバーにnico-rank.comへのボタンを追加します
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="showNicoRankButton">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="squareProfileIcons" class="setting-label">
-            プロフィールアイコンを四角型に変更
-          </label>
-          <p class="setting-description">
-            プロフィールアイコンの形状を丸型から角丸の四角型に変更します
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="squareProfileIcons">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="hideSupporterButton" class="setting-label">
-            サポーターボタンを非表示
-          </label>
-          <p class="setting-description">
-            動画視聴ページの「サポート」ボタンとサポーター勧誘を非表示にします
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="hideSupporterButton">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="hideNicoAds" class="setting-label">
-            ニコニ広告セクションを非表示
-          </label>
-          <p class="setting-description">
-            動画プレーヤーの下部に表示される「ニコニ広告」のセクション全体を非表示にします
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="hideNicoAds">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="enablePictureInPicture" class="setting-label">
-            Picture-in-Picture機能
-          </label>
-          <p class="setting-description">
-            動画プレーヤーにPiPボタンを追加し、動画とコメントを合成してPiP表示できるようにします
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="enablePictureInPicture">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <label for="enableVideoScreenshot" class="setting-label">
-            動画スクリーンショット機能
-          </label>
-          <p class="setting-description">
-            動画プレーヤーにスクリーンショットボタンを追加し、現在のフレーム（コメント付き）を画像として保存できます
-          </p>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="enableVideoScreenshot">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <!-- 将来の機能拡張のためのプレースホルダー -->
-      <div class="future-features">
-        <p class="future-text">更なる改善機能を追加予定...</p>
-      </div>
+    <main class="settings-container" id="settingsContainer">
+      <!-- Settings will be dynamically injected here -->
     </main>
 
     <footer class="footer">
       <div class="status-message" id="statusMessage"></div>
-      <p class="version" id="version"></p>
+      <a href="https://github.com/kongyo2/better-niconico" target="_blank" class="github-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.05-.015-2.055-3.33.72-4.035-1.605-4.035-1.605-.54-1.38-1.32-1.755-1.32-1.755-1.095-.75.09-.735.09-.735 1.2.09 1.845 1.245 1.845 1.245 1.08 1.86 2.805 1.32 3.495 1.005.105-.78.42-1.32.765-1.62-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405 1.02 0 2.04.135 3 .405 2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.285 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+        GitHub
+      </a>
     </footer>
   </div>
 
