@@ -1101,26 +1101,50 @@ controlBarButtonGroup.insertBefore(button, fullscreenButton);
 
 #### 2. HLS URL Extraction
 
-The feature extracts the HLS master playlist URL from Niconico's system messages:
+**Modern Approach (2025)**: Uses Performance API to find already-loaded m3u8 resources
+
+Niconico no longer displays HLS URLs in system messages. The video player loads the master playlist via API, and we extract the URL from browser's Performance API:
 
 ```typescript
 function extractHLSUrl(): Result<string, DownloadError> {
-  const systemMessages = document.querySelectorAll('.c_monotone\\.L80');
+  // Modern approach: Use Performance API
+  try {
+    const resources = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+    const m3u8Resources = resources.filter((r) => r.name.includes('.m3u8'));
 
-  for (const message of systemMessages) {
-    const text = message.textContent || '';
-    const match = text.match(/動画の初期化処理が完了しました \((https:\/\/[^)]+)\)/);
-    if (match && match[1]) {
-      return ok(match[1]);
+    if (m3u8Resources.length > 0) {
+      // Prefer master playlist (contains /playlists/variants/)
+      const masterPlaylist = m3u8Resources.find((r) => r.name.includes('/playlists/variants/'));
+
+      if (masterPlaylist) {
+        return ok(masterPlaylist.name);
+      }
+
+      return ok(m3u8Resources[0].name);
     }
+  } catch (error) {
+    console.warn('Performance API failed:', error);
   }
 
-  return err(hlsUrlNotFoundError('HLS URL not found in system messages'));
+  // Legacy fallback: Try DOM-based extraction
+  // (for older pages or different login states)
+  const systemMessages = document.querySelectorAll('.c_monotone\\.L80');
+  // ... DOM fallback logic ...
+
+  return err(hlsUrlNotFoundError('HLS URL not found'));
 }
 ```
 
-- **System Messages**: Searches for "動画の初期化処理が完了しました" message
-- **URL Format**: `https://delivery.domand.nicovideo.jp/...`
+**How it works**:
+1. **Performance API**: Queries already-loaded network resources via `performance.getEntriesByType('resource')`
+2. **Master Playlist**: Prefers URLs containing `/playlists/variants/` (master playlist)
+3. **URL Format**: `https://delivery.domand.nicovideo.jp/hlsbid/{id}/playlists/variants/{hash}.m3u8?session=...`
+4. **Legacy Fallback**: DOM-based extraction for older page structures
+
+**Why this approach**:
+- **Current Niconico** (2025): HLS URLs obtained via `/v1/watch/{videoId}/access-rights/hls` API
+- **No DOM messages**: URLs are not displayed in system messages anymore
+- **Performance API**: Reliable way to extract already-loaded resources
 - **Error Handling**: Returns Result type for type-safe error handling
 
 #### 3. M3U8 Playlist Parsing
