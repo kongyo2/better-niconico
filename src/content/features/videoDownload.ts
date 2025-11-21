@@ -26,7 +26,7 @@ function getVideoId(): string | null {
 }
 
 /**
- * Execute nicozon bookmarklet to download video
+ * Send download request to background script
  */
 function handleDownloadClick(): void {
   const videoId = getVideoId();
@@ -35,18 +35,24 @@ function handleDownloadClick(): void {
     return;
   }
 
-  console.log(`${FEATURE_NAME} Executing nicozon bookmarklet for video:`, videoId);
+  console.log(`${FEATURE_NAME} Sending download request for video:`, videoId);
 
-  // Execute nicozon bookmarklet directly on current page
-  try {
-    const script = document.createElement('script');
-    script.setAttribute('charset', 'utf-8');
-    script.src = 'https://www.nicozon.net/js/bookmarklet.js';
-    document.body.appendChild(script);
-    console.log(`${FEATURE_NAME} Bookmarklet script injected`);
-  } catch (error) {
-    console.error(`${FEATURE_NAME} Failed to execute bookmarklet:`, error);
-  }
+  // Send message to background script to handle download
+  chrome.runtime.sendMessage(
+    { action: 'downloadVideo', videoId },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error(`${FEATURE_NAME} Failed to send message:`, chrome.runtime.lastError);
+        return;
+      }
+
+      if (response?.success) {
+        console.log(`${FEATURE_NAME} Download initiated successfully`);
+      } else {
+        console.error(`${FEATURE_NAME} Download failed:`, response?.error);
+      }
+    }
+  );
 }
 
 /**
