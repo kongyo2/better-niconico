@@ -16,6 +16,7 @@ import * as hideSupporterButton from './features/hideSupporterButton';
 import * as hideNicoAds from './features/hideNicoAds';
 import * as pictureInPicture from './features/pictureInPicture';
 import * as videoScreenshot from './features/videoScreenshot';
+import * as videoDownload from './features/videoDownload';
 
 /**
  * 設定を適用する（Result型を使用）
@@ -37,6 +38,7 @@ async function applySettings(): Promise<void> {
     hideNicoAds.apply(settings.hideNicoAds);
     pictureInPicture.apply(settings.enablePictureInPicture);
     videoScreenshot.apply(settings.enableVideoScreenshot);
+    videoDownload.apply(settings.enableVideoDownload);
     return;
   }
 
@@ -53,6 +55,7 @@ async function applySettings(): Promise<void> {
   hideNicoAds.apply(settings.hideNicoAds);
   pictureInPicture.apply(settings.enablePictureInPicture);
   videoScreenshot.apply(settings.enableVideoScreenshot);
+  videoDownload.apply(settings.enableVideoDownload);
 }
 
 /**
