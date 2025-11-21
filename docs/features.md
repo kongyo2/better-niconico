@@ -680,6 +680,7 @@ const controlBarButtonGroup = fullscreenButton.parentElement;
 // Create PiP button with Niconico's native styling
 const button = document.createElement('button');
 button.className = 'Pressable cursor_pointer';
+button.style.color = '#FFFFFF'; // White color to match other control buttons
 button.setAttribute('aria-label', 'Picture-in-Picture');
 
 // Insert before fullscreen button
@@ -687,7 +688,9 @@ controlBarButtonGroup.insertBefore(button, fullscreenButton);
 ```
 
 - **Position**: Integrated into player control bar, before fullscreen button
-- **Styling**: Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+- **Styling**:
+  - Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+  - White color (`#FFFFFF`) applied for consistency with other player controls
 - **Icon**: SVG PiP icon (rectangle with smaller rectangle inside), 28x28px
 - **Integration**: Seamlessly blends with native player controls
 
@@ -854,6 +857,7 @@ const controlBarButtonGroup = fullscreenButton.parentElement;
 // Create screenshot button with Niconico's native styling
 const button = document.createElement('button');
 button.className = 'Pressable cursor_pointer';
+button.style.color = '#FFFFFF'; // White color to match other control buttons
 button.setAttribute('aria-label', 'スクリーンショット');
 
 // Insert before fullscreen button
@@ -861,7 +865,9 @@ controlBarButtonGroup.insertBefore(button, fullscreenButton);
 ```
 
 - **Position**: Integrated into player control bar, before fullscreen button
-- **Styling**: Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+- **Styling**:
+  - Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+  - White color (`#FFFFFF`) applied for consistency with other player controls
 - **Icon**: SVG camera icon, 28x28px
 - **Integration**: Seamlessly blends with native player controls
 
