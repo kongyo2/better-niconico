@@ -43,6 +43,18 @@ export type MessageError =
   | { type: 'message_response_failed'; message: string; cause?: unknown };
 
 /**
+ * Video download and encoding errors
+ */
+export type DownloadError =
+  | { type: 'hls_url_not_found'; message: string }
+  | { type: 'm3u8_parse_failed'; message: string; cause?: unknown }
+  | { type: 'segment_download_failed'; message: string; url: string; cause?: unknown }
+  | { type: 'ffmpeg_not_loaded'; message: string }
+  | { type: 'ffmpeg_encode_failed'; message: string; cause?: unknown }
+  | { type: 'file_save_failed'; message: string; cause?: unknown }
+  | { type: 'invalid_video_format'; message: string; format: string };
+
+/**
  * Union of all application errors
  */
 export type AppError =
@@ -50,7 +62,8 @@ export type AppError =
   | WebGPUError
   | VideoError
   | PageError
-  | MessageError;
+  | MessageError
+  | DownloadError;
 
 /**
  * Helper function to create StorageError
@@ -133,4 +146,39 @@ export function invalidMessageActionError(message: string, action: string): Mess
 
 export function messageResponseFailedError(message: string, cause?: unknown): MessageError {
   return { type: 'message_response_failed', message, cause };
+}
+
+/**
+ * Helper function to create DownloadError
+ */
+export function hlsUrlNotFoundError(message: string): DownloadError {
+  return { type: 'hls_url_not_found', message };
+}
+
+export function m3u8ParseFailedError(message: string, cause?: unknown): DownloadError {
+  return { type: 'm3u8_parse_failed', message, cause };
+}
+
+export function segmentDownloadFailedError(
+  message: string,
+  url: string,
+  cause?: unknown,
+): DownloadError {
+  return { type: 'segment_download_failed', message, url, cause };
+}
+
+export function ffmpegNotLoadedError(message: string): DownloadError {
+  return { type: 'ffmpeg_not_loaded', message };
+}
+
+export function ffmpegEncodeFailedError(message: string, cause?: unknown): DownloadError {
+  return { type: 'ffmpeg_encode_failed', message, cause };
+}
+
+export function fileSaveFailedError(message: string, cause?: unknown): DownloadError {
+  return { type: 'file_save_failed', message, cause };
+}
+
+export function invalidVideoFormatError(message: string, format: string): DownloadError {
+  return { type: 'invalid_video_format', message, format };
 }
