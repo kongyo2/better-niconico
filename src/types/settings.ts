@@ -21,6 +21,8 @@ export interface BetterNiconicoSettings {
   enablePictureInPicture: boolean;
   // 動画スクリーンショット機能を有効化
   enableVideoScreenshot: boolean;
+  // 動画ダウンロード機能を有効化
+  enableVideoDownload: boolean;
   // 今後追加する機能のための拡張性
 }
 
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideNicoAds: false,
   enablePictureInPicture: false,
   enableVideoScreenshot: false,
+  enableVideoDownload: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

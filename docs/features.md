@@ -16,6 +16,7 @@ This document describes all features implemented in Better Niconico, with detail
 | Hide Nico Ads | `src/content/features/hideNicoAds.ts` | DOM | OFF |
 | Picture-in-Picture | `src/content/features/pictureInPicture.ts` | Canvas | OFF |
 | Video Screenshot | `src/content/features/videoScreenshot.ts` | Canvas | OFF |
+| Video Download | `src/content/features/videoDownloader.ts` | FFmpeg | OFF |
 
 ---
 
@@ -1055,6 +1056,391 @@ Screenshots allow users to save memorable moments from videos, share them on soc
 
 ---
 
+## 11. Video Download
+
+**Location**: `src/content/features/videoDownloader.ts`
+**Reference**: Based on [nico_downloader](https://github.com/masteralice3104/nico_downloader)
+**Default**: OFF
+**Page**: `/watch/*` only
+
+### Description
+
+Downloads HLS streaming videos from Niconico and converts them to MP4 format using FFmpeg.wasm. Adds a download button to the player control bar that automatically extracts HLS URLs, downloads all segments, and merges them into a single MP4 file.
+
+### CRITICAL Implementation Details
+
+#### 1. Button Integration
+
+The feature adds a download button to the player control bar:
+
+```typescript
+// Find the fullscreen button in the control bar
+const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
+  (btn) => btn.getAttribute('aria-label') === '全画面表示する',
+);
+
+// Get the control bar button group (parent of fullscreen button)
+const controlBarButtonGroup = fullscreenButton.parentElement;
+
+// Create download button with Niconico's native styling
+const button = document.createElement('button');
+button.className = 'Pressable cursor_pointer';
+button.style.color = '#FFFFFF'; // White color to match other control buttons
+button.setAttribute('aria-label', 'ダウンロード');
+
+// Insert before fullscreen button
+controlBarButtonGroup.insertBefore(button, fullscreenButton);
+```
+
+- **Position**: Integrated into player control bar, before fullscreen button
+- **Styling**:
+  - Uses Niconico's native control bar button classes (`Pressable cursor_pointer`)
+  - White color (`#FFFFFF`) applied for consistency with other player controls
+- **Icon**: SVG download icon (arrow down to tray), 28x28px
+- **Integration**: Seamlessly blends with native player controls
+
+#### 2. HLS URL Extraction
+
+The feature extracts the HLS master playlist URL from Niconico's system messages:
+
+```typescript
+function extractHLSUrl(): Result<string, DownloadError> {
+  const systemMessages = document.querySelectorAll('.c_monotone\\.L80');
+
+  for (const message of systemMessages) {
+    const text = message.textContent || '';
+    const match = text.match(/動画の初期化処理が完了しました \((https:\/\/[^)]+)\)/);
+    if (match && match[1]) {
+      return ok(match[1]);
+    }
+  }
+
+  return err(hlsUrlNotFoundError('HLS URL not found in system messages'));
+}
+```
+
+- **System Messages**: Searches for "動画の初期化処理が完了しました" message
+- **URL Format**: `https://delivery.domand.nicovideo.jp/...`
+- **Error Handling**: Returns Result type for type-safe error handling
+
+#### 3. M3U8 Playlist Parsing
+
+Uses the `m3u8-parser` library to parse HLS playlists:
+
+```typescript
+import { Parser } from 'm3u8-parser';
+
+function parseM3U8(content: string): Result<Parser, DownloadError> {
+  try {
+    const parser = new Parser();
+    parser.push(content);
+    parser.end();
+    return ok(parser);
+  } catch (error) {
+    return err(m3u8ParseFailedError('Failed to parse M3U8 playlist', error));
+  }
+}
+```
+
+**Playlist Structure**:
+1. **Master Playlist**: Contains references to audio and video playlists
+2. **Audio Playlist**: Lists all audio segments (`.m4s` files)
+3. **Video Playlist**: Lists all video segments (`.m4s` files)
+
+**Extracted Information**:
+- Audio M3U8 URL: `manifest.mediaGroups.AUDIO.audio.main.uri`
+- Video M3U8 URL: `manifest.playlists[0].uri`
+- Audio segments: `manifest.segments` (from audio playlist)
+- Video segments: `manifest.segments` (from video playlist)
+
+#### 4. Segment Downloading
+
+Downloads all HLS segments with credentials:
+
+```typescript
+async function downloadSegment(url: string): Promise<Result<Uint8Array, DownloadError>> {
+  try {
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) {
+      return err(
+        segmentDownloadFailedError(
+          `Failed to download segment: ${response.status} ${response.statusText}`,
+          url,
+        ),
+      );
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return ok(new Uint8Array(arrayBuffer));
+  } catch (error) {
+    return err(segmentDownloadFailedError('Network error during segment download', url, error));
+  }
+}
+```
+
+**Download Flow**:
+1. Download audio init segment (initialization data)
+2. Download video init segment
+3. Download all audio segments sequentially
+4. Download all video segments sequentially
+5. Update progress display every 10 segments
+
+**Credentials**: Uses `credentials: 'include'` to maintain login session cookies
+
+#### 5. FFmpeg.wasm Integration
+
+Initializes and uses FFmpeg.wasm to merge segments:
+
+```typescript
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { toBlobURL } from '@ffmpeg/util';
+
+async function initFFmpeg(): Promise<Result<FFmpeg, DownloadError>> {
+  const ffmpeg = new FFmpeg();
+
+  // Set up logging
+  ffmpeg.on('log', ({ message }) => {
+    console.log(`${FEATURE_NAME} FFmpeg:`, message);
+  });
+
+  // Set up progress tracking
+  ffmpeg.on('progress', ({ progress }) => {
+    downloadState.progress = Math.round(progress * 100);
+    updateButtonText(`変換中 ${downloadState.progress}%`);
+  });
+
+  // Load FFmpeg core from CDN
+  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  await ffmpeg.load({
+    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+
+  return ok(ffmpeg);
+}
+```
+
+**FFmpeg Commands**:
+
+```bash
+# 1. Concatenate audio segments
+ffmpeg -f concat -safe 0 -i audio_list.txt -c copy audio.m4a
+
+# 2. Concatenate video segments
+ffmpeg -f concat -safe 0 -i video_list.txt -c copy video.m4v
+
+# 3. Merge audio and video
+ffmpeg -i video.m4v -i audio.m4a -c copy output.mp4
+```
+
+**Concat List Format**:
+```
+file audio_init.mp4
+file audio_seg_0.m4s
+file audio_seg_1.m4s
+...
+```
+
+#### 6. Progress Tracking
+
+Real-time progress display through button text updates:
+
+```typescript
+interface DownloadState {
+  isDownloading: boolean;
+  currentVideoId: string;
+  progress: number;
+}
+
+// Progress states
+updateButtonText('処理開始');           // Start
+updateButtonText('URL取得中');         // Extracting HLS URL
+updateButtonText('プレイリスト取得中'); // Downloading playlists
+updateButtonText('セグメント取得中 45/120'); // Downloading segments
+updateButtonText('変換中 78%');        // FFmpeg encoding
+updateButtonText('保存中');            // Saving file
+updateButtonText('保存完了');          // Complete
+```
+
+**Progress Granularity**:
+- URL extraction: Instant
+- Playlist download: Per playlist
+- Segment download: Every 10 segments
+- FFmpeg encoding: Real-time percentage (via FFmpeg progress events)
+
+#### 7. File Download
+
+Saves the merged MP4 file with automatic filename generation:
+
+```typescript
+function getVideoTitle(): string {
+  const titleElement = document.querySelector('.fs_xl.fw_bold');
+  if (titleElement) {
+    return titleElement.textContent?.trim() || 'video';
+  }
+  return 'video';
+}
+
+// Create download link
+const blob = new Blob([data], { type: 'video/mp4' });
+const url = URL.createObjectURL(blob);
+
+const a = document.createElement('a');
+a.href = url;
+a.download = `${videoTitle}_${videoId}.mp4`;
+a.style.display = 'none';
+document.body.appendChild(a);
+a.click();
+
+// Cleanup
+setTimeout(() => {
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}, 100);
+```
+
+**Filename Format**: `{動画タイトル}_{動画ID}.mp4`
+- Example: `初音ミクの消失_sm2937784.mp4`
+
+#### 8. Error Handling with Result Types
+
+All operations use Result types for type-safe error handling:
+
+```typescript
+export type DownloadError =
+  | { type: 'hls_url_not_found'; message: string }
+  | { type: 'm3u8_parse_failed'; message: string; cause?: unknown }
+  | { type: 'segment_download_failed'; message: string; url: string; cause?: unknown }
+  | { type: 'ffmpeg_not_loaded'; message: string }
+  | { type: 'ffmpeg_encode_failed'; message: string; cause?: unknown }
+  | { type: 'file_save_failed'; message: string; cause?: unknown }
+  | { type: 'invalid_video_format'; message: string; format: string };
+```
+
+**Error Flow**:
+```typescript
+const hlsUrlResult = extractHLSUrl();
+if (hlsUrlResult.isErr()) {
+  console.error(`${FEATURE_NAME} ${hlsUrlResult.error.message}`);
+  updateButtonText('URL取得失敗');
+  downloadState.isDownloading = false;
+  return;
+}
+```
+
+- **No exceptions thrown**: Always returns `Result<T, E>`
+- **Type-safe errors**: Specific error types for each operation
+- **Graceful degradation**: Logs errors, updates button text, resets state
+
+### Dependencies
+
+The feature requires the following npm packages:
+
+| Package | Version | Purpose | Size |
+|---------|---------|---------|------|
+| `@ffmpeg/ffmpeg` | 0.12.10 | Browser-based FFmpeg execution | ~24MB wasm |
+| `@ffmpeg/util` | 0.12.1 | FFmpeg utilities (toBlobURL, fetchFile) | ~20KB |
+| `m3u8-parser` | 7.2.0 | HLS playlist parsing | ~30KB |
+| `streamsaver` | 2.0.6 | Large file streaming (future use) | ~20KB |
+
+**Total Bundle Impact**: ~3.5MB (includes FFmpeg libraries in content script)
+
+**CDN Loading**: FFmpeg core (24MB wasm) is loaded from unpkg.com CDN on first use, not bundled with the extension.
+
+### Manifest Configuration
+
+Requires `wasm-unsafe-eval` in Content Security Policy:
+
+```json
+{
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
+```
+
+This allows FFmpeg.wasm to execute WebAssembly code in the extension context.
+
+### Idempotency
+
+- **Button**: Uses `data-bn-download-button` marker, checks existence before creating
+- **State tracking**: `isDownloading` flag prevents duplicate downloads
+- **Safe re-application**: Calling `apply(true)` multiple times is safe
+
+### Browser Compatibility
+
+- **FFmpeg.wasm**: Chrome 87+, Edge 87+, Firefox 89+
+- **WebAssembly**: All modern browsers
+- **Fetch with credentials**: All modern browsers
+
+### Performance Considerations
+
+- **CPU usage**: Variable depending on video length and FFmpeg encoding
+- **Memory**: 2-4GB for 1-hour videos (segments stored in memory before encoding)
+- **Network**: Downloads all segments sequentially (typical video: 100-200 segments)
+- **Time**: Typical 10-minute video takes 2-5 minutes to download and encode
+- **Why default OFF**: High resource usage, user opt-in preferred
+
+### Limitations
+
+1. **Video Format**: Only supports sm-numbered videos (e.g., sm2937784)
+2. **Encryption**: Does not support DRM-encrypted premium content
+3. **Memory**: Requires sufficient RAM for video length (see Performance)
+4. **Network**: Requires stable connection for segment downloads
+5. **Browser**: Must support WebAssembly and modern JavaScript features
+
+### User Experience
+
+1. User enables download feature in settings (Video category)
+2. Download button appears on `/watch/*` pages (in player control bar, before fullscreen button)
+3. User clicks button to start download
+4. Real-time progress displayed on button text
+5. MP4 file downloads automatically with descriptive filename
+6. Button resets to "保存" after 3 seconds
+
+### Why This Feature Exists
+
+Allows users to save Niconico videos for offline viewing or archival purposes. Especially useful for:
+- Videos that may be deleted or made private
+- Offline viewing during travel or poor connectivity
+- Personal video archives
+- Content preservation
+
+### Implementation Reference
+
+Based on [masteralice3104/nico_downloader](https://github.com/masteralice3104/nico_downloader) with significant modernization:
+
+**Improvements over nico_downloader**:
+- TypeScript with strict mode (vs vanilla JavaScript)
+- Result types for error handling (vs try-catch)
+- m3u8-parser library (vs custom regex parsing)
+- FFmpeg loaded from CDN (vs bundled dist/)
+- Integrated into unified settings system (vs standalone extension)
+- Modern @ffmpeg/ffmpeg v0.12 API (vs older version)
+
+**Similarities**:
+- HLS URL extraction from system messages
+- Segment downloading with credentials
+- FFmpeg.wasm for encoding
+- Progress tracking and UI updates
+
+### Known Issues
+
+1. **Long videos**: Videos over 1 hour may cause out-of-memory errors on low-spec machines
+2. **First-time load**: FFmpeg initialization takes 5-10 seconds on first use
+3. **Network errors**: Segment download failures are not automatically retried
+4. **Bundle size**: Content script is ~3.5MB due to FFmpeg libraries
+
+### Future Improvements
+
+1. **Quality selection**: Allow user to choose video quality before download
+2. **Batch downloading**: Support downloading multiple videos in sequence
+3. **Retry mechanism**: Automatically retry failed segment downloads
+4. **StreamSaver integration**: Use streaming for very large files to reduce memory usage
+5. **Web Worker**: Move FFmpeg encoding to background worker
+6. **Progress bar**: Visual progress indicator in addition to text
+
+---
+
 ## Page-Specific Features
 
 Some features only apply to specific pages:
@@ -1065,6 +1451,7 @@ Some features only apply to specific pages:
 - Hide Nico Ads
 - Picture-in-Picture
 - Video Screenshot
+- Video Download
 
 **Video top page only** (`/video_top`):
 - Add Nico Rank Button

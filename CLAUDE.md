@@ -53,7 +53,7 @@ The extension has three main components:
 Detailed documentation is organized by topic:
 
 - **[Architecture](docs/architecture.md)** - Extension components, settings system, build configuration
-- **[Features](docs/features.md)** - All 10 features with implementation details
+- **[Features](docs/features.md)** - All 11 features with implementation details
 - **[Development](docs/development.md)** - Workflow, debugging, testing, commands reference
 - **[Implementation Guide](docs/implementation.md)** - Adding features, best practices, patterns
 
@@ -69,6 +69,7 @@ Detailed documentation is organized by topic:
 8. **Hide Nico Ads** - Hides "ニコニ広告" section below video player
 9. **Picture-in-Picture** - Watch videos with comments in PiP mode
 10. **Video Screenshot** - Capture current video frame with comments as PNG image
+11. **Video Download** - Download HLS streaming videos as MP4 using FFmpeg.wasm
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 
@@ -90,6 +91,9 @@ Quick overview (see [docs/implementation.md](docs/implementation.md) for details
 - **Oxlint** (fast Rust-based linter)
 - **neverthrow** (Result type for error handling)
 - **Anime4K-WebGPU** (video upscaling library)
+- **@ffmpeg/ffmpeg** (browser-based FFmpeg for video download/encoding)
+- **m3u8-parser** (HLS playlist parsing)
+- **streamsaver** (large file streaming, prepared for future use)
 
 ## Error Handling Architecture
 
@@ -161,6 +165,67 @@ await render({ ..., signal: controller.signal }); // Does nothing!
 ```
 
 **Stopping the render loop**: Remove the canvas element with `canvas.remove()`. The `requestVideoFrameCallback` loop will stop automatically when the canvas is gone.
+
+## FFmpeg.wasm Integration Notes (Video Download Feature)
+
+**CRITICAL**: FFmpeg.wasm requires specific Content Security Policy and loading configuration.
+
+### CSP Configuration
+
+The manifest requires `wasm-unsafe-eval` to execute WebAssembly:
+
+```json
+{
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
+```
+
+### Loading from CDN
+
+FFmpeg core is loaded from unpkg.com CDN (not bundled) to reduce extension size:
+
+```typescript
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { toBlobURL } from '@ffmpeg/util';
+
+const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+await ffmpeg.load({
+  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+});
+```
+
+**Why CDN loading**:
+- FFmpeg wasm is 24MB - too large to bundle in extension
+- Loaded on-demand when user clicks download button
+- Cached by browser after first use
+
+### Progress Tracking
+
+FFmpeg provides real-time progress events:
+
+```typescript
+ffmpeg.on('progress', ({ progress, time }) => {
+  const percentage = Math.round(progress * 100);
+  updateButtonText(`変換中 ${percentage}%`);
+});
+```
+
+### Memory Considerations
+
+- Video segments are stored in FFmpeg virtual file system
+- Large videos (1+ hour) may consume 2-4GB RAM during encoding
+- Always clean up after encoding (FFmpeg automatically clears on next exec)
+
+### Implementation Reference
+
+Based on [nico_downloader](https://github.com/masteralice3104/nico_downloader) with modernization:
+- TypeScript strict mode (vs vanilla JS)
+- Result types for error handling (vs try-catch)
+- m3u8-parser library (vs custom regex parsing)
+- CDN loading (vs bundled dist/)
 
 ## Testing Limitation
 

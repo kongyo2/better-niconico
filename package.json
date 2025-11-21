@@ -34,7 +34,11 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1",
     "anime4k-webgpu": "^1.0.0",
-    "neverthrow": "^8.2.0"
+    "m3u8-parser": "^7.2.0",
+    "neverthrow": "^8.2.0",
+    "streamsaver": "^2.0.6"
   }
 }

@@ -196,6 +196,31 @@ async function applySettings(): Promise<void> {
 - **Permissions**: storage (for settings persistence)
 - **Host permissions**: `*://*.nicovideo.jp/*` (Niconico only)
 - **Popup**: `src/popup/popup.html` (shown when clicking extension icon)
+- **Content Security Policy**: Includes `'wasm-unsafe-eval'` for FFmpeg.wasm support (video download feature)
+
+### Content Security Policy (CSP)
+
+The extension uses a custom CSP to support WebAssembly execution:
+
+```json
+{
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
+```
+
+**Why `wasm-unsafe-eval` is needed**:
+- FFmpeg.wasm (used by video download feature) requires WebAssembly compilation
+- Manifest V3 blocks `eval()` and WebAssembly by default
+- `'wasm-unsafe-eval'` directive allows WASM while maintaining security
+- Only applies to extension pages (content scripts, popup), not arbitrary web content
+
+**Security implications**:
+- Extension code is trusted (reviewed before distribution)
+- WASM execution is sandboxed by the browser
+- No dynamic code execution from external sources
+- CSP still blocks inline scripts and external script sources
 
 ### CRITICAL: CSS Handling in Manifest
 
@@ -239,3 +264,54 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - Floating promises detection (errors on unhandled promises)
 - Console logging allowed (common in extensions)
 - Side-effect imports allowed (CSS imports)
+
+## Dependencies
+
+### Runtime Dependencies
+
+| Package | Version | Purpose | Size Impact |
+|---------|---------|---------|-------------|
+| `anime4k-webgpu` | ^1.0.0 | AI-powered video upscaling | ~100KB |
+| `neverthrow` | ^8.2.0 | Type-safe Result types for error handling | ~10KB |
+| `@ffmpeg/ffmpeg` | ^0.12.10 | Browser-based FFmpeg for video processing | ~200KB (+ 24MB wasm from CDN) |
+| `@ffmpeg/util` | ^0.12.1 | FFmpeg utility functions | ~20KB |
+| `m3u8-parser` | ^7.2.0 | HLS playlist parsing | ~30KB |
+| `streamsaver` | ^2.0.6 | Large file streaming (prepared for future use) | ~20KB |
+
+**Total runtime bundle size**: ~3.5MB (includes FFmpeg libraries in content script)
+
+**Notes**:
+- FFmpeg core (24MB wasm) is loaded from unpkg.com CDN on first use, not bundled
+- `anime4k-webgpu` and FFmpeg libraries contribute most to bundle size
+- Both are opt-in features (default OFF) to minimize impact on users who don't need them
+
+### Development Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `@crxjs/vite-plugin` | Chrome extension development and HMR |
+| `vite` | Build tool and dev server |
+| `typescript` | Type checking and compilation |
+| `oxlint` | Fast Rust-based linting |
+| `nodemon` | Auto-rebuild on file changes |
+| `@resvg/resvg-js` | SVG to PNG icon generation |
+| `vite-tsconfig-paths` | TypeScript path alias resolution |
+
+### Bundle Size Considerations
+
+The content script bundle is significantly larger than typical extensions due to:
+
+1. **FFmpeg.wasm** (~200KB bundled, 24MB loaded from CDN)
+   - Required for video download feature
+   - Only loaded when user clicks download button
+   - Cached after first use
+
+2. **Anime4K-WebGPU** (~100KB)
+   - Required for video upscaling feature
+   - Only active when user enables upscaling
+
+**Mitigation strategies**:
+- Both heavy features are default OFF (user opt-in)
+- FFmpeg loads from CDN, not bundled in extension package
+- Future: Consider code splitting with dynamic imports
+- Future: Move FFmpeg to Web Worker for background processing
