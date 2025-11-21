@@ -224,6 +224,8 @@ function createScreenshotButton(): HTMLButtonElement {
 
   // ニコニコ動画のコントロールバーボタンと同じクラス名を使用
   button.className = 'Pressable cursor_pointer';
+  // ボタンの色を白に設定（他のボタンに合わせる）
+  button.style.color = '#FFFFFF';
 
   // カメラ SVGアイコン
   button.innerHTML = `
