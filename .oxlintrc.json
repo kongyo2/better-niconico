@@ -3,18 +3,13 @@
   // Based on oxc.rs documentation and best practices
 
   // Enable recommended plugins
-  "plugins": [
-    "typescript",
-    "promise",
-    "import",
-    "unicorn"
-  ],
+  "plugins": ["typescript", "promise", "import", "unicorn"],
 
   // Configure rule categories with severity levels
   "categories": {
-    "correctness": "error",  // Code that is outright wrong or useless
-    "suspicious": "warn",     // Code that is likely wrong or useless
-    "perf": "warn"            // Performance optimizations
+    "correctness": "error", // Code that is outright wrong or useless
+    "suspicious": "warn", // Code that is likely wrong or useless
+    "perf": "warn" // Performance optimizations
   },
 
   // Specific rule overrides
@@ -31,11 +26,11 @@
 
     // Promise handling
     "promise/no-new-statics": "error",
-    "promise/always-return": "off",  // Disabled: sendResponse is intentional side-effect
+    "promise/always-return": "off", // Disabled: sendResponse is intentional side-effect
 
     // Import rules
     "import/no-duplicates": "warn",
-    "import/no-unassigned-import": "off",  // Allow side-effect imports like CSS
+    "import/no-unassigned-import": "off", // Allow side-effect imports like CSS
 
     // Code quality
     "no-unused-vars": "warn",

@@ -188,7 +188,9 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-md);
-  transition: transform var(--transition-fast), background-color var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    background-color var(--transition-fast);
   border: 1px solid transparent;
 }
 
@@ -258,7 +260,7 @@ body {
 
 .toggle-slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 18px;
   width: 18px;
   left: 2px;
@@ -269,12 +271,12 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.toggle input:checked+.toggle-slider {
+.toggle input:checked + .toggle-slider {
   background-color: var(--accent-color);
   border-color: var(--accent-color);
 }
 
-.toggle input:checked+.toggle-slider:before {
+.toggle input:checked + .toggle-slider:before {
   transform: translateX(20px);
   background-color: #fff;
 }
@@ -283,7 +285,7 @@ body {
   transform: scale(1.1);
 }
 
-.toggle input:checked:hover+.toggle-slider:before {
+.toggle input:checked:hover + .toggle-slider:before {
   transform: translateX(20px) scale(1.1);
 }
 

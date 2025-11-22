@@ -2,7 +2,9 @@
 
 /* プレミアム会員セクションを非表示にする際のスムーズなトランジション */
 .TagPushVideosContainer {
-  transition: opacity 0.3s ease-out, height 0.3s ease-out;
+  transition:
+    opacity 0.3s ease-out,
+    height 0.3s ease-out;
 }
 
 /* プロフィールアイコンを四角型にする */
@@ -30,37 +32,52 @@ body.bn-square-icons .bdr_full[src*="/comch/channel-icon/"] {
 
 /* 動画ページのプロフィールアイコン（--radii-m を使用） */
 body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/"],
-body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/comch/channel-icon/"] {
+body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/comch/channel-icon/"]
+{
   border-radius: var(--radii-m);
 }
 
 body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/"].ml_-x1_5,
-body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/comch/channel-icon/"].ml_-x1_5 {
+body.bn-square-icons .bdr_full[src^="https://secure-dcdn.cdn.nimg.jp/comch/channel-icon/"].ml_-x1_5
+{
   margin-left: 0;
 }
 
 /* data-src属性（遅延読み込み）やsrcset属性を持つプロフィールアイコンにも対応 */
-body.bn-square-icons img.bdr_full[data-src*="nicoaccount/usericon/"],
-body.bn-square-icons img.bdr_full[data-src*="comch/channel-icon/"],
-body.bn-square-icons img.bdr_full[srcset*="nicoaccount/usericon/"],
-body.bn-square-icons img.bdr_full[srcset*="comch/channel-icon/"] {
+body.bn-square-icons img.bdr_full[data-src*='nicoaccount/usericon/'],
+body.bn-square-icons img.bdr_full[data-src*='comch/channel-icon/'],
+body.bn-square-icons img.bdr_full[srcset*='nicoaccount/usericon/'],
+body.bn-square-icons img.bdr_full[srcset*='comch/channel-icon/'] {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
 /* より汎用的な画像セレクタ（クラス名に依存しない） */
-body.bn-square-icons img[src*="nicoaccount/usericon/"],
-body.bn-square-icons img[src*="comch/channel-icon/"],
-body.bn-square-icons img[data-src*="nicoaccount/usericon/"],
-body.bn-square-icons img[data-src*="comch/channel-icon/"] {
+body.bn-square-icons img[src*='nicoaccount/usericon/'],
+body.bn-square-icons img[src*='comch/channel-icon/'],
+body.bn-square-icons img[data-src*='nicoaccount/usericon/'],
+body.bn-square-icons img[data-src*='comch/channel-icon/'] {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
 /* ニコニコ静画 - コミュニティページ */
 body.bn-square-icons .p-works .subInfoArea .userName .userIcon,
-body.bn-square-icons .p-works .materialComment .commentList .commentContents .surfaceArea .commentInfo .useIcon,
+body.bn-square-icons
+  .p-works
+  .materialComment
+  .commentList
+  .commentContents
+  .surfaceArea
+  .commentInfo
+  .useIcon,
 body.bn-square-icons .p-worksAgreement__contents .targetMaterial__card .summary .userInfo .userIcon,
 body.bn-square-icons .c-childrenContents .childrenContentsUserArea .childrenContentsUserIcon > img,
-body.bn-square-icons .p-treeWorksFull .worksFullCard .contentArea .contentFootArea .ownerInfoArea .ownerIcon {
+body.bn-square-icons
+  .p-treeWorksFull
+  .worksFullCard
+  .contentArea
+  .contentFootArea
+  .ownerInfoArea
+  .ownerIcon {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
@@ -130,21 +147,65 @@ body.bn-square-icons .___program-provider-icon____8OxE {
 }
 
 /* ニコニコ生放送 - プログラムカード */
-body.bn-square-icons .___program-card___JAMyQ > .content-area > .program-provider-card > .information > .thumbnail-image,
-body.bn-square-icons .___program-card___nN5tk > .content-area > .program-provider-card > .information > .thumbnail-image {
+body.bn-square-icons
+  .___program-card___JAMyQ
+  > .content-area
+  > .program-provider-card
+  > .information
+  > .thumbnail-image,
+body.bn-square-icons
+  .___program-card___nN5tk
+  > .content-area
+  > .program-provider-card
+  > .information
+  > .thumbnail-image {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
 /* ニコニコ生放送 - ユーザーカード */
-body.bn-square-icons .___user-card-list___zXzii > li > .user-card > .user-summary > .thumbnail-area > .user-thumbnail {
+body.bn-square-icons
+  .___user-card-list___zXzii
+  > li
+  > .user-card
+  > .user-summary
+  > .thumbnail-area
+  > .user-thumbnail {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 
 /* ニコニコ生放送 - マイページ関連 */
-body.bn-square-icons .item > .program-card > .content-area > .program-provider-card > .information > .thumbnail-image,
-body.bn-square-icons .content-area > .program-provider-card > .information > .thumbnail-image > .resource,
-body.bn-square-icons .nicoad-frame > .content-area > .content-area > .program-information-area > .program-provider-card > .information > .thumbnail-image > .resource,
-body.bn-square-icons .nicoad-frame > .content-area > .content-area > .nicoad-statistics-section > header > .heading > .nicoad-provider-summary > .thumbnail-area > .user-thumbnail,
+body.bn-square-icons
+  .item
+  > .program-card
+  > .content-area
+  > .program-provider-card
+  > .information
+  > .thumbnail-image,
+body.bn-square-icons
+  .content-area
+  > .program-provider-card
+  > .information
+  > .thumbnail-image
+  > .resource,
+body.bn-square-icons
+  .nicoad-frame
+  > .content-area
+  > .content-area
+  > .program-information-area
+  > .program-provider-card
+  > .information
+  > .thumbnail-image
+  > .resource,
+body.bn-square-icons
+  .nicoad-frame
+  > .content-area
+  > .content-area
+  > .nicoad-statistics-section
+  > header
+  > .heading
+  > .nicoad-provider-summary
+  > .thumbnail-area
+  > .user-thumbnail,
 body.bn-square-icons .___user-konomi-tag-list-section___QALx0 > header > .user-thumbnail-image {
   border-radius: var(--bn-icon-border-radius) !important;
 }
@@ -187,7 +248,7 @@ body.bn-square-icons .ChannelIcon {
 /* サポーターボタンを非表示 */
 body.bn-hide-supporter {
   /* 現在のニコニコ動画: creator-support.nicovideo.jpへのリンク */
-  a[href*="creator-support.nicovideo.jp"] {
+  a[href*='creator-support.nicovideo.jp'] {
     display: none !important;
   }
 

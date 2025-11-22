@@ -22,7 +22,7 @@ const sizes = [16, 32, 48, 128];
 
 console.log('Generating PNG icons from SVG...');
 
-sizes.forEach(size => {
+sizes.forEach((size) => {
   try {
     // Create a Resvg instance with the SVG content
     const resvg = new Resvg(svgContent, {

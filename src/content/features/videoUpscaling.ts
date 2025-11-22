@@ -142,12 +142,7 @@ function isAdVideo(video: HTMLVideoElement): boolean {
  * - 広告動画ではない
  */
 function isValidContentVideo(video: HTMLVideoElement): boolean {
-  return (
-    video.src !== '' &&
-    video.videoWidth > 0 &&
-    video.videoHeight > 0 &&
-    !isAdVideo(video)
-  );
+  return video.src !== '' && video.videoWidth > 0 && video.videoHeight > 0 && !isAdVideo(video);
 }
 
 /**
@@ -387,7 +382,10 @@ async function enableUpscaling(): Promise<void> {
   // WebGPU対応チェック（キャッシュされる）
   const gpuSupportedResult = await isWebGPUSupported();
   if (gpuSupportedResult.isErr()) {
-    console.error('[Better Niconico] Video upscaling requires WebGPU support:', gpuSupportedResult.error);
+    console.error(
+      '[Better Niconico] Video upscaling requires WebGPU support:',
+      gpuSupportedResult.error,
+    );
     return;
   }
 
@@ -523,7 +521,9 @@ function setupFullscreenListener(): void {
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) {
       // 全画面表示に入った - アップスケーリングを無効化
-      console.log('[Better Niconico] 全画面表示に入りました。動画アップスケーリングを無効化します。');
+      console.log(
+        '[Better Niconico] 全画面表示に入りました。動画アップスケーリングを無効化します。',
+      );
       if (currentVideoElement) {
         cleanupUpscaling(currentVideoElement);
       }
@@ -565,7 +565,9 @@ function setupVideoObserver(): void {
         // src属性が変更された
         const video = mutation.target as HTMLVideoElement;
         if (isValidContentVideo(video) && currentEnabled) {
-          console.log('[Better Niconico] 動画のsrcが変更されました。アップスケーリングを再初期化します。');
+          console.log(
+            '[Better Niconico] 動画のsrcが変更されました。アップスケーリングを再初期化します。',
+          );
           // 既存のアップスケーリングをクリーンアップ
           if (currentVideoElement) {
             cleanupUpscaling(currentVideoElement);
@@ -584,7 +586,9 @@ function setupVideoObserver(): void {
             const element = node as HTMLElement;
             if (element.tagName === 'VIDEO' || element.querySelector('video')) {
               if (currentEnabled) {
-                console.log('[Better Niconico] 新しい動画要素が検出されました。アップスケーリングを再適用します。');
+                console.log(
+                  '[Better Niconico] 新しい動画要素が検出されました。アップスケーリングを再適用します。',
+                );
                 // 少し遅延させてから再適用（DOM更新を待つ）
                 setTimeout(() => {
                   void enableUpscaling();

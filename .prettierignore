@@ -1,0 +1,23 @@
+# Ignore artifacts
+node_modules
+dist
+coverage
+
+# Ignore all markdown files
+*.md
+**/*.md
+
+# Ignore lock files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Ignore minified files
+*.min.js
+*.min.css
+
+# Ignore build outputs
+build
+
+# Ignore generated icons
+public/icons/*.png
