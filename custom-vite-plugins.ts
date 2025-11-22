@@ -1,19 +1,19 @@
-import fs from 'fs'
-import { resolve } from 'path'
-import type { PluginOption, NormalizedOutputOptions } from 'vite'
+import fs from 'fs';
+import { resolve } from 'path';
+import type { PluginOption, NormalizedOutputOptions } from 'vite';
 
 /**
  * Plugin to remove dev icons from production build
  * This keeps the production bundle clean and smaller
  */
 export function stripDevIcons(isDev: boolean): PluginOption {
-  if (isDev) return null
+  if (isDev) return null;
 
   return {
     name: 'strip-dev-icons',
     renderStart(outputOptions: NormalizedOutputOptions) {
-      const outDir = outputOptions.dir
-      if (!outDir) return
+      const outDir = outputOptions.dir;
+      if (!outDir) return;
 
       // List of dev-only files to remove from production builds
       const devFiles = [
@@ -21,16 +21,16 @@ export function stripDevIcons(isDev: boolean): PluginOption {
         'dev-icon-32.png',
         'dev-icon-48.png',
         'dev-icon-128.png',
-      ]
+      ];
 
       devFiles.forEach((file) => {
-        const filePath = resolve(outDir, file)
+        const filePath = resolve(outDir, file);
         fs.rm(filePath, { force: true }, (err) => {
           if (!err) {
-            console.log(`Removed ${file} from production build`)
+            console.log(`Removed ${file} from production build`);
           }
-        })
-      })
+        });
+      });
     },
-  }
+  };
 }

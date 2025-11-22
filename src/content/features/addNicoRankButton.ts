@@ -30,7 +30,9 @@ function createPodiumIcon(): string {
  * video_topページかどうかを判定
  */
 function isVideoTopPage(): boolean {
-  return window.location.pathname === '/video_top' || window.location.pathname.startsWith('/video_top');
+  return (
+    window.location.pathname === '/video_top' || window.location.pathname.startsWith('/video_top')
+  );
 }
 
 /**
@@ -49,9 +51,12 @@ function hasButtonAfterRanking(rankingParent: HTMLElement): boolean {
   if (!nextSibling) {
     return false;
   }
-  
+
   // 次の兄弟要素がニコランボタンのコンテナかどうかをチェック
-  return nextSibling.hasAttribute(CONTAINER_MARKER) || nextSibling.querySelector(`[${BUTTON_MARKER}]`) !== null;
+  return (
+    nextSibling.hasAttribute(CONTAINER_MARKER) ||
+    nextSibling.querySelector(`[${BUTTON_MARKER}]`) !== null
+  );
 }
 
 /**
@@ -65,27 +70,27 @@ function createNicoRankButton(): HTMLElement {
   link.rel = 'noopener noreferrer';
   link.className = 'css-1i9dz1a';
   link.setAttribute(BUTTON_MARKER, 'true');
-  
+
   // ランキングリンクと同じ内部構造を作成
   const containerDiv = document.createElement('div');
   containerDiv.className = 'css-54sd46';
-  
+
   // アイコン用のDIV（表彰台アイコンを追加）
   const iconDiv = document.createElement('div');
   iconDiv.className = 'css-14y3bdu';
   iconDiv.innerHTML = createPodiumIcon();
-  
+
   // テキスト用のDIV
   const textDiv = document.createElement('div');
   const textParagraph = document.createElement('p');
   textParagraph.className = 'css-ium6yj';
   textParagraph.textContent = 'ニコラン';
   textDiv.appendChild(textParagraph);
-  
+
   containerDiv.appendChild(iconDiv);
   containerDiv.appendChild(textDiv);
   link.appendChild(containerDiv);
-  
+
   return link;
 }
 
@@ -97,39 +102,39 @@ function addAllNicoRankButtons(): void {
   if (!isVideoTopPage()) {
     return;
   }
-  
+
   // サイドバーコンテナを取得
   const sidebarContainer = getSidebarContainer();
   if (!sidebarContainer) {
     return;
   }
-  
+
   // すべてのランキングリンクを探す（展開時と折りたたみ時の両方）
-  const rankingLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a.css-1i9dz1a')).filter(
-    link => link.textContent?.trim() === 'ランキング' && link.href.includes('/ranking')
-  );
-  
+  const rankingLinks = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>('a.css-1i9dz1a'),
+  ).filter((link) => link.textContent?.trim() === 'ランキング' && link.href.includes('/ranking'));
+
   for (const rankingLink of rankingLinks) {
     // 各ランキングリンクの親要素を取得
     const rankingParent = rankingLink.closest('.css-1i3qj3a, .css-gzpr6t') as HTMLElement;
     if (!rankingParent) {
       continue;
     }
-    
+
     // ランキングの親要素の後にすでにボタンが追加されている場合はスキップ
     if (hasButtonAfterRanking(rankingParent)) {
       continue;
     }
-    
+
     // ランキングの親要素の後に新しいメニュー項目コンテナを作成
     const menuContainer = document.createElement('div');
     menuContainer.className = rankingParent.className;
     menuContainer.setAttribute(CONTAINER_MARKER, 'true');
-    
+
     // ボタンを作成
     const button = createNicoRankButton();
     menuContainer.appendChild(button);
-    
+
     // ランキングの親要素の後に挿入
     const nextSibling = rankingParent.nextElementSibling;
     if (nextSibling) {
@@ -138,7 +143,7 @@ function addAllNicoRankButtons(): void {
       rankingParent.parentElement?.appendChild(menuContainer);
     }
   }
-  
+
   if (rankingLinks.length > 0) {
     console.log('[Better Niconico] ニコランボタンを追加しました');
   }
@@ -151,10 +156,10 @@ function removeNicoRankButton(): void {
   // コンテナマーカーとボタンマーカーの両方を削除
   const containers = document.querySelectorAll(`[${CONTAINER_MARKER}]`);
   const buttons = document.querySelectorAll(`[${BUTTON_MARKER}]`);
-  
-  containers.forEach(container => container.remove());
-  buttons.forEach(button => button.remove());
-  
+
+  containers.forEach((container) => container.remove());
+  buttons.forEach((button) => button.remove());
+
   if (containers.length > 0 || buttons.length > 0) {
     console.log('[Better Niconico] ニコランボタンを削除しました');
   }
@@ -172,4 +177,3 @@ export function apply(enabled: boolean): void {
     removeNicoRankButton();
   }
 }
-

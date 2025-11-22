@@ -12,7 +12,9 @@
     "lint": "oxlint --silent",
     "lint:strict": "oxlint --deny-warnings",
     "lint:fix": "oxlint --fix",
-    "check:file": "oxlint"
+    "check:file": "oxlint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [
     "chrome-extension",
@@ -29,6 +31,7 @@
     "@types/chrome": "^0.0.268",
     "nodemon": "^3.1.10",
     "oxlint": "^1.24.0",
+    "prettier": "3.6.2",
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
     "vite-tsconfig-paths": "^5.1.4"

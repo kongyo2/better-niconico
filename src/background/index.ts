@@ -16,7 +16,10 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
       },
       () => {
         if (chrome.runtime.lastError) {
-          console.error('[Better Niconico] 初期化データの保存に失敗しました:', chrome.runtime.lastError);
+          console.error(
+            '[Better Niconico] 初期化データの保存に失敗しました:',
+            chrome.runtime.lastError,
+          );
         } else {
           console.log('[Better Niconico] 初期化データを保存しました');
         }
@@ -25,7 +28,9 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
   } else if (details.reason === 'update') {
     const previousVersion = details.previousVersion;
     const currentVersion = chrome.runtime.getManifest().version;
-    console.log(`[Better Niconico] 拡張機能が更新されました: ${previousVersion} → ${currentVersion}`);
+    console.log(
+      `[Better Niconico] 拡張機能が更新されました: ${previousVersion} → ${currentVersion}`,
+    );
   }
 });
 

@@ -35,7 +35,9 @@ function isFullscreenMode(): boolean {
   // フォールバック: DOM要素ベースの検出
   // 全画面表示時には .grid-area_[player] の直下に .w_[100dvw].h_[100dvh] という要素が出現する
   // 参考: https://github.com/Bymnet1845/niconico-classic
-  const fullscreenElement = document.querySelector('.grid-area_\\[player\\] > .w_\\[100dvw\\].h_\\[100dvh\\]');
+  const fullscreenElement = document.querySelector(
+    '.grid-area_\\[player\\] > .w_\\[100dvw\\].h_\\[100dvh\\]',
+  );
   return fullscreenElement !== null;
 }
 
@@ -44,7 +46,7 @@ function isFullscreenMode(): boolean {
  */
 function getDetailInfoSection(): HTMLElement | null {
   const headings = Array.from(document.querySelectorAll('h1'));
-  const heading = headings.find(h => h.textContent?.includes('動画の詳細情報'));
+  const heading = headings.find((h) => h.textContent?.includes('動画の詳細情報'));
   if (!heading) return null;
 
   // セクション全体を取得（最も近いSECTION要素を探す）
@@ -202,8 +204,10 @@ function restoreDefaultLayout(): void {
   }
 
   // すでにデフォルトレイアウトの場合は何もしない
-  if (playerArea.getAttribute(LAYOUT_MARKER) === LAYOUT_DEFAULT ||
-      playerArea.getAttribute(LAYOUT_MARKER) === null) {
+  if (
+    playerArea.getAttribute(LAYOUT_MARKER) === LAYOUT_DEFAULT ||
+    playerArea.getAttribute(LAYOUT_MARKER) === null
+  ) {
     return;
   }
 
@@ -225,7 +229,9 @@ function restoreDefaultLayout(): void {
     parent.classList.add('grid-tr_[min-content_min-content_1fr]');
   }
   if (!parent.className.includes('grid-template-areas_')) {
-    parent.classList.add('grid-template-areas_[_"player_sidebar"_"bottom_sidebar"_"bottom_sidebar"_]');
+    parent.classList.add(
+      'grid-template-areas_[_"player_sidebar"_"bottom_sidebar"_"bottom_sidebar"_]',
+    );
   }
   if (!parent.className.includes('grid-tc_')) {
     parent.classList.add('grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)]');
@@ -303,7 +309,9 @@ export function apply(enabled: boolean): void {
   if (enabled) {
     // 全画面表示中は適用しない（fullscreenchangeイベントで処理）
     if (isFullscreenMode()) {
-      console.log('[Better Niconico] 全画面表示中のため、クラシックレイアウトの適用をスキップします');
+      console.log(
+        '[Better Niconico] 全画面表示中のため、クラシックレイアウトの適用をスキップします',
+      );
       return;
     }
 

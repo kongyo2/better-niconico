@@ -102,12 +102,7 @@ function isAdVideo(video: HTMLVideoElement): boolean {
  * 有効なコンテンツ動画かどうかを判定
  */
 function isValidContentVideo(video: HTMLVideoElement): boolean {
-  return (
-    video.src !== '' &&
-    video.videoWidth > 0 &&
-    video.videoHeight > 0 &&
-    !isAdVideo(video)
-  );
+  return video.src !== '' && video.videoWidth > 0 && video.videoHeight > 0 && !isAdVideo(video);
 }
 
 /**
@@ -166,19 +161,12 @@ function getCommentCanvas(): Result<HTMLCanvasElement, PageError> {
   // [data-name="comment"] 配下のcanvas要素を探す
   const commentContainer = playerArea.querySelector('[data-name="comment"]');
   if (!commentContainer) {
-    return err(
-      domElementNotFoundError('Comment container not found', '[data-name="comment"]'),
-    );
+    return err(domElementNotFoundError('Comment container not found', '[data-name="comment"]'));
   }
 
   const canvas = commentContainer.querySelector('canvas') as HTMLCanvasElement;
   if (!canvas) {
-    return err(
-      domElementNotFoundError(
-        'Comment canvas not found',
-        '[data-name="comment"] canvas',
-      ),
-    );
+    return err(domElementNotFoundError('Comment canvas not found', '[data-name="comment"] canvas'));
   }
 
   return ok(canvas);
@@ -358,11 +346,7 @@ function compositeLoop(): void {
   }
 
   // コメントレイヤーの破棄検知
-  if (
-    !commentCanvas.parentElement ||
-    commentCanvas.width === 0 ||
-    commentCanvas.height === 0
-  ) {
+  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
     console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
     void reinitializePiP();
     return;
