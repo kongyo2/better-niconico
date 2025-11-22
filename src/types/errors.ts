@@ -1,6 +1,8 @@
 // Better Niconico Error Type Definitions
 // Domain-specific error types for type-safe error handling using Result types
 
+import type { ZodError } from 'zod';
+
 /**
  * Chrome Storage API related errors
  */
@@ -8,6 +10,16 @@ export type StorageError =
   | { type: 'storage_get_failed'; message: string }
   | { type: 'storage_set_failed'; message: string }
   | { type: 'storage_sync_unavailable'; message: string };
+
+/**
+ * Data validation errors (Zod validation failures)
+ */
+export type ValidationError = {
+  type: 'validation_failed';
+  message: string;
+  zodError: ZodError;
+  fieldErrors: Record<string, string[]>;
+};
 
 /**
  * WebGPU initialization and processing errors
@@ -59,6 +71,7 @@ export type DownloadError =
  */
 export type AppError =
   | StorageError
+  | ValidationError
   | WebGPUError
   | VideoError
   | PageError
@@ -78,6 +91,28 @@ export function storageSetFailedError(message: string): StorageError {
 
 export function storageSyncUnavailableError(message: string): StorageError {
   return { type: 'storage_sync_unavailable', message };
+}
+
+/**
+ * Helper function to create ValidationError
+ */
+export function validationFailedError(message: string, zodError: ZodError): ValidationError {
+  // Extract field-level errors from Zod error
+  const fieldErrors: Record<string, string[]> = {};
+  for (const issue of zodError.issues) {
+    const path = issue.path.join('.');
+    if (!fieldErrors[path]) {
+      fieldErrors[path] = [];
+    }
+    fieldErrors[path].push(issue.message);
+  }
+
+  return {
+    type: 'validation_failed',
+    message,
+    zodError,
+    fieldErrors,
+  };
 }
 
 /**

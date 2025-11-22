@@ -28,21 +28,33 @@ export function apply(enabled: boolean): void {
 }
 ```
 
-#### 2. Add Setting to Types
+#### 2. Add Setting to Zod Schema
 
-Update `src/types/settings.ts`:
+Update `src/types/settings.ts` by adding to the **Zod schema** (TypeScript type updates automatically):
 
 ```typescript
-export interface BetterNiconicoSettings {
-  hidePremiumSection: boolean;
-  myNewFeature: boolean; // Add here
-}
+export const BetterNiconicoSettingsSchema = z.object({
+  hidePremiumSection: z.boolean().default(true),
+  myNewFeature: z.boolean().default(false), // Add here with .default()
+  // ... other settings
+});
 
-export const DEFAULT_SETTINGS = {
+// TypeScript type is inferred from schema - no manual update needed
+export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema>;
+
+// Update DEFAULT_SETTINGS to match schema defaults
+export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hidePremiumSection: true,
-  myNewFeature: false, // Add default
+  myNewFeature: false, // Add default (must match schema)
+  // ... other settings
 };
 ```
+
+**IMPORTANT:**
+
+- **Always add `.default()` to new schema fields** for backward compatibility
+- TypeScript type is automatically inferred via `z.infer` - don't manually update the interface
+- Runtime validation ensures data integrity when loading settings
 
 #### 3. Import and Apply in Content Script
 

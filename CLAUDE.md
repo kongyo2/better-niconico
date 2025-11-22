@@ -69,7 +69,7 @@ Detailed documentation is organized by topic:
 8. **Hide Nico Ads** - Hides "ニコニ広告" section below video player
 9. **Picture-in-Picture** - Watch videos with comments in PiP mode
 10. **Video Screenshot** - Capture current video frame with comments as PNG image
-11. **Video Download** - Download HLS streaming videos as MP4 using FFmpeg.wasm
+11. **Video Download** - Download videos using nicozon.net bookmarklet service
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 
@@ -89,11 +89,10 @@ Quick overview (see [docs/implementation.md](docs/implementation.md) for details
 - **Vite** + **@crxjs/vite-plugin** (build system with HMR)
 - **Nodemon** (auto-rebuild on file changes)
 - **Oxlint** (fast Rust-based linter)
+- **Prettier** (code formatter)
 - **neverthrow** (Result type for error handling)
+- **Zod** (TypeScript-first schema validation for settings)
 - **Anime4K-WebGPU** (video upscaling library)
-- **@ffmpeg/ffmpeg** (browser-based FFmpeg for video download/encoding)
-- **m3u8-parser** (HLS playlist parsing)
-- **streamsaver** (large file streaming, prepared for future use)
 
 ## Error Handling Architecture
 
@@ -108,10 +107,12 @@ This project uses **neverthrow** for type-safe error handling with Result types.
 ### Error Types (`src/types/errors.ts`)
 
 - `StorageError` - Chrome Storage API failures
+- `ValidationError` - Zod schema validation failures (settings data integrity)
 - `WebGPUError` - WebGPU initialization/rendering errors
 - `VideoError` - Video element detection/processing errors
 - `PageError` - DOM element not found errors
 - `MessageError` - Message passing errors
+- `DownloadError` - Video download and encoding errors
 
 ### Result Pattern Examples
 
@@ -141,6 +142,65 @@ function processVideo(): Result<HTMLCanvasElement, VideoError> {
 
 **When adding new async operations**, wrap them with `ResultAsync` or return `Result<T, E>`.
 
+## Settings Validation with Zod
+
+This project uses **Zod** for runtime validation of settings loaded from `chrome.storage.sync`.
+
+### Why Zod?
+
+- **Runtime type safety**: Validates that stored data matches expected types
+- **Schema-driven types**: TypeScript types are inferred from Zod schema (single source of truth)
+- **Default values**: Automatically fills missing fields with defaults
+- **Graceful degradation**: Falls back to default settings if validation fails
+- **Bundle size**: Only 2KB gzipped, minimal overhead
+
+### Schema Definition (`src/types/settings.ts`)
+
+Settings schema is defined using Zod:
+
+```typescript
+import { z } from 'zod';
+
+export const BetterNiconicoSettingsSchema = z.object({
+  hidePremiumSection: z.boolean().default(true),
+  hideOnAirAnime: z.boolean().default(true),
+  // ... all settings with defaults
+});
+
+// Type is inferred from schema - always in sync
+export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema>;
+```
+
+### Validation in Storage Utilities (`src/utils/storage.ts`)
+
+Both `loadSettings()` and `saveSettings()` validate data:
+
+```typescript
+// Loading: validates data from chrome.storage
+const parseResult = BetterNiconicoSettingsSchema.safeParse(rawSettings);
+if (!parseResult.success) {
+  // Falls back to DEFAULT_SETTINGS
+  return err(validationFailedError('...', parseResult.error));
+}
+
+// Saving: prevents corrupt data from being stored
+const parseResult = BetterNiconicoSettingsSchema.safeParse(settings);
+if (!parseResult.success) {
+  return err(validationFailedError('...', parseResult.error));
+}
+```
+
+### Adding New Settings
+
+When adding a new setting:
+
+1. Add to Zod schema in `src/types/settings.ts` with `.default()` value
+2. TypeScript type updates automatically via `z.infer`
+3. Update `DEFAULT_SETTINGS` to match schema defaults
+4. Validation and type checking work automatically
+
+**IMPORTANT**: Always add `.default()` to new schema fields for backward compatibility.
+
 ## anime4k-webgpu Integration Notes
 
 **CRITICAL**: The `render()` function from anime4k-webgpu does **NOT** support `signal` parameter for AbortController.
@@ -166,66 +226,48 @@ await render({ ..., signal: controller.signal }); // Does nothing!
 
 **Stopping the render loop**: Remove the canvas element with `canvas.remove()`. The `requestVideoFrameCallback` loop will stop automatically when the canvas is gone.
 
-## FFmpeg.wasm Integration Notes (Video Download Feature)
+## Video Download Integration Notes
 
-**CRITICAL**: FFmpeg.wasm requires specific Content Security Policy and loading configuration.
+The video download feature uses an external bookmarklet service (nicozon.net) for downloading videos.
 
-### CSP Configuration
+### Implementation Approach
 
-The manifest requires `wasm-unsafe-eval` to execute WebAssembly:
+1. **Content Script** (`src/content/features/videoDownload.ts`):
+   - Adds download button to player control bar
+   - Sends download request to background script with video ID
 
-```json
-{
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
-}
-```
+2. **Background Script** (`src/background/index.ts`):
+   - Opens `https://ext.nicovideo.jp/?{videoId}` in new tab
+   - Injects nicozon.net bookmarklet script into the page (using `world: 'MAIN'` to bypass CSP)
+   - Bookmarklet handles the actual download process
 
-### Loading from CDN
+### Why External Service?
 
-FFmpeg core is loaded from unpkg.com CDN (not bundled) to reduce extension size:
+- Niconico's HLS streaming is complex and requires significant processing
+- nicozon.net provides a reliable, maintained download solution
+- Avoids bundling large libraries (FFmpeg.wasm ~24MB)
+- No need for client-side video encoding
 
-```typescript
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
+### Script Injection
 
-const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-await ffmpeg.load({
-  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-});
-```
-
-**Why CDN loading**:
-- FFmpeg wasm is 24MB - too large to bundle in extension
-- Loaded on-demand when user clicks download button
-- Cached by browser after first use
-
-### Progress Tracking
-
-FFmpeg provides real-time progress events:
+Uses `chrome.scripting.executeScript` with `world: 'MAIN'` to inject the bookmarklet:
 
 ```typescript
-ffmpeg.on('progress', ({ progress, time }) => {
-  const percentage = Math.round(progress * 100);
-  updateButtonText(`変換中 ${percentage}%`);
+chrome.scripting.executeScript({
+  target: { tabId: newTab.id },
+  world: 'MAIN', // Run in page context to bypass CSP
+  func: () => {
+    const script = document.createElement('script');
+    script.setAttribute('charset', 'utf-8');
+    script.src = 'https://www.nicozon.net/js/bookmarklet.js';
+    document.body.appendChild(script);
+  },
 });
 ```
-
-### Memory Considerations
-
-- Video segments are stored in FFmpeg virtual file system
-- Large videos (1+ hour) may consume 2-4GB RAM during encoding
-- Always clean up after encoding (FFmpeg automatically clears on next exec)
 
 ### Implementation Reference
 
-Based on [nico_downloader](https://github.com/masteralice3104/nico_downloader) with modernization:
-- TypeScript strict mode (vs vanilla JS)
-- Result types for error handling (vs try-catch)
-- m3u8-parser library (vs custom regex parsing)
-- CDN loading (vs bundled dist/)
+Based on [NicoNicoDownloader-for-Firefox](https://github.com/iiiiiinnnnnnnn/NicoNicoDownloader-for-Firefox) with adaptations for Chrome Manifest V3.
 
 ## Testing Limitation
 

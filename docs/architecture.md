@@ -85,35 +85,51 @@ const SETTINGS_CONFIG: SettingConfig[] = [
 
 ## Settings System Architecture
 
-Settings are centrally defined in `src/types/settings.ts`:
+Settings are centrally defined in `src/types/settings.ts` using **Zod schema validation**:
 
 ```typescript
-export interface BetterNiconicoSettings {
-  hidePremiumSection: boolean;
-  hideOnAirAnime: boolean;
-  restoreClassicVideoLayout: boolean;
-  enableVideoUpscaling: boolean;
-  showNicoRankButton: boolean;
-  squareProfileIcons: boolean;
-  hideSupporterButton: boolean;
-  hideNicoAds: boolean;
-  enablePictureInPicture: boolean;
-}
+import { z } from 'zod';
+
+// Zod schema defines both validation rules and default values
+export const BetterNiconicoSettingsSchema = z.object({
+  hidePremiumSection: z.boolean().default(true),
+  hideOnAirAnime: z.boolean().default(true),
+  restoreClassicVideoLayout: z.boolean().default(false),
+  enableVideoUpscaling: z.boolean().default(false),
+  showNicoRankButton: z.boolean().default(true),
+  squareProfileIcons: z.boolean().default(false),
+  hideSupporterButton: z.boolean().default(false),
+  hideNicoAds: z.boolean().default(false),
+  enablePictureInPicture: z.boolean().default(false),
+  enableVideoScreenshot: z.boolean().default(false),
+  enableVideoDownload: z.boolean().default(false),
+});
+
+// TypeScript type is inferred from schema (single source of truth)
+export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema>;
 
 export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
-  hidePremiumSection: true,
-  hideOnAirAnime: true,
-  restoreClassicVideoLayout: false,
-  enableVideoUpscaling: false,
-  showNicoRankButton: true,
-  squareProfileIcons: false,
-  hideSupporterButton: false,
-  hideNicoAds: false,
-  enablePictureInPicture: false,
+  // ... defaults match schema
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
 ```
+
+### Settings Validation
+
+**Runtime validation with Zod ensures data integrity:**
+
+- All settings loaded from `chrome.storage.sync` are validated against the schema
+- Invalid or corrupt data triggers fallback to `DEFAULT_SETTINGS`
+- Missing fields are automatically filled with schema defaults
+- Type safety is guaranteed at both compile-time (TypeScript) and runtime (Zod)
+
+**Benefits:**
+
+1. **Backward compatibility**: Old settings without new fields automatically get defaults
+2. **Forward compatibility**: Extra fields are ignored during parsing
+3. **Type safety**: TypeScript type is always in sync with Zod schema
+4. **Error reporting**: Detailed validation errors help debug storage issues
 
 ### Settings Flow
 
@@ -244,16 +260,20 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 
 ### Runtime Dependencies
 
-| Package | Version | Purpose | Size Impact |
-|---------|---------|---------|-------------|
-| `anime4k-webgpu` | ^1.0.0 | AI-powered video upscaling | ~100KB |
-| `neverthrow` | ^8.2.0 | Type-safe Result types for error handling | ~10KB |
+| Package          | Version | Purpose                                         | Size Impact |
+| ---------------- | ------- | ----------------------------------------------- | ----------- |
+| `anime4k-webgpu` | ^1.0.0  | AI-powered video upscaling                      | ~3.4MB      |
+| `neverthrow`     | ^8.2.0  | Type-safe Result types for error handling       | ~10KB       |
+| `zod`            | ^4.1.12 | TypeScript-first schema validation for settings | ~2KB        |
 
-**Total runtime bundle size**: ~120KB
+**Total runtime bundle size**: ~3.42MB
 
 **Notes**:
-- `anime4k-webgpu` contributes most to bundle size
-- Opt-in feature (default OFF) to minimize impact on users who don't need it
+
+- `anime4k-webgpu` contributes most to bundle size (contains WebGPU shaders and CNN/GAN neural network weights)
+- Video upscaling is opt-in (default OFF) to minimize impact on users who don't need it
+- Zod adds minimal overhead (2KB) for comprehensive validation
+- Video download feature uses external nicozon.net bookmarklet service (no additional dependencies)
 
 ### Development Dependencies
 
