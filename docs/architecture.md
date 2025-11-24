@@ -103,6 +103,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   enablePictureInPicture: z.boolean().default(false),
   enableVideoScreenshot: z.boolean().default(false),
   enableVideoDownload: z.boolean().default(false),
+  enableAllegationAssist: z.boolean().default(false),
+  allegationTemplates: z.array(AllegationTemplateSchema).default([]),
 });
 
 // TypeScript type is inferred from schema (single source of truth)
@@ -180,6 +182,7 @@ import * as squareProfileIcons from './features/squareProfileIcons';
 import * as hideSupporterButton from './features/hideSupporterButton';
 import * as hideNicoAds from './features/hideNicoAds';
 import * as pictureInPicture from './features/pictureInPicture';
+import * as allegationAssist from './features/allegationAssist';
 
 async function applySettings(): Promise<void> {
   const settings = await loadSettings();
@@ -192,6 +195,7 @@ async function applySettings(): Promise<void> {
   hideSupporterButton.apply(settings.hideSupporterButton);
   hideNicoAds.apply(settings.hideNicoAds);
   pictureInPicture.apply(settings.enablePictureInPicture);
+  void allegationAssist.apply(settings.enableAllegationAssist);
 }
 ```
 

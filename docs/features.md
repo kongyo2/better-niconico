@@ -17,6 +17,7 @@ This document describes all features implemented in Better Niconico, with detail
 | Picture-in-Picture   | `src/content/features/pictureInPicture.ts`       | Canvas | OFF     |
 | Video Screenshot     | `src/content/features/videoScreenshot.ts`        | Canvas | OFF     |
 | Video Download       | `src/content/features/videoDownload.ts`          | External | OFF   |
+| Allegation Assist    | `src/content/features/allegationAssist.ts`       | DOM    | OFF     |
 
 ---
 
@@ -1152,6 +1153,278 @@ Based on [NicoNicoDownloader-for-Firefox](https://github.com/iiiiiinnnnnnnn/Nico
 
 ---
 
+## 12. Allegation Assist (通報フォーム入力補助)
+
+**Location**: `src/content/features/allegationAssist.ts`
+**Default**: OFF
+**Page**: `garage.nicovideo.jp/allegation/*` only
+
+### Description
+
+Adds a template dropdown menu to Niconico's allegation/report pages, allowing users to quickly fill in report forms with pre-configured templates. Helps users report rule violations consistently and efficiently.
+
+### CRITICAL Implementation Details
+
+#### 1. Page Detection
+
+The feature only activates on allegation pages:
+
+```typescript
+function isAllegationPage(): boolean {
+  return (
+    window.location.hostname === 'garage.nicovideo.jp' &&
+    window.location.pathname.includes('/allegation/')
+  );
+}
+```
+
+- **Host**: `garage.nicovideo.jp` (not regular nicovideo.jp)
+- **Path**: Must contain `/allegation/`
+- Example URL: `https://garage.nicovideo.jp/allegation/40347342/119898405`
+
+#### 2. Form Element Detection
+
+The allegation form has three main elements:
+
+```typescript
+function getFormElements(): {
+  reasonSelect: HTMLSelectElement | null;
+  contentTypeRadios: HTMLInputElement[];
+  commentTextarea: HTMLTextAreaElement | null;
+} {
+  const reasonSelect = document.querySelector<HTMLSelectElement>('select[name="reason_id"]');
+  const contentTypeRadios = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="radio"][name="content_type"]'),
+  );
+  const commentTextarea = document.querySelector<HTMLTextAreaElement>('textarea[name="comment"]');
+
+  return { reasonSelect, contentTypeRadios, commentTextarea };
+}
+```
+
+**Form Structure**:
+- `select[name="reason_id"]` - Violation reason dropdown
+  - Values: "1" (性的), "2" (暴力), "3" (グロテスク), "4" (不快), "5" (差別), "6" (残虐), "7" (法令違反), "91" (その他), "rights" (権利侵害)
+- `input[name="content_type"]` - Content type radio buttons
+  - Values: "1" (映像), "2" (音声), "3" (映像+音声)
+- `textarea[name="comment"]` - Detailed comment field
+
+#### 3. Template Structure
+
+Templates are defined using Zod schema in `src/types/settings.ts`:
+
+```typescript
+export const AllegationTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  reasonId: z.string(), // Violation reason value
+  contentType: z.string(), // Content type value (1, 2, or 3)
+  comment: z.string(), // Comment text
+});
+
+export type AllegationTemplate = z.infer<typeof AllegationTemplateSchema>;
+```
+
+**Default Templates**:
+
+1. **無断転載と思われる動画の通報** (Unauthorized reposting report)
+   - Reason: 91 (その他)
+   - Type: 3 (映像+音声)
+   - Pre-filled comment explaining spam-like unauthorized uploads
+
+2. **一般的な違反報告** (General violation report)
+   - Generic template for common violations
+
+3. **詳細な違反報告** (Detailed violation report)
+   - Template with structured placeholders
+
+4. **カスタムテンプレート** (Custom template)
+   - Blank template for custom use
+
+#### 4. Dropdown UI Integration
+
+The dropdown is inserted before the reason select element:
+
+```typescript
+function addDropdownToPage(templates: AllegationTemplate[]): void {
+  // Check if already exists (idempotency)
+  const existingContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+  if (existingContainer) {
+    return;
+  }
+
+  const { reasonSelect } = getFormElements();
+  if (!reasonSelect) {
+    return; // Form not ready yet
+  }
+
+  const parent = reasonSelect.parentElement;
+  if (!parent) {
+    return;
+  }
+
+  const dropdown = createDropdown(templates);
+  parent.insertBefore(dropdown, reasonSelect);
+}
+```
+
+**UI Design**:
+- Light blue background (`#f0f8ff`) with blue border (`#b0d4ff`)
+- Clear label: "定型文を使用："
+- Dropdown with placeholder: "-- 定型文を選択してください --"
+- Help text: "※ 定型文を選択すると、フォームに自動入力されます。内容を確認・編集してから送信してください。"
+
+#### 5. Template Application
+
+When user selects a template:
+
+```typescript
+function applyTemplate(template: AllegationTemplate): void {
+  const { reasonSelect, contentTypeRadios, commentTextarea } = getFormElements();
+
+  if (!reasonSelect || !commentTextarea || contentTypeRadios.length === 0) {
+    console.warn('[Better Niconico] 通報フォームの要素が見つかりませんでした');
+    return;
+  }
+
+  // Set reason
+  reasonSelect.value = template.reasonId;
+
+  // Set content type
+  contentTypeRadios.forEach((radio) => {
+    radio.checked = radio.value === template.contentType;
+  });
+
+  // Set comment
+  commentTextarea.value = template.comment;
+}
+```
+
+**Important**: Template values are **auto-filled** but **not auto-submitted**. Users must review and submit manually.
+
+#### 6. Template Management UI
+
+The popup includes a template editor accessible via "定型文を管理" button:
+
+**Features**:
+- List all templates with preview
+- Add new templates
+- Edit existing templates
+- Delete templates
+- Form fields:
+  - Template name (required)
+  - Violation reason (dropdown matching actual form)
+  - Content type (radio buttons)
+  - Comment text (textarea)
+
+**Security Note**: Template names and comments use `textContent` (not `innerHTML`) to prevent XSS attacks.
+
+### CSS-Based Styling
+
+The feature uses CSS classes instead of inline styles for better maintainability:
+
+```css
+/* src/content/index.css */
+.bn-allegation-assist-container {
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #f0f8ff;
+  border: 1px solid #b0d4ff;
+  border-radius: 4px;
+}
+
+.bn-allegation-assist-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+  font-size: 14px;
+  color: #333;
+}
+
+.bn-allegation-assist-select {
+  width: 100%;
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.bn-allegation-assist-note {
+  margin-top: 8px;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+}
+```
+
+### Idempotency
+
+- **Container marker**: `data-bn-allegation-container` attribute
+- **Dropdown marker**: `data-bn-allegation-dropdown` attribute
+- Checks for existing elements before creating new ones
+- Safe to call `apply(true)` multiple times via MutationObserver
+
+### Error Handling
+
+Uses Result types for type-safe error handling:
+
+```typescript
+const settingsResult = await loadSettings();
+if (settingsResult.isErr()) {
+  console.error('[Better Niconico] 設定の読み込みに失敗しました:', settingsResult.error);
+  return;
+}
+
+const settings = settingsResult.value;
+```
+
+- **No templates configured**: Removes dropdown and logs warning
+- **Form not ready**: Silently skips (MutationObserver will retry)
+- **Settings load failure**: Logs error and aborts
+
+### User Experience
+
+1. User enables "通報フォーム入力補助" in extension settings (System tab)
+2. User can manage templates via "定型文を管理" button
+3. User navigates to any allegation page (`garage.nicovideo.jp/allegation/*`)
+4. Dropdown appears at top of form with available templates
+5. User selects a template from dropdown
+6. Form fields are automatically filled
+7. User reviews and edits content as needed
+8. User submits the form manually
+
+### Why This Feature Exists
+
+Reporting rule violations on Niconico can be repetitive and time-consuming. This feature:
+- **Saves time**: No need to type the same report text repeatedly
+- **Ensures consistency**: Pre-configured templates maintain consistent reporting style
+- **Reduces errors**: Less typing means fewer mistakes
+- **Lowers barrier**: Makes it easier to report spam and violations
+
+The default "unauthorized reposting" template specifically addresses the common issue of spam uploads that hurt content discoverability.
+
+### Security Considerations
+
+**XSS Prevention**:
+- All user-generated template content (names, comments) uses `textContent` instead of `innerHTML`
+- Template data is validated using Zod schema before storage
+- No eval() or dangerous DOM manipulation
+
+**Data Validation**:
+- Reason IDs must match actual form values
+- Content type must be "1", "2", or "3"
+- Template IDs are unique (timestamp-based generation)
+
+**Privacy**:
+- Templates are stored in `chrome.storage.sync` (user's private storage)
+- No external API calls
+- No data sent to third parties
+
+---
+
 ## Page-Specific Features
 
 Some features only apply to specific pages:
@@ -1166,6 +1439,9 @@ Some features only apply to specific pages:
 
 **Video top page only** (`/video_top`):
 - Add Nico Rank Button
+
+**Allegation page only** (`garage.nicovideo.jp/allegation/*`):
+- Allegation Assist
 
 **Primarily video_top** (but check for elements on all pages):
 - Hide Premium Section

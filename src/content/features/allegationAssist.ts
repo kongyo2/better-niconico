@@ -79,35 +79,15 @@ function applyTemplate(template: AllegationTemplate): void {
 function createDropdown(templates: AllegationTemplate[]): HTMLElement {
   const container = document.createElement('div');
   container.setAttribute(CONTAINER_MARKER, 'true');
-  container.style.cssText = `
-    margin-bottom: 16px;
-    padding: 12px;
-    background-color: #f0f8ff;
-    border: 1px solid #b0d4ff;
-    border-radius: 4px;
-  `;
+  container.className = 'bn-allegation-assist-container';
 
   const label = document.createElement('label');
   label.textContent = '定型文を使用：';
-  label.style.cssText = `
-    display: block;
-    margin-bottom: 8px;
-    font-weight: bold;
-    font-size: 14px;
-    color: #333;
-  `;
+  label.className = 'bn-allegation-assist-label';
 
   const select = document.createElement('select');
   select.setAttribute(DROPDOWN_MARKER, 'true');
-  select.style.cssText = `
-    width: 100%;
-    padding: 8px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: white;
-    cursor: pointer;
-  `;
+  select.className = 'bn-allegation-assist-select';
 
   // Add placeholder option
   const placeholderOption = document.createElement('option');
@@ -135,14 +115,9 @@ function createDropdown(templates: AllegationTemplate[]): HTMLElement {
   });
 
   const noteText = document.createElement('p');
-  noteText.textContent = '※ 定型文を選択すると、フォームに自動入力されます。内容を確認・編集してから送信してください。';
-  noteText.style.cssText = `
-    margin-top: 8px;
-    margin-bottom: 0;
-    font-size: 12px;
-    color: #666;
-    line-height: 1.5;
-  `;
+  noteText.textContent =
+    '※ 定型文を選択すると、フォームに自動入力されます。内容を確認・編集してから送信してください。';
+  noteText.className = 'bn-allegation-assist-note';
 
   container.appendChild(label);
   container.appendChild(select);

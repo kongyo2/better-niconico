@@ -267,30 +267,53 @@ function renderTemplateList() {
   templates.forEach((template) => {
     const item = document.createElement('div');
     item.className = 'template-item';
-    item.innerHTML = `
-      <div class="template-item-info">
-        <div class="template-item-name">${template.name}</div>
-        <div class="template-item-preview">${template.comment}</div>
-      </div>
-      <div class="template-actions">
-        <button class="icon-button" id="edit-${template.id}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-          </svg>
-        </button>
-        <button class="icon-button" id="delete-${template.id}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-          </svg>
-        </button>
-      </div>
+
+    // Create info container
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'template-item-info';
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'template-item-name';
+    nameDiv.textContent = template.name; // Safe: uses textContent instead of innerHTML
+
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'template-item-preview';
+    previewDiv.textContent = template.comment; // Safe: uses textContent instead of innerHTML
+
+    infoDiv.appendChild(nameDiv);
+    infoDiv.appendChild(previewDiv);
+
+    // Create actions container with buttons
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'template-actions';
+
+    // Edit button
+    const editButton = document.createElement('button');
+    editButton.className = 'icon-button';
+    editButton.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+      </svg>
     `;
+    editButton.addEventListener('click', () => openEditForm(template));
 
-    item.querySelector(`#edit-${template.id}`)?.addEventListener('click', () => openEditForm(template));
-    item.querySelector(`#delete-${template.id}`)?.addEventListener('click', () => deleteTemplate(template.id));
+    // Delete button
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'icon-button';
+    deleteButton.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+      </svg>
+    `;
+    deleteButton.addEventListener('click', () => deleteTemplate(template.id));
 
+    actionsDiv.appendChild(editButton);
+    actionsDiv.appendChild(deleteButton);
+
+    item.appendChild(infoDiv);
+    item.appendChild(actionsDiv);
     templateList.appendChild(item);
   });
 }

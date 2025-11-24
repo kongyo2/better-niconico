@@ -53,7 +53,7 @@ The extension has three main components:
 Detailed documentation is organized by topic:
 
 - **[Architecture](docs/architecture.md)** - Extension components, settings system, build configuration
-- **[Features](docs/features.md)** - All 11 features with implementation details
+- **[Features](docs/features.md)** - All 12 features with implementation details
 - **[Development](docs/development.md)** - Workflow, debugging, testing, commands reference
 - **[Implementation Guide](docs/implementation.md)** - Adding features, best practices, patterns
 
@@ -70,6 +70,7 @@ Detailed documentation is organized by topic:
 9. **Picture-in-Picture** - Watch videos with comments in PiP mode
 10. **Video Screenshot** - Capture current video frame with comments as PNG image
 11. **Video Download** - Download videos using nicozon.net bookmarklet service
+12. **Allegation Assist** - Template-based auto-fill for violation report forms
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 

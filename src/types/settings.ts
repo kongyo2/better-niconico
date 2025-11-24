@@ -60,6 +60,14 @@ export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema
 export const DEFAULT_ALLEGATION_TEMPLATES: AllegationTemplate[] = [
   {
     id: 'template-1',
+    name: '無断転載と思われる動画の通報',
+    reasonId: '91', // その他
+    contentType: '3', // 映像+音声
+    comment:
+      '無断転載と思われる動画が多数氾濫しており、正規のコンテンツが探しにくくなるなど利用体験を大きく損なっています。\n\n私は権利者ではないため権利侵害の主張は行いませんが、スパム的投稿として規約違反の可能性があると考えています。\n\n調査と対応をご検討いただければ幸いです。',
+  },
+  {
+    id: 'template-2',
     name: '一般的な違反報告',
     reasonId: '91', // その他
     contentType: '3', // 映像+音声
@@ -67,7 +75,7 @@ export const DEFAULT_ALLEGATION_TEMPLATES: AllegationTemplate[] = [
       'この動画には利用規約に違反する内容が含まれています。\n適切な対応をお願いいたします。',
   },
   {
-    id: 'template-2',
+    id: 'template-3',
     name: '詳細な違反報告',
     reasonId: '91', // その他
     contentType: '3', // 映像+音声
@@ -75,7 +83,7 @@ export const DEFAULT_ALLEGATION_TEMPLATES: AllegationTemplate[] = [
       'この動画には利用規約に違反する内容が含まれています。\n\n違反内容：\n- \n\n該当箇所：\n- \n\nご確認のほど、よろしくお願いいたします。',
   },
   {
-    id: 'template-3',
+    id: 'template-4',
     name: 'カスタムテンプレート',
     reasonId: '91', // その他
     contentType: '3', // 映像+音声
