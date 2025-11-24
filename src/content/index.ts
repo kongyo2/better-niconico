@@ -17,6 +17,7 @@ import * as hideNicoAds from './features/hideNicoAds';
 import * as pictureInPicture from './features/pictureInPicture';
 import * as videoScreenshot from './features/videoScreenshot';
 import * as videoDownload from './features/videoDownload';
+import * as allegationAssist from './features/allegationAssist';
 
 /**
  * 設定を適用する（Result型を使用）
@@ -39,6 +40,7 @@ async function applySettings(): Promise<void> {
     pictureInPicture.apply(settings.enablePictureInPicture);
     videoScreenshot.apply(settings.enableVideoScreenshot);
     videoDownload.apply(settings.enableVideoDownload);
+    void allegationAssist.apply(settings.enableAllegationAssist);
     return;
   }
 
@@ -56,6 +58,7 @@ async function applySettings(): Promise<void> {
   pictureInPicture.apply(settings.enablePictureInPicture);
   videoScreenshot.apply(settings.enableVideoScreenshot);
   videoDownload.apply(settings.enableVideoDownload);
+  void allegationAssist.apply(settings.enableAllegationAssist);
 }
 
 /**

@@ -3,6 +3,19 @@
 import { z } from 'zod';
 
 /**
+ * Allegation template for auto-fill assistance
+ */
+export const AllegationTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  reasonId: z.string(), // 違反項目のvalue
+  contentType: z.string(), // 種別のvalue (1=映像, 2=音声, 3=映像+音声)
+  comment: z.string(), // 詳細コメント
+});
+
+export type AllegationTemplate = z.infer<typeof AllegationTemplateSchema>;
+
+/**
  * Zod schema for Better Niconico settings
  * Provides runtime validation for settings loaded from chrome.storage
  */
@@ -29,6 +42,10 @@ export const BetterNiconicoSettingsSchema = z.object({
   enableVideoScreenshot: z.boolean().default(false),
   // 動画ダウンロード機能を有効化
   enableVideoDownload: z.boolean().default(false),
+  // 通報フォーム定型文入力補助機能を有効化
+  enableAllegationAssist: z.boolean().default(false),
+  // 通報フォーム定型文テンプレート
+  allegationTemplates: z.array(AllegationTemplateSchema).default([]),
 });
 
 /**
@@ -36,6 +53,35 @@ export const BetterNiconicoSettingsSchema = z.object({
  * Ensures type and schema are always in sync
  */
 export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema>;
+
+/**
+ * Default allegation templates (汎用的な内容)
+ */
+export const DEFAULT_ALLEGATION_TEMPLATES: AllegationTemplate[] = [
+  {
+    id: 'template-1',
+    name: '一般的な違反報告',
+    reasonId: '91', // その他
+    contentType: '3', // 映像+音声
+    comment:
+      'この動画には利用規約に違反する内容が含まれています。\n適切な対応をお願いいたします。',
+  },
+  {
+    id: 'template-2',
+    name: '詳細な違反報告',
+    reasonId: '91', // その他
+    contentType: '3', // 映像+音声
+    comment:
+      'この動画には利用規約に違反する内容が含まれています。\n\n違反内容：\n- \n\n該当箇所：\n- \n\nご確認のほど、よろしくお願いいたします。',
+  },
+  {
+    id: 'template-3',
+    name: 'カスタムテンプレート',
+    reasonId: '91', // その他
+    contentType: '3', // 映像+音声
+    comment: '（ここに詳細を記入してください）',
+  },
+];
 
 /**
  * Default settings object
@@ -53,6 +99,8 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   enablePictureInPicture: false,
   enableVideoScreenshot: false,
   enableVideoDownload: false,
+  enableAllegationAssist: false,
+  allegationTemplates: DEFAULT_ALLEGATION_TEMPLATES,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
