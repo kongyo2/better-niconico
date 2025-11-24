@@ -1,4 +1,4 @@
-import type { BetterNiconicoSettings } from '../types/settings';
+import type { BetterNiconicoSettings, AllegationTemplate } from '../types/settings';
 import { DEFAULT_SETTINGS } from '../types/settings';
 import { loadSettings, saveSettings } from '../utils/storage';
 
@@ -12,7 +12,39 @@ interface SettingConfig {
   description: string;
   category: SettingCategory;
   icon?: string; // SVG path d attribute
+  actionButton?: {
+    label: string;
+    onClick: () => void;
+  };
 }
+
+// --- State ---
+
+let currentSettings: BetterNiconicoSettings = { ...DEFAULT_SETTINGS };
+let activeTab: SettingCategory = 'video';
+let editingTemplateId: string | null = null;
+
+// --- DOM Elements ---
+
+const settingsContainer = document.getElementById('settingsContainer') as HTMLElement;
+const statusMessage = document.getElementById('statusMessage') as HTMLElement;
+const versionElement = document.getElementById('version') as HTMLElement;
+const tabButtons = document.querySelectorAll('.tab-button');
+
+// Template Editor Elements
+const templateEditor = document.getElementById('templateEditor') as HTMLElement;
+const templateList = document.getElementById('templateList') as HTMLElement;
+const backButton = document.getElementById('backButton') as HTMLElement;
+const addTemplateButton = document.getElementById('addTemplateButton') as HTMLElement;
+const editFormOverlay = document.getElementById('editFormOverlay') as HTMLElement;
+const cancelEditButton = document.getElementById('cancelEditButton') as HTMLElement;
+const saveTemplateButton = document.getElementById('saveTemplateButton') as HTMLElement;
+
+// Form Elements
+const templateNameInput = document.getElementById('templateName') as HTMLInputElement;
+const templateReasonSelect = document.getElementById('templateReason') as HTMLSelectElement;
+const templateCommentTextarea = document.getElementById('templateComment') as HTMLTextAreaElement;
+const templateTypeRadios = document.querySelectorAll('input[name="templateType"]');
 
 // --- Configuration ---
 
@@ -105,20 +137,12 @@ const SETTINGS_CONFIG: SettingConfig[] = [
     description: '通報画面で定型文を選択して自動入力できます',
     category: 'system',
     icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    actionButton: {
+      label: '定型文を管理',
+      onClick: () => openTemplateEditor(),
+    },
   },
 ];
-
-// --- State ---
-
-let currentSettings: BetterNiconicoSettings = { ...DEFAULT_SETTINGS };
-let activeTab: SettingCategory = 'video';
-
-// --- DOM Elements ---
-
-const settingsContainer = document.getElementById('settingsContainer') as HTMLElement;
-const statusMessage = document.getElementById('statusMessage') as HTMLElement;
-const versionElement = document.getElementById('version') as HTMLElement;
-const tabButtons = document.querySelectorAll('.tab-button');
 
 // --- Functions ---
 
@@ -140,6 +164,11 @@ function createSettingCard(config: SettingConfig): HTMLElement {
        </div>`
     : '';
 
+  let actionButtonHtml = '';
+  if (config.actionButton) {
+    actionButtonHtml = `<button class="manage-button" id="action-${config.id}">${config.actionButton.label}</button>`;
+  }
+
   card.innerHTML = `
     <div class="setting-info">
       <div class="setting-header">
@@ -147,6 +176,7 @@ function createSettingCard(config: SettingConfig): HTMLElement {
         <div class="setting-title">${config.label}</div>
       </div>
       <div class="setting-description">${config.description}</div>
+      ${actionButtonHtml}
     </div>
     <label class="toggle">
       <input type="checkbox" id="${config.id}">
@@ -155,10 +185,10 @@ function createSettingCard(config: SettingConfig): HTMLElement {
   `;
 
   const checkbox = card.querySelector('input') as HTMLInputElement;
-  checkbox.checked = currentSettings[config.id];
+  checkbox.checked = currentSettings[config.id] as boolean;
 
   checkbox.addEventListener('change', async () => {
-    currentSettings[config.id] = checkbox.checked;
+    (currentSettings[config.id] as boolean) = checkbox.checked;
     const result = await saveSettings(currentSettings);
     if (result.isOk()) {
       showStatus('設定を保存しました');
@@ -168,6 +198,11 @@ function createSettingCard(config: SettingConfig): HTMLElement {
       checkbox.checked = !checkbox.checked; // Revert
     }
   });
+
+  if (config.actionButton) {
+    const actionBtn = card.querySelector(`#action-${config.id}`);
+    actionBtn?.addEventListener('click', config.actionButton.onClick);
+  }
 
   return card;
 }
@@ -205,6 +240,162 @@ function initTabs() {
   });
 }
 
+// --- Template Editor Functions ---
+
+function openTemplateEditor() {
+  renderTemplateList();
+  templateEditor.style.display = 'flex';
+}
+
+function closeTemplateEditor() {
+  templateEditor.style.display = 'none';
+}
+
+function renderTemplateList() {
+  templateList.innerHTML = '';
+  const templates = currentSettings.allegationTemplates || [];
+
+  if (templates.length === 0) {
+    templateList.innerHTML = `
+      <div class="empty-state">
+        <p>定型文がありません</p>
+      </div>
+    `;
+    return;
+  }
+
+  templates.forEach((template) => {
+    const item = document.createElement('div');
+    item.className = 'template-item';
+    item.innerHTML = `
+      <div class="template-item-info">
+        <div class="template-item-name">${template.name}</div>
+        <div class="template-item-preview">${template.comment}</div>
+      </div>
+      <div class="template-actions">
+        <button class="icon-button" id="edit-${template.id}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+        <button class="icon-button" id="delete-${template.id}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+          </svg>
+        </button>
+      </div>
+    `;
+
+    item.querySelector(`#edit-${template.id}`)?.addEventListener('click', () => openEditForm(template));
+    item.querySelector(`#delete-${template.id}`)?.addEventListener('click', () => deleteTemplate(template.id));
+
+    templateList.appendChild(item);
+  });
+}
+
+function openEditForm(template?: AllegationTemplate) {
+  editingTemplateId = template ? template.id : null;
+
+  // Reset form
+  templateNameInput.value = template ? template.name : '';
+  templateReasonSelect.value = template ? template.reasonId : '91';
+  templateCommentTextarea.value = template ? template.comment : '';
+
+  const typeValue = template ? template.contentType : '3';
+  templateTypeRadios.forEach((radio) => {
+    (radio as HTMLInputElement).checked = (radio as HTMLInputElement).value === typeValue;
+  });
+
+  editFormOverlay.style.display = 'flex';
+}
+
+function closeEditForm() {
+  editFormOverlay.style.display = 'none';
+  editingTemplateId = null;
+}
+
+async function saveTemplate() {
+  const name = templateNameInput.value.trim();
+  const reasonId = templateReasonSelect.value;
+  const comment = templateCommentTextarea.value;
+
+  let contentType = '3';
+  templateTypeRadios.forEach((radio) => {
+    if ((radio as HTMLInputElement).checked) {
+      contentType = (radio as HTMLInputElement).value;
+    }
+  });
+
+  if (!name) {
+    alert('テンプレート名を入力してください');
+    return;
+  }
+
+  const newTemplate: AllegationTemplate = {
+    id: editingTemplateId || `template-${Date.now()}`,
+    name,
+    reasonId,
+    contentType,
+    comment,
+  };
+
+  let templates = [...(currentSettings.allegationTemplates || [])];
+
+  if (editingTemplateId) {
+    // Update existing
+    templates = templates.map(t => t.id === editingTemplateId ? newTemplate : t);
+  } else {
+    // Add new
+    templates.push(newTemplate);
+  }
+
+  currentSettings.allegationTemplates = templates;
+
+  const result = await saveSettings(currentSettings);
+  if (result.isOk()) {
+    showStatus('テンプレートを保存しました');
+    closeEditForm();
+    renderTemplateList();
+  } else {
+    console.error('Failed to save:', result.error);
+    showStatus('保存に失敗しました');
+  }
+}
+
+async function deleteTemplate(id: string) {
+  if (!confirm('このテンプレートを削除してもよろしいですか？')) {
+    return;
+  }
+
+  const templates = (currentSettings.allegationTemplates || []).filter(t => t.id !== id);
+  currentSettings.allegationTemplates = templates;
+
+  const result = await saveSettings(currentSettings);
+  if (result.isOk()) {
+    showStatus('テンプレートを削除しました');
+    renderTemplateList();
+  } else {
+    console.error('Failed to save:', result.error);
+    showStatus('削除に失敗しました');
+  }
+}
+
+function initTemplateEditor() {
+  backButton.addEventListener('click', closeTemplateEditor);
+  addTemplateButton.addEventListener('click', () => openEditForm());
+  cancelEditButton.addEventListener('click', closeEditForm);
+  saveTemplateButton.addEventListener('click', () => void saveTemplate());
+
+  // Close modal when clicking outside
+  editFormOverlay.addEventListener('click', (e) => {
+    if (e.target === editFormOverlay) {
+      closeEditForm();
+    }
+  });
+}
+
 async function init() {
   // Display version
   const manifest = chrome.runtime.getManifest();
@@ -220,6 +411,7 @@ async function init() {
 
   // Initialize UI
   initTabs();
+  initTemplateEditor();
   renderSettings();
 }
 

@@ -15,10 +15,16 @@ let currentTemplates: AllegationTemplate[] = [];
  * Check if current page is an allegation page
  */
 function isAllegationPage(): boolean {
-  return (
+  // Check if current page is an allegation page
+  const isPage =
     window.location.hostname === 'garage.nicovideo.jp' &&
-    window.location.pathname.includes('/allegation/')
-  );
+    window.location.pathname.includes('/allegation/');
+
+  if (isPage) {
+    console.log('[Better Niconico] 通報ページを検出しました');
+  }
+
+  return isPage;
 }
 
 /**
@@ -155,34 +161,30 @@ function addDropdownToPage(templates: AllegationTemplate[]): void {
     return; // Already added
   }
 
-  // Find the form (it's after the heading)
-  const heading = document.querySelector('h1');
-  if (!heading) {
-    return; // Page not ready yet
-  }
-
-  // Find the parent element that contains the form
-  const formParent = heading.parentElement;
-  if (!formParent) {
-    return;
-  }
-
   // Find the 違反項目 select element
   const { reasonSelect } = getFormElements();
   if (!reasonSelect) {
+    console.log('[Better Niconico] フォーム要素(reasonSelect)が見つかりません');
     return; // Form not ready yet
   }
 
-  // Insert dropdown before the "違反項目：" label
-  const reasonLabel = Array.from(formParent.childNodes).find(
-    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.includes('違反項目：'),
-  );
-
-  if (reasonLabel && reasonLabel.parentElement) {
-    const dropdown = createDropdown(templates);
-    reasonLabel.parentElement.insertBefore(dropdown, reasonLabel);
-    console.log('[Better Niconico] 定型文ドロップダウンを追加しました');
+  // Find the parent element to insert into
+  // Usually the select is inside a td or div
+  const parent = reasonSelect.parentElement;
+  if (!parent) {
+    console.log('[Better Niconico] 親要素が見つかりません');
+    return;
   }
+
+  // Insert dropdown before the select element
+  const dropdown = createDropdown(templates);
+
+  // Try to find a good place to insert
+  // If there's a label or text node before the select, we might want to insert before that
+  // But inserting directly before the select is the safest fallback
+
+  parent.insertBefore(dropdown, reasonSelect);
+  console.log('[Better Niconico] 定型文ドロップダウンを追加しました');
 }
 
 /**
