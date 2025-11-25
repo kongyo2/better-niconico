@@ -16,7 +16,6 @@ import * as hideSupporterButton from './features/hideSupporterButton';
 import * as hideNicoAds from './features/hideNicoAds';
 import * as pictureInPicture from './features/pictureInPicture';
 import * as videoScreenshot from './features/videoScreenshot';
-import * as videoDownload from './features/videoDownload';
 import * as allegationAssist from './features/allegationAssist';
 
 /**
@@ -39,7 +38,6 @@ async function applySettings(): Promise<void> {
     hideNicoAds.apply(settings.hideNicoAds);
     pictureInPicture.apply(settings.enablePictureInPicture);
     videoScreenshot.apply(settings.enableVideoScreenshot);
-    videoDownload.apply(settings.enableVideoDownload);
     void allegationAssist.apply(settings.enableAllegationAssist);
     return;
   }
@@ -57,7 +55,6 @@ async function applySettings(): Promise<void> {
   hideNicoAds.apply(settings.hideNicoAds);
   pictureInPicture.apply(settings.enablePictureInPicture);
   videoScreenshot.apply(settings.enableVideoScreenshot);
-  videoDownload.apply(settings.enableVideoDownload);
   void allegationAssist.apply(settings.enableAllegationAssist);
 }
 

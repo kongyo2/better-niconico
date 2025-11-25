@@ -69,8 +69,7 @@ Detailed documentation is organized by topic:
 8. **Hide Nico Ads** - Hides "ニコニ広告" section below video player
 9. **Picture-in-Picture** - Watch videos with comments in PiP mode
 10. **Video Screenshot** - Capture current video frame with comments as PNG image
-11. **Video Download** - Download videos using nicozon.net bookmarklet service
-12. **Allegation Assist** - Template-based auto-fill for violation report forms
+11. **Allegation Assist** - Template-based auto-fill for violation report forms
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 
@@ -226,49 +225,6 @@ await render({ ..., signal: controller.signal }); // Does nothing!
 ```
 
 **Stopping the render loop**: Remove the canvas element with `canvas.remove()`. The `requestVideoFrameCallback` loop will stop automatically when the canvas is gone.
-
-## Video Download Integration Notes
-
-The video download feature uses an external bookmarklet service (nicozon.net) for downloading videos.
-
-### Implementation Approach
-
-1. **Content Script** (`src/content/features/videoDownload.ts`):
-   - Adds download button to player control bar
-   - Sends download request to background script with video ID
-
-2. **Background Script** (`src/background/index.ts`):
-   - Opens `https://ext.nicovideo.jp/?{videoId}` in new tab
-   - Injects nicozon.net bookmarklet script into the page (using `world: 'MAIN'` to bypass CSP)
-   - Bookmarklet handles the actual download process
-
-### Why External Service?
-
-- Niconico's HLS streaming is complex and requires significant processing
-- nicozon.net provides a reliable, maintained download solution
-- Avoids bundling large libraries (FFmpeg.wasm ~24MB)
-- No need for client-side video encoding
-
-### Script Injection
-
-Uses `chrome.scripting.executeScript` with `world: 'MAIN'` to inject the bookmarklet:
-
-```typescript
-chrome.scripting.executeScript({
-  target: { tabId: newTab.id },
-  world: 'MAIN', // Run in page context to bypass CSP
-  func: () => {
-    const script = document.createElement('script');
-    script.setAttribute('charset', 'utf-8');
-    script.src = 'https://www.nicozon.net/js/bookmarklet.js';
-    document.body.appendChild(script);
-  },
-});
-```
-
-### Implementation Reference
-
-Based on [NicoNicoDownloader-for-Firefox](https://github.com/iiiiiinnnnnnnn/NicoNicoDownloader-for-Firefox) with adaptations for Chrome Manifest V3.
 
 ## Testing Limitation
 

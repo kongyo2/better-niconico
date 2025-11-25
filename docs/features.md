@@ -16,7 +16,6 @@ This document describes all features implemented in Better Niconico, with detail
 | Hide Nico Ads        | `src/content/features/hideNicoAds.ts`            | DOM    | OFF     |
 | Picture-in-Picture   | `src/content/features/pictureInPicture.ts`       | Canvas | OFF     |
 | Video Screenshot     | `src/content/features/videoScreenshot.ts`        | Canvas | OFF     |
-| Video Download       | `src/content/features/videoDownload.ts`          | External | OFF   |
 | Allegation Assist    | `src/content/features/allegationAssist.ts`       | DOM    | OFF     |
 
 ---
@@ -1057,103 +1056,7 @@ Screenshots allow users to save memorable moments from videos, share them on soc
 
 ---
 
-## 11. Video Download
-
-**Location**: `src/content/features/videoDownload.ts`
-**Default**: OFF
-**Page**: `/watch/*` only
-
-### Description
-
-Enables video download functionality using the nicozon.net external bookmarklet service. Adds a download button to the video player control bar that opens the video in nicozon.net's download interface.
-
-### Implementation Approach
-
-The feature uses a two-part architecture:
-
-1. **Content Script** (`src/content/features/videoDownload.ts`):
-   - Adds download button to player control bar (before fullscreen button)
-   - Extracts video ID from URL
-   - Sends download request to background script
-
-2. **Background Script** (`src/background/index.ts`):
-   - Opens `https://ext.nicovideo.jp/?{videoId}` in new tab
-   - Injects nicozon.net bookmarklet script using `chrome.scripting.executeScript`
-   - Uses `world: 'MAIN'` to run script in page context and bypass CSP
-
-### Button Integration
-
-```typescript
-// Find fullscreen button in control bar
-const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
-  (btn) => btn.getAttribute('aria-label') === '全画面表示する',
-);
-
-// Create download button with native styling
-const button = document.createElement('button');
-button.className = 'Pressable cursor_pointer';
-button.style.color = '#FFFFFF';
-button.setAttribute('aria-label', 'ダウンロード');
-
-// Insert before fullscreen button
-controlBarButtonGroup.insertBefore(button, fullscreenButton);
-```
-
-- **Position**: Integrated into player control bar, before fullscreen button
-- **Styling**: Uses Niconico's native control bar button classes
-- **Icon**: SVG download icon (arrow down to tray), 28x28px
-
-### Script Injection Pattern
-
-The background script injects the nicozon.net bookmarklet:
-
-```typescript
-chrome.scripting.executeScript({
-  target: { tabId: newTab.id },
-  world: 'MAIN', // Run in page context to bypass CSP restrictions
-  func: () => {
-    const script = document.createElement('script');
-    script.setAttribute('charset', 'utf-8');
-    script.src = 'https://www.nicozon.net/js/bookmarklet.js';
-    document.body.appendChild(script);
-  },
-});
-```
-
-- **CSP Bypass**: `world: 'MAIN'` runs the script in the page's JavaScript context
-- **Async handling**: Uses message channel to confirm successful injection
-- **External service**: Delegates actual download processing to nicozon.net
-
-### Idempotency
-
-- **Button**: Uses `data-bn-download-button` marker, checks existence before creating
-- **Safe re-application**: Calling `apply(true)` multiple times is safe
-
-### Why External Service?
-
-- **Complexity**: Niconico's HLS streaming requires significant processing
-- **Maintenance**: nicozon.net provides a reliable, actively maintained solution
-- **Bundle size**: Avoids bundling large libraries like FFmpeg.wasm (~24MB)
-- **No encoding**: Delegates video processing to external service
-
-### User Experience
-
-1. User enables video download feature in settings
-2. Download button appears on `/watch/*` pages (in player control bar)
-3. User clicks button to initiate download
-4. New tab opens with nicozon.net download interface
-5. Bookmarklet automatically triggers download process
-
-### Implementation Reference
-
-Based on [NicoNicoDownloader-for-Firefox](https://github.com/iiiiiinnnnnnnn/NicoNicoDownloader-for-Firefox) with adaptations for Chrome Manifest V3:
-- Uses `chrome.scripting.executeScript` instead of Firefox's webRequest API
-- `world: 'MAIN'` parameter for CSP bypass
-- Message passing for async confirmation
-
----
-
-## 12. Allegation Assist (通報フォーム入力補助)
+## 11. Allegation Assist (通報フォーム入力補助)
 
 **Location**: `src/content/features/allegationAssist.ts`
 **Default**: OFF
@@ -1435,7 +1338,6 @@ Some features only apply to specific pages:
 - Hide Nico Ads
 - Picture-in-Picture
 - Video Screenshot
-- Video Download
 
 **Video top page only** (`/video_top`):
 - Add Nico Rank Button
