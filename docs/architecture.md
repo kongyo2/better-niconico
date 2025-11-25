@@ -102,7 +102,6 @@ export const BetterNiconicoSettingsSchema = z.object({
   hideNicoAds: z.boolean().default(false),
   enablePictureInPicture: z.boolean().default(false),
   enableVideoScreenshot: z.boolean().default(false),
-  enableVideoDownload: z.boolean().default(false),
   enableAllegationAssist: z.boolean().default(false),
   allegationTemplates: z.array(AllegationTemplateSchema).default([]),
 });
@@ -277,7 +276,6 @@ Fast Rust-based linter configured in `.oxlintrc.json`:
 - `anime4k-webgpu` contributes most to bundle size (contains WebGPU shaders and CNN/GAN neural network weights)
 - Video upscaling is opt-in (default OFF) to minimize impact on users who don't need it
 - Zod adds minimal overhead (2KB) for comprehensive validation
-- Video download feature uses external nicozon.net bookmarklet service (no additional dependencies)
 
 ### Development Dependencies
 

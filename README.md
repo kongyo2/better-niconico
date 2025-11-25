@@ -54,7 +54,6 @@ Chrome Webstore: https://chromewebstore.google.com/detail/plgkkapmiakgdndngkacnd
 - **ニコニ広告セクションを非表示** - 動画下部の広告セクションを非表示
 - **Picture-in-Picture機能** - 動画とコメントをPiP表示
 - **動画スクリーンショット機能** - 現在のフレーム（コメント付き）を画像保存
-- **動画ダウンロード機能** - nicozon.netを使用した動画保存
 - **通報フォーム入力補助** - 通報フォームへの定型文自動入力
 
 ## 魔改造大歓迎！（ローカルで自由にやれよ！）
