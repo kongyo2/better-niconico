@@ -72,13 +72,6 @@ const SETTINGS_CONFIG: SettingConfig[] = [
     icon: 'M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z',
   },
   {
-    id: 'enableVideoDownload',
-    label: '動画ダウンロード',
-    description: 'nicozon.netを使用して動画をダウンロードします',
-    category: 'video',
-    icon: 'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3',
-  },
-  {
     id: 'restoreClassicVideoLayout',
     label: 'クラシックレイアウト',
     description: '動画情報をプレイヤー上部に表示します',

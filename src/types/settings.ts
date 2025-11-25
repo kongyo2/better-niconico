@@ -40,8 +40,6 @@ export const BetterNiconicoSettingsSchema = z.object({
   enablePictureInPicture: z.boolean().default(false),
   // 動画スクリーンショット機能を有効化
   enableVideoScreenshot: z.boolean().default(false),
-  // 動画ダウンロード機能を有効化
-  enableVideoDownload: z.boolean().default(false),
   // 通報フォーム定型文入力補助機能を有効化
   enableAllegationAssist: z.boolean().default(false),
   // 通報フォーム定型文テンプレート
@@ -105,7 +103,6 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideNicoAds: false,
   enablePictureInPicture: false,
   enableVideoScreenshot: false,
-  enableVideoDownload: false,
   enableAllegationAssist: false,
   allegationTemplates: DEFAULT_ALLEGATION_TEMPLATES,
 };
