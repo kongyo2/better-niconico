@@ -368,7 +368,7 @@ async function saveTemplate() {
 
   if (editingTemplateId) {
     // Update existing
-    templates = templates.map(t => t.id === editingTemplateId ? newTemplate : t);
+    templates = templates.map((t) => (t.id === editingTemplateId ? newTemplate : t));
   } else {
     // Add new
     templates.push(newTemplate);
@@ -392,7 +392,7 @@ async function deleteTemplate(id: string) {
     return;
   }
 
-  const templates = (currentSettings.allegationTemplates || []).filter(t => t.id !== id);
+  const templates = (currentSettings.allegationTemplates || []).filter((t) => t.id !== id);
   currentSettings.allegationTemplates = templates;
 
   const result = await saveSettings(currentSettings);

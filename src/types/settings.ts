@@ -71,8 +71,7 @@ export const DEFAULT_ALLEGATION_TEMPLATES: AllegationTemplate[] = [
     name: '一般的な違反報告',
     reasonId: '91', // その他
     contentType: '3', // 映像+音声
-    comment:
-      'この動画には利用規約に違反する内容が含まれています。\n適切な対応をお願いいたします。',
+    comment: 'この動画には利用規約に違反する内容が含まれています。\n適切な対応をお願いいたします。',
   },
   {
     id: 'template-3',

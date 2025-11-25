@@ -1,122 +1,160 @@
 <!doctype html>
 <html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Better Niconico 設定</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="popup-editor.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Better Niconico 設定</title>
-  <link rel="stylesheet" href="popup.css" />
-  <link rel="stylesheet" href="popup-editor.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"
-    rel="stylesheet" />
-</head>
-
-<body>
-  <div class="app-container">
-    <header class="header">
-      <div class="header-content">
-        <div class="logo-area">
-          <div class="logo-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="2" y="6" width="20" height="15" rx="2" stroke="white" stroke-width="2" />
-              <path d="M8 2L12 6L16 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+  <body>
+    <div class="app-container">
+      <header class="header">
+        <div class="header-content">
+          <div class="logo-area">
+            <div class="logo-icon">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect x="2" y="6" width="20" height="15" rx="2" stroke="white" stroke-width="2" />
+                <path
+                  d="M8 2L12 6L16 2"
+                  stroke="white"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+            <h1 class="title">Better Niconico</h1>
           </div>
-          <h1 class="title">Better Niconico</h1>
+          <div class="version-badge" id="version">v1.0.0</div>
         </div>
-        <div class="version-badge" id="version">v1.0.0</div>
-      </div>
-      <div class="tabs">
-        <button class="tab-button active" data-tab="video">動画</button>
-        <button class="tab-button" data-tab="ui">UI/表示</button>
-        <button class="tab-button" data-tab="system">システム</button>
-      </div>
-    </header>
+        <div class="tabs">
+          <button class="tab-button active" data-tab="video">動画</button>
+          <button class="tab-button" data-tab="ui">UI/表示</button>
+          <button class="tab-button" data-tab="system">システム</button>
+        </div>
+      </header>
 
-    <main class="settings-container" id="settingsContainer">
-      <!-- Settings will be dynamically injected here -->
-    </main>
+      <main class="settings-container" id="settingsContainer">
+        <!-- Settings will be dynamically injected here -->
+      </main>
 
-    <!-- Template Editor View (Hidden by default) -->
-    <div class="template-editor" id="templateEditor" style="display: none;">
-      <div class="editor-header">
-        <button class="icon-button" id="backButton">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h2>定型文の管理</h2>
-        <button class="icon-button primary" id="addTemplateButton">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-      </div>
+      <!-- Template Editor View (Hidden by default) -->
+      <div class="template-editor" id="templateEditor" style="display: none">
+        <div class="editor-header">
+          <button class="icon-button" id="backButton">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h2>定型文の管理</h2>
+          <button class="icon-button primary" id="addTemplateButton">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
 
-      <div class="template-list" id="templateList">
-        <!-- Templates will be injected here -->
-      </div>
+        <div class="template-list" id="templateList">
+          <!-- Templates will be injected here -->
+        </div>
 
-      <!-- Edit Form Modal (Hidden by default) -->
-      <div class="edit-form-overlay" id="editFormOverlay" style="display: none;">
-        <div class="edit-form">
-          <h3>定型文を編集</h3>
-          <div class="form-group">
-            <label>テンプレート名</label>
-            <input type="text" id="templateName" placeholder="例: 一般的な違反報告">
-          </div>
-          <div class="form-group">
-            <label>違反項目</label>
-            <select id="templateReason">
-              <option value="1">性的な内容が含まれている</option>
-              <option value="2">暴力的な内容が含まれている</option>
-              <option value="3">グロテスクな内容が含まれている</option>
-              <option value="4">不快な表現が含まれている</option>
-              <option value="5">差別的な表現が含まれている</option>
-              <option value="6">残虐な内容が含まれている</option>
-              <option value="7">法令に違反する内容が含まれている（権利侵害以外）</option>
-              <option value="91">その他</option>
-              <option value="rights">保有する権利が侵害されている(権利者の方のみ)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>種別</label>
-            <div class="radio-group">
-              <label><input type="radio" name="templateType" value="1"> 映像</label>
-              <label><input type="radio" name="templateType" value="2"> 音声</label>
-              <label><input type="radio" name="templateType" value="3"> 映像+音声</label>
+        <!-- Edit Form Modal (Hidden by default) -->
+        <div class="edit-form-overlay" id="editFormOverlay" style="display: none">
+          <div class="edit-form">
+            <h3>定型文を編集</h3>
+            <div class="form-group">
+              <label>テンプレート名</label>
+              <input type="text" id="templateName" placeholder="例: 一般的な違反報告" />
+            </div>
+            <div class="form-group">
+              <label>違反項目</label>
+              <select id="templateReason">
+                <option value="1">性的な内容が含まれている</option>
+                <option value="2">暴力的な内容が含まれている</option>
+                <option value="3">グロテスクな内容が含まれている</option>
+                <option value="4">不快な表現が含まれている</option>
+                <option value="5">差別的な表現が含まれている</option>
+                <option value="6">残虐な内容が含まれている</option>
+                <option value="7">法令に違反する内容が含まれている（権利侵害以外）</option>
+                <option value="91">その他</option>
+                <option value="rights">保有する権利が侵害されている(権利者の方のみ)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>種別</label>
+              <div class="radio-group">
+                <label><input type="radio" name="templateType" value="1" /> 映像</label>
+                <label><input type="radio" name="templateType" value="2" /> 音声</label>
+                <label><input type="radio" name="templateType" value="3" /> 映像+音声</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>詳細コメント</label>
+              <textarea
+                id="templateComment"
+                rows="5"
+                placeholder="詳細を入力してください"
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="button secondary" id="cancelEditButton">キャンセル</button>
+              <button class="button primary" id="saveTemplateButton">保存</button>
             </div>
           </div>
-          <div class="form-group">
-            <label>詳細コメント</label>
-            <textarea id="templateComment" rows="5" placeholder="詳細を入力してください"></textarea>
-          </div>
-          <div class="form-actions">
-            <button class="button secondary" id="cancelEditButton">キャンセル</button>
-            <button class="button primary" id="saveTemplateButton">保存</button>
-          </div>
         </div>
       </div>
+
+      <footer class="footer">
+        <div class="status-message" id="statusMessage"></div>
+        <a href="https://github.com/kongyo2/better-niconico" target="_blank" class="github-link">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.05-.015-2.055-3.33.72-4.035-1.605-4.035-1.605-.54-1.38-1.32-1.755-1.32-1.755-1.095-.75.09-.735.09-.735 1.2.09 1.845 1.245 1.845 1.245 1.08 1.86 2.805 1.32 3.495 1.005.105-.78.42-1.32.765-1.62-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405 1.02 0 2.04.135 3 .405 2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.285 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"
+            />
+          </svg>
+          GitHub
+        </a>
+      </footer>
     </div>
 
-    <footer class="footer">
-      <div class="status-message" id="statusMessage"></div>
-      <a href="https://github.com/kongyo2/better-niconico" target="_blank" class="github-link">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.05-.015-2.055-3.33.72-4.035-1.605-4.035-1.605-.54-1.38-1.32-1.755-1.32-1.755-1.095-.75.09-.735.09-.735 1.2.09 1.845 1.245 1.845 1.245 1.08 1.86 2.805 1.32 3.495 1.005.105-.78.42-1.32.765-1.62-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405 1.02 0 2.04.135 3 .405 2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.285 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-        </svg>
-        GitHub
-      </a>
-    </footer>
-  </div>
-
-  <script type="module" src="popup.ts"></script>
-</body>
-
+    <script type="module" src="popup.ts"></script>
+  </body>
 </html>
