@@ -298,7 +298,33 @@ body.bn-hide-supporter {
   line-height: 1.5;
 }
 
-/* シネマティックライティング（アンビエントモード） */
+/* シネマティックライティング（アンビエントモード） - 改善版 */
+
+/* 外側グロー用コンテナ（メイングリッドに配置、広範囲の光） */
+.bn-ambient-outer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+  /* GPUアクセラレーション */
+  will-change: box-shadow, background;
+  transform: translateZ(0);
+  /* スムーズなトランジション */
+  transition:
+    box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* ダークモードとの調和 */
+  mix-blend-mode: screen;
+  /* 外側に広がるように */
+  margin: -100px;
+  padding: 100px;
+}
+
+/* 内側グロー用コンテナ（プレイヤーエリアに配置） */
 .bn-ambient-container {
   position: absolute;
   top: 0;
@@ -310,6 +336,75 @@ body.bn-hide-supporter {
   overflow: visible;
 }
 
+/* 内側グロー要素（プレイヤー周囲の近いグロー） */
+.bn-ambient-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  /* GPUアクセラレーション */
+  will-change: box-shadow, background;
+  transform: translateZ(0);
+  /* スムーズなトランジション */
+  transition:
+    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  /* ダークモードとの調和 */
+  mix-blend-mode: screen;
+}
+
+/* コーナーグロー用コンテナ */
+.bn-ambient-corners {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* コーナーグロー要素（四隅の光） */
+.bn-ambient-corner {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  pointer-events: none;
+  /* GPUアクセラレーション */
+  will-change: background;
+  transform: translateZ(0);
+  /* スムーズなトランジション */
+  transition: background 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* ダークモードとの調和 */
+  mix-blend-mode: screen;
+  border-radius: 50%;
+  filter: blur(30px);
+}
+
+/* コーナーの位置 */
+.bn-ambient-corner-top-left {
+  top: -60px;
+  left: -60px;
+}
+
+.bn-ambient-corner-top-right {
+  top: -60px;
+  right: -60px;
+}
+
+.bn-ambient-corner-bottom-left {
+  bottom: -60px;
+  left: -60px;
+}
+
+.bn-ambient-corner-bottom-right {
+  bottom: -60px;
+  right: -60px;
+}
+
+/* 旧バージョンとの互換性（廃止予定） */
 .bn-ambient-glow {
   position: absolute;
   top: 0;
@@ -317,11 +412,9 @@ body.bn-hide-supporter {
   right: 0;
   bottom: 0;
   pointer-events: none;
-  /* グローのトランジション（色変化を滑らかに） */
   transition:
     box-shadow 0.3s ease-out,
     background 0.3s ease-out;
-  /* ニコニコのダークモードと調和するためのブレンド */
   mix-blend-mode: screen;
 }
 

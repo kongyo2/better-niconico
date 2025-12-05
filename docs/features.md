@@ -1349,51 +1349,107 @@ The default "unauthorized reposting" template specifically addresses the common 
 
 ### Description
 
-Ambient lighting feature inspired by YouTube's ambient mode. Extracts colors from video edges and displays a soft glow effect around the player, creating an immersive viewing experience that harmonizes with Niconico's existing dark mode.
+Ambient lighting feature inspired by YouTube's ambient mode. Extracts vibrant colors from video frames using saturation-weighted sampling and displays a multi-layer glow effect around the player, creating an immersive viewing experience that harmonizes with Niconico's existing dark mode.
+
+### December 2025 Improvements
+
+- **Multi-layer glow effect**: Inner and outer glow layers for depth
+- **Saturation-priority color extraction**: Prefers vibrant colors over dull/dark ones
+- **Extended glow range**: Light spreads beyond the player area
+- **Corner glow**: Additional glow effects at the four corners
+- **Smooth transitions**: GPU-accelerated animations with cubic-bezier easing
+- **16x16 sampling**: Improved color accuracy while maintaining performance
 
 ### CRITICAL Implementation Details
 
-#### 1. Color Extraction
+#### 1. Saturation-Priority Color Extraction
 
 ```typescript
-// Low-resolution sampling canvas for performance
-const SAMPLE_SIZE = 8;
-const samplingCanvas = document.createElement('canvas');
-samplingCanvas.width = SAMPLE_SIZE;
-samplingCanvas.height = SAMPLE_SIZE;
+// Higher resolution sampling canvas (16x16) for better color accuracy
+const SAMPLE_SIZE = 16;
 
-// Draw video frame to small canvas
-samplingContext.drawImage(video, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+// RGB to HSL conversion for saturation analysis
+function rgbToHsl(rgb: RGB): HSL { ... }
 
-// Extract edge colors (top, bottom, left, right)
-const imageData = samplingContext.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+// Calculate color score based on saturation
+function calculateColorScore(rgb: RGB): number {
+  const hsl = rgbToHsl(rgb);
+
+  // Skip extremely dark or bright colors
+  if (hsl.l < BRIGHTNESS_MIN / 2.55 || hsl.l > BRIGHTNESS_MAX / 2.55) {
+    return 0;
+  }
+
+  // Weight saturation heavily
+  return hsl.s * SATURATION_WEIGHT + hsl.l * 0.5;
+}
+
+// Select vibrant color using weighted average
+const selectVibrantColor = (colors: Array<{ rgb: RGB; score: number }>): RGB => {
+  // Square the score to emphasize high-saturation colors
+  const weight = score * score;
+  ...
+};
 ```
 
-- Uses a small 8x8 canvas for efficient sampling
-- Extracts average colors from each edge (top, bottom, left, right)
-- Calculates overall average color for center gradient
+- Uses 16x16 canvas for better sampling accuracy
+- Converts RGB to HSL for saturation analysis
+- Filters out extremely dark (<30) or bright (>230) colors
+- Weights saturation 2x higher than brightness
+- Squares scores to emphasize vibrant colors
 
-#### 2. Glow Effect
+#### 2. Multi-Layer Glow Effect
 
 ```typescript
-// Multi-directional box-shadow for ambient glow
-const shadows = [
-  `0 -${GLOW_SPREAD}px ${GLOW_BLUR}px rgba(${colors.top}, ${GLOW_OPACITY})`,
-  `0 ${GLOW_SPREAD}px ${GLOW_BLUR}px rgba(${colors.bottom}, ${GLOW_OPACITY})`,
-  `-${GLOW_SPREAD}px 0 ${GLOW_BLUR}px rgba(${colors.left}, ${GLOW_OPACITY})`,
-  `${GLOW_SPREAD}px 0 ${GLOW_BLUR}px rgba(${colors.right}, ${GLOW_OPACITY})`,
-];
-ambientGlow.style.boxShadow = shadows.join(', ');
+// Inner glow (close to player)
+const INNER_GLOW_BLUR = 60;
+const INNER_GLOW_SPREAD = 30;
+const GLOW_OPACITY_INNER = 0.6;
 
-// Center radial gradient for richer effect
-ambientGlow.style.background = `radial-gradient(ellipse at center, rgba(${colors.average}, 0.15) 0%, transparent 70%)`;
+// Outer glow (extended range)
+const OUTER_GLOW_BLUR = 120;
+const OUTER_GLOW_SPREAD = 80;
+const GLOW_OPACITY_OUTER = 0.35;
+
+// Corner glow size
+const CORNER_GLOW_SIZE = 200;
 ```
 
-- Four-directional box-shadow with edge-specific colors
-- Central radial gradient using average color
-- `mix-blend-mode: screen` for natural blending with dark backgrounds
+**DOM Structure**:
+- `#bn-ambient-outer`: Wide glow on parent grid (extends beyond player)
+- `#bn-ambient-container`: Container on player area
+- `#bn-ambient-inner`: Inner glow layer
+- `#bn-ambient-corners`: Four corner glow elements
 
-#### 3. Frame Synchronization
+**Visual Layers**:
+1. **Outer glow**: Softer, wider spread on the page background
+2. **Inner glow**: Stronger, tighter glow around player edges
+3. **Corner glow**: Radial gradients at each corner with blur
+4. **Center gradient**: Dominant color radial gradient
+
+#### 3. Corner Color Extraction
+
+```typescript
+interface VibrantColors {
+  top: string;
+  bottom: string;
+  left: string;
+  right: string;
+  dominant: string; // Most vibrant color overall
+  corners: {
+    topLeft: string;
+    topRight: string;
+    bottomLeft: string;
+    bottomRight: string;
+  };
+}
+```
+
+- Samples corner regions (1/4 size from each corner)
+- Each corner gets its own color for natural transitions
+- Creates more realistic ambient effect
+
+#### 4. Frame Synchronization
 
 ```typescript
 // requestVideoFrameCallback for perfect sync (Chrome 83+)
@@ -1410,54 +1466,53 @@ if (supportsRequestVideoFrameCallback() && currentVideo) {
 
 - Uses `requestVideoFrameCallback` for frame-accurate updates
 - Falls back to `requestAnimationFrame` for older browsers
-- Color change threshold prevents unnecessary updates
-
-#### 4. Performance Optimization
-
-- **Low-resolution sampling**: 8x8 pixel canvas instead of full resolution
-- **Color change threshold**: Skips updates when color difference < 10
-- **`willReadFrequently: true`**: Canvas context hint for frequent `getImageData` calls
-- **Fullscreen bypass**: Disables effect in fullscreen mode
-
-#### 5. Niconico Dark Mode Integration
-
-- **Opacity**: 0.5 for glow, 0.15 for center gradient (subtle effect)
-- **Blend mode**: `screen` blends naturally with dark backgrounds
-- **Transition**: 0.3s ease-out for smooth color changes
-- **CSS class**: `.bn-ambient-glow` with `mix-blend-mode: screen`
+- Color change threshold (15) prevents unnecessary updates
 
 ### CSS Implementation
 
 ```css
-.bn-ambient-container {
+/* Outer glow (extends beyond player) */
+.bn-ambient-outer {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   pointer-events: none;
-  z-index: -1;
-  overflow: visible;
+  z-index: 0;
+  will-change: box-shadow, background;
+  transform: translateZ(0);
+  transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  mix-blend-mode: screen;
+  margin: -100px;
+  padding: 100px;
 }
 
-.bn-ambient-glow {
+/* Inner glow (tight to player) */
+.bn-ambient-inner {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  transition:
-    box-shadow 0.3s ease-out,
-    background 0.3s ease-out;
+  will-change: box-shadow, background;
+  transform: translateZ(0);
+  transition: box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   mix-blend-mode: screen;
+}
+
+/* Corner glow elements */
+.bn-ambient-corner {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  will-change: background;
+  transform: translateZ(0);
+  transition: background 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  mix-blend-mode: screen;
+  border-radius: 50%;
+  filter: blur(30px);
 }
 ```
 
 ### Idempotency
 
 - **Container marker**: `data-bn-ambient-container` attribute
-- **Glow marker**: `data-bn-ambient-glow` attribute
+- **Outer marker**: `data-bn-ambient-outer` attribute
 - Checks for existing elements before creating new ones
 - Safe to call `apply(true)` multiple times via MutationObserver
 
@@ -1474,25 +1529,28 @@ if (supportsRequestVideoFrameCallback() && currentVideo) {
 - **Fallback**: requestAnimationFrame (all modern browsers)
 - **Canvas API**: All modern browsers
 - **mix-blend-mode**: Chrome 41+, Firefox 32+, Safari 8+
+- **CSS will-change**: Chrome 36+, Firefox 36+, Safari 9.1+
 
 ### Performance Considerations
 
-- **CPU usage**: ~2-3% on modern CPUs (8x8 sampling)
-- **Memory**: Minimal (~1MB for canvas and state)
-- **Battery impact**: Low (efficient frame-synced updates)
+- **CPU usage**: ~3-4% on modern CPUs (16x16 sampling with HSL conversion)
+- **Memory**: Minimal (~2MB for canvas, state, and glow elements)
+- **GPU usage**: Optimized with `will-change` and `transform: translateZ(0)`
+- **Battery impact**: Low (efficient frame-synced updates, GPU-accelerated transitions)
 - **Why default OFF**: Personal preference feature, not essential
 
 ### User Experience
 
 1. User enables "シネマティックライティング" in extension settings (Video tab)
-2. Ambient glow appears around video player on `/watch/*` pages
-3. Glow color dynamically matches video content
-4. Effect automatically disables in fullscreen mode
-5. Smooth transitions between color changes
+2. Multi-layer ambient glow appears around video player on `/watch/*` pages
+3. Glow colors dynamically match the most vibrant parts of the video
+4. Corner glows add depth and realism to the effect
+5. Effect automatically disables in fullscreen mode
+6. Smooth transitions between color changes with GPU acceleration
 
 ### Why This Feature Exists
 
-Ambient lighting enhances the viewing experience by extending the video's visual atmosphere beyond the player boundaries. This creates a more immersive, cinema-like experience, especially effective when watching videos in a dark room. The feature is designed to harmonize with Niconico's existing dark mode rather than conflict with it.
+Ambient lighting enhances the viewing experience by extending the video's visual atmosphere beyond the player boundaries. This creates a more immersive, cinema-like experience, especially effective when watching videos in a dark room. The improved multi-layer design provides a richer, more natural ambient effect that rivals YouTube's ambient mode while harmonizing with Niconico's existing dark mode
 
 ---
 

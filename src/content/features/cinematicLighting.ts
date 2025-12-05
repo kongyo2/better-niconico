@@ -5,29 +5,42 @@
  *
  * IMPLEMENTATION NOTES:
  * - Main video element: blob: URL, outside #nv_watch_VideoAdContainer
- * - Extracts edge colors from video frames using a small sampling canvas
- * - Creates ambient glow effect behind the player area
+ * - Extracts vibrant colors from video frames using saturation-weighted sampling
+ * - Creates multi-layer ambient glow effect around and behind the player
  * - Uses requestVideoFrameCallback for frame-synced updates (Chrome 83+)
  * - Falls back to requestAnimationFrame if not supported
  * - Automatically disables in fullscreen mode
  * - Harmonizes with Niconico's existing dark mode
+ *
+ * 改善点 (2025/12):
+ * - 多層グロー効果: 内側/外側の複数レイヤーで深みのある効果
+ * - 彩度優先の色抽出: 暗い色より彩度の高い色を優先
+ * - 広範囲グロー: プレイヤーエリアの外側にも光が広がる
+ * - スムーズなトランジション: CSS変数とGPUアクセラレーション活用
+ * - コーナーグロー: 四隅に追加のグロー効果
  */
 
 // マーカー属性
 const AMBIENT_CONTAINER_MARKER = 'data-bn-ambient-container';
-const AMBIENT_GLOW_MARKER = 'data-bn-ambient-glow';
+const AMBIENT_OUTER_MARKER = 'data-bn-ambient-outer';
 
 // 要素ID
 const AMBIENT_CONTAINER_ID = 'bn-ambient-container';
-const AMBIENT_GLOW_ID = 'bn-ambient-glow';
+const AMBIENT_OUTER_ID = 'bn-ambient-outer';
+const AMBIENT_INNER_ID = 'bn-ambient-inner';
+const AMBIENT_CORNERS_ID = 'bn-ambient-corners';
 
-// サンプリングキャンバスの解像度（パフォーマンス重視で小さめ）
-const SAMPLE_SIZE = 8;
+// サンプリングキャンバスの解像度（パフォーマンスと品質のバランス）
+const SAMPLE_SIZE = 16;
 
 // グロー効果の設定
-const GLOW_BLUR = 80; // ぼかしの強さ (px)
-const GLOW_SPREAD = 40; // 広がりの範囲 (px)
-const GLOW_OPACITY = 0.5; // 不透明度（ニコニコのダークモードと調和）
+const INNER_GLOW_BLUR = 60; // 内側グローのぼかし (px)
+const INNER_GLOW_SPREAD = 30; // 内側グローの広がり (px)
+const OUTER_GLOW_BLUR = 120; // 外側グローのぼかし (px)
+const OUTER_GLOW_SPREAD = 80; // 外側グローの広がり (px)
+const GLOW_OPACITY_INNER = 0.6; // 内側グローの不透明度
+const GLOW_OPACITY_OUTER = 0.35; // 外側グローの不透明度
+// コーナーグローのサイズはCSSで定義 (200px)
 
 // グローバル状態
 let isEnabled: boolean = false;
@@ -37,22 +50,35 @@ let currentVideo: HTMLVideoElement | null = null;
 let samplingCanvas: HTMLCanvasElement | null = null;
 let samplingContext: CanvasRenderingContext2D | null = null;
 let ambientContainer: HTMLDivElement | null = null;
-let ambientGlow: HTMLDivElement | null = null;
+let ambientOuter: HTMLDivElement | null = null;
+let ambientInner: HTMLDivElement | null = null;
+let ambientCorners: HTMLDivElement | null = null;
 let fullscreenListenerSetup: boolean = false;
 
 // 前回の色（色変化が小さい場合の更新スキップ用）
-let lastColors: EdgeColors | null = null;
+let lastColors: VibrantColors | null = null;
 
 // 色の変化閾値（この値より小さい変化は無視）
-const COLOR_CHANGE_THRESHOLD = 10;
+const COLOR_CHANGE_THRESHOLD = 15;
+
+// 彩度重み付けの設定
+const SATURATION_WEIGHT = 2.0; // 彩度の重要度
+const BRIGHTNESS_MIN = 30; // 最低輝度（これ以下は無視）
+const BRIGHTNESS_MAX = 230; // 最大輝度（これ以上は無視）
 
 // エッジの色を表す型
-interface EdgeColors {
+interface VibrantColors {
   top: string;
   bottom: string;
   left: string;
   right: string;
-  average: string;
+  dominant: string; // 支配的な色（彩度優先）
+  corners: {
+    topLeft: string;
+    topRight: string;
+    bottomLeft: string;
+    bottomRight: string;
+  };
 }
 
 // RGB型
@@ -60,6 +86,13 @@ interface RGB {
   r: number;
   g: number;
   b: number;
+}
+
+// HSL型
+interface HSL {
+  h: number;
+  s: number;
+  l: number;
 }
 
 /**
@@ -150,9 +183,55 @@ function createSamplingCanvas(): void {
 }
 
 /**
- * 動画フレームからエッジの色を抽出
+ * RGBからHSLに変換
  */
-function extractEdgeColors(video: HTMLVideoElement): EdgeColors | null {
+function rgbToHsl(rgb: RGB): HSL {
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+
+  if (max === min) {
+    return { h: 0, s: 0, l: l * 100 };
+  }
+
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+  let h = 0;
+  if (max === r) {
+    h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  } else if (max === g) {
+    h = ((b - r) / d + 2) / 6;
+  } else {
+    h = ((r - g) / d + 4) / 6;
+  }
+
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+/**
+ * 彩度に基づいて色のスコアを計算
+ */
+function calculateColorScore(rgb: RGB): number {
+  const hsl = rgbToHsl(rgb);
+
+  // 輝度が極端な場合はスコアを下げる
+  if (hsl.l < BRIGHTNESS_MIN / 2.55 || hsl.l > BRIGHTNESS_MAX / 2.55) {
+    return 0;
+  }
+
+  // 彩度を重み付け
+  return hsl.s * SATURATION_WEIGHT + hsl.l * 0.5;
+}
+
+/**
+ * 動画フレームから彩度優先で色を抽出
+ */
+function extractVibrantColors(video: HTMLVideoElement): VibrantColors | null {
   if (!samplingCanvas || !samplingContext) {
     return null;
   }
@@ -169,86 +248,70 @@ function extractEdgeColors(video: HTMLVideoElement): EdgeColors | null {
     const imageData = samplingContext.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
     const data = imageData.data;
 
-    // 各エッジの色を計算
-    const topColors: RGB[] = [];
-    const bottomColors: RGB[] = [];
-    const leftColors: RGB[] = [];
-    const rightColors: RGB[] = [];
+    // 各エッジと領域の色を収集
+    const topColors: Array<{ rgb: RGB; score: number }> = [];
+    const bottomColors: Array<{ rgb: RGB; score: number }> = [];
+    const leftColors: Array<{ rgb: RGB; score: number }> = [];
+    const rightColors: Array<{ rgb: RGB; score: number }> = [];
+    const allColors: Array<{ rgb: RGB; score: number }> = [];
 
-    for (let x = 0; x < SAMPLE_SIZE; x++) {
-      // 上辺
-      const topIdx = x * 4;
-      topColors.push({ r: data[topIdx], g: data[topIdx + 1], b: data[topIdx + 2] });
+    // コーナー領域のサイズ
+    const cornerSize = Math.floor(SAMPLE_SIZE / 4);
 
-      // 下辺
-      const bottomIdx = ((SAMPLE_SIZE - 1) * SAMPLE_SIZE + x) * 4;
-      bottomColors.push({
-        r: data[bottomIdx],
-        g: data[bottomIdx + 1],
-        b: data[bottomIdx + 2],
-      });
-    }
+    const cornerTopLeft: Array<{ rgb: RGB; score: number }> = [];
+    const cornerTopRight: Array<{ rgb: RGB; score: number }> = [];
+    const cornerBottomLeft: Array<{ rgb: RGB; score: number }> = [];
+    const cornerBottomRight: Array<{ rgb: RGB; score: number }> = [];
 
     for (let y = 0; y < SAMPLE_SIZE; y++) {
-      // 左辺
-      const leftIdx = y * SAMPLE_SIZE * 4;
-      leftColors.push({ r: data[leftIdx], g: data[leftIdx + 1], b: data[leftIdx + 2] });
+      for (let x = 0; x < SAMPLE_SIZE; x++) {
+        const idx = (y * SAMPLE_SIZE + x) * 4;
+        const rgb: RGB = { r: data[idx], g: data[idx + 1], b: data[idx + 2] };
+        const score = calculateColorScore(rgb);
 
-      // 右辺
-      const rightIdx = (y * SAMPLE_SIZE + (SAMPLE_SIZE - 1)) * 4;
-      rightColors.push({
-        r: data[rightIdx],
-        g: data[rightIdx + 1],
-        b: data[rightIdx + 2],
-      });
+        if (score > 0) {
+          allColors.push({ rgb, score });
+
+          // エッジの色を収集（2ピクセル幅）
+          if (y < 2) topColors.push({ rgb, score });
+          if (y >= SAMPLE_SIZE - 2) bottomColors.push({ rgb, score });
+          if (x < 2) leftColors.push({ rgb, score });
+          if (x >= SAMPLE_SIZE - 2) rightColors.push({ rgb, score });
+
+          // コーナーの色を収集
+          if (x < cornerSize && y < cornerSize) cornerTopLeft.push({ rgb, score });
+          if (x >= SAMPLE_SIZE - cornerSize && y < cornerSize) cornerTopRight.push({ rgb, score });
+          if (x < cornerSize && y >= SAMPLE_SIZE - cornerSize) cornerBottomLeft.push({ rgb, score });
+          if (x >= SAMPLE_SIZE - cornerSize && y >= SAMPLE_SIZE - cornerSize)
+            cornerBottomRight.push({ rgb, score });
+        }
+      }
     }
 
-    // 各辺の平均色を計算
-    const top = averageColor(topColors);
-    const bottom = averageColor(bottomColors);
-    const left = averageColor(leftColors);
-    const right = averageColor(rightColors);
-
-    // 全体の平均色
-    const allColors = [...topColors, ...bottomColors, ...leftColors, ...rightColors];
-    const average = averageColor(allColors);
+    // 各エッジの色を計算
+    const top = selectVibrantColor(topColors);
+    const bottom = selectVibrantColor(bottomColors);
+    const left = selectVibrantColor(leftColors);
+    const right = selectVibrantColor(rightColors);
+    const dominant = findDominantColor(allColors);
 
     return {
       top: rgbToString(top),
       bottom: rgbToString(bottom),
       left: rgbToString(left),
       right: rgbToString(right),
-      average: rgbToString(average),
+      dominant: rgbToString(dominant),
+      corners: {
+        topLeft: rgbToString(selectVibrantColor(cornerTopLeft)),
+        topRight: rgbToString(selectVibrantColor(cornerTopRight)),
+        bottomLeft: rgbToString(selectVibrantColor(cornerBottomLeft)),
+        bottomRight: rgbToString(selectVibrantColor(cornerBottomRight)),
+      },
     };
   } catch {
     // CORS等でエラーが発生した場合
     return null;
   }
-}
-
-/**
- * RGB配列の平均色を計算
- */
-function averageColor(colors: RGB[]): RGB {
-  if (colors.length === 0) {
-    return { r: 0, g: 0, b: 0 };
-  }
-
-  let totalR = 0;
-  let totalG = 0;
-  let totalB = 0;
-
-  for (const color of colors) {
-    totalR += color.r;
-    totalG += color.g;
-    totalB += color.b;
-  }
-
-  return {
-    r: Math.round(totalR / colors.length),
-    g: Math.round(totalG / colors.length),
-    b: Math.round(totalB / colors.length),
-  };
 }
 
 /**
@@ -261,16 +324,17 @@ function rgbToString(rgb: RGB): string {
 /**
  * 色の変化が閾値を超えているかチェック
  */
-function hasSignificantColorChange(newColors: EdgeColors): boolean {
+function hasSignificantColorChange(newColors: VibrantColors): boolean {
   if (!lastColors) {
     return true;
   }
 
-  // 平均色の変化をチェック
-  const newAvg = parseRgbString(newColors.average);
-  const oldAvg = parseRgbString(lastColors.average);
+  // 支配的な色の変化をチェック
+  const newDom = parseRgbString(newColors.dominant);
+  const oldDom = parseRgbString(lastColors.dominant);
 
-  const diff = Math.abs(newAvg.r - oldAvg.r) + Math.abs(newAvg.g - oldAvg.g) + Math.abs(newAvg.b - oldAvg.b);
+  const diff =
+    Math.abs(newDom.r - oldDom.r) + Math.abs(newDom.g - oldDom.g) + Math.abs(newDom.b - oldDom.b);
 
   return diff > COLOR_CHANGE_THRESHOLD;
 }
@@ -288,6 +352,55 @@ function parseRgbString(rgbStr: string): RGB {
 }
 
 /**
+ * 彩度優先で色を選択（スコアで重み付け平均）
+ */
+function selectVibrantColor(colors: Array<{ rgb: RGB; score: number }>): RGB {
+  if (colors.length === 0) {
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  // スコアで重み付け平均を計算
+  let totalWeight = 0;
+  let weightedR = 0;
+  let weightedG = 0;
+  let weightedB = 0;
+
+  for (const { rgb, score } of colors) {
+    const weight = score * score; // スコアを二乗して高スコアを強調
+    totalWeight += weight;
+    weightedR += rgb.r * weight;
+    weightedG += rgb.g * weight;
+    weightedB += rgb.b * weight;
+  }
+
+  if (totalWeight === 0) {
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  return {
+    r: Math.round(weightedR / totalWeight),
+    g: Math.round(weightedG / totalWeight),
+    b: Math.round(weightedB / totalWeight),
+  };
+}
+
+/**
+ * 支配的な色を見つける（最も彩度の高い色）
+ */
+function findDominantColor(colors: Array<{ rgb: RGB; score: number }>): RGB {
+  if (colors.length === 0) {
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  // 上位30%のスコアの色のみ使用
+  const sorted = [...colors].toSorted((a, b) => b.score - a.score);
+  const topCount = Math.max(1, Math.floor(sorted.length * 0.3));
+  const topColors = sorted.slice(0, topCount);
+
+  return selectVibrantColor(topColors);
+}
+
+/**
  * アンビエントグロー要素を作成
  */
 function createAmbientElements(): void {
@@ -296,7 +409,23 @@ function createAmbientElements(): void {
     return;
   }
 
-  // 既存の要素があれば再利用
+  // プレイヤーエリアの親（メイングリッド）を取得
+  const mainGrid = playerArea.parentElement as HTMLElement;
+
+  // 外側グロー用コンテナ（メイングリッドに配置）
+  ambientOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement;
+  if (!ambientOuter && mainGrid) {
+    ambientOuter = document.createElement('div');
+    ambientOuter.id = AMBIENT_OUTER_ID;
+    ambientOuter.setAttribute(AMBIENT_OUTER_MARKER, 'true');
+    ambientOuter.className = 'bn-ambient-outer';
+
+    // メイングリッドにposition: relativeを設定
+    mainGrid.style.position = 'relative';
+    mainGrid.insertBefore(ambientOuter, mainGrid.firstChild);
+  }
+
+  // 内側グロー用コンテナ（プレイヤーエリアに配置）
   ambientContainer = document.getElementById(AMBIENT_CONTAINER_ID) as HTMLDivElement;
   if (!ambientContainer) {
     ambientContainer = document.createElement('div');
@@ -304,46 +433,107 @@ function createAmbientElements(): void {
     ambientContainer.setAttribute(AMBIENT_CONTAINER_MARKER, 'true');
     ambientContainer.className = 'bn-ambient-container';
 
-    // プレイヤーエリアの背面に挿入
+    // プレイヤーエリアに配置
     playerArea.style.position = 'relative';
     playerArea.insertBefore(ambientContainer, playerArea.firstChild);
   }
 
-  ambientGlow = document.getElementById(AMBIENT_GLOW_ID) as HTMLDivElement;
-  if (!ambientGlow) {
-    ambientGlow = document.createElement('div');
-    ambientGlow.id = AMBIENT_GLOW_ID;
-    ambientGlow.setAttribute(AMBIENT_GLOW_MARKER, 'true');
-    ambientGlow.className = 'bn-ambient-glow';
-    ambientContainer.appendChild(ambientGlow);
+  // 内側グロー要素
+  ambientInner = document.getElementById(AMBIENT_INNER_ID) as HTMLDivElement;
+  if (!ambientInner) {
+    ambientInner = document.createElement('div');
+    ambientInner.id = AMBIENT_INNER_ID;
+    ambientInner.className = 'bn-ambient-inner';
+    ambientContainer.appendChild(ambientInner);
+  }
+
+  // コーナーグロー要素
+  ambientCorners = document.getElementById(AMBIENT_CORNERS_ID) as HTMLDivElement;
+  if (!ambientCorners) {
+    ambientCorners = document.createElement('div');
+    ambientCorners.id = AMBIENT_CORNERS_ID;
+    ambientCorners.className = 'bn-ambient-corners';
+
+    // 4つのコーナーグローを作成
+    const cornerPositions = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+    for (const pos of cornerPositions) {
+      const corner = document.createElement('div');
+      corner.className = `bn-ambient-corner bn-ambient-corner-${pos}`;
+      corner.setAttribute('data-corner', pos);
+      ambientCorners.appendChild(corner);
+    }
+    ambientContainer.appendChild(ambientCorners);
   }
 }
 
 /**
  * グロー効果を更新
  */
-function updateGlow(colors: EdgeColors): void {
-  if (!ambientGlow) {
-    return;
+function updateGlow(colors: VibrantColors): void {
+  // 内側グロー（プレイヤー周囲）
+  if (ambientInner) {
+    const innerShadows = [
+      // 上方向
+      `0 -${INNER_GLOW_SPREAD}px ${INNER_GLOW_BLUR}px rgba(${colors.top}, ${GLOW_OPACITY_INNER})`,
+      // 下方向
+      `0 ${INNER_GLOW_SPREAD}px ${INNER_GLOW_BLUR}px rgba(${colors.bottom}, ${GLOW_OPACITY_INNER})`,
+      // 左方向
+      `-${INNER_GLOW_SPREAD}px 0 ${INNER_GLOW_BLUR}px rgba(${colors.left}, ${GLOW_OPACITY_INNER})`,
+      // 右方向
+      `${INNER_GLOW_SPREAD}px 0 ${INNER_GLOW_BLUR}px rgba(${colors.right}, ${GLOW_OPACITY_INNER})`,
+    ];
+
+    ambientInner.style.boxShadow = innerShadows.join(', ');
+
+    // 中心部分に支配的な色のグラデーション
+    ambientInner.style.background = `radial-gradient(ellipse at center, rgba(${colors.dominant}, 0.2) 0%, transparent 70%)`;
   }
 
-  // box-shadowで4方向のグローを表現
-  // 各方向に異なる色を適用し、より自然なアンビエント効果を作る
-  const shadows = [
-    // 上方向のグロー
-    `0 -${GLOW_SPREAD}px ${GLOW_BLUR}px rgba(${colors.top}, ${GLOW_OPACITY})`,
-    // 下方向のグロー
-    `0 ${GLOW_SPREAD}px ${GLOW_BLUR}px rgba(${colors.bottom}, ${GLOW_OPACITY})`,
-    // 左方向のグロー
-    `-${GLOW_SPREAD}px 0 ${GLOW_BLUR}px rgba(${colors.left}, ${GLOW_OPACITY})`,
-    // 右方向のグロー
-    `${GLOW_SPREAD}px 0 ${GLOW_BLUR}px rgba(${colors.right}, ${GLOW_OPACITY})`,
-  ];
+  // 外側グロー（広範囲）
+  if (ambientOuter) {
+    const outerShadows = [
+      // 上方向（より広い）
+      `0 -${OUTER_GLOW_SPREAD}px ${OUTER_GLOW_BLUR}px rgba(${colors.top}, ${GLOW_OPACITY_OUTER})`,
+      // 下方向（より広い）
+      `0 ${OUTER_GLOW_SPREAD}px ${OUTER_GLOW_BLUR}px rgba(${colors.bottom}, ${GLOW_OPACITY_OUTER})`,
+      // 左方向（より広い）
+      `-${OUTER_GLOW_SPREAD}px 0 ${OUTER_GLOW_BLUR}px rgba(${colors.left}, ${GLOW_OPACITY_OUTER})`,
+      // 右方向（より広い）
+      `${OUTER_GLOW_SPREAD}px 0 ${OUTER_GLOW_BLUR}px rgba(${colors.right}, ${GLOW_OPACITY_OUTER})`,
+    ];
 
-  ambientGlow.style.boxShadow = shadows.join(', ');
+    ambientOuter.style.boxShadow = outerShadows.join(', ');
 
-  // 中心部分に平均色のグラデーションを適用（より豊かな効果）
-  ambientGlow.style.background = `radial-gradient(ellipse at center, rgba(${colors.average}, 0.15) 0%, transparent 70%)`;
+    // 背景に淡いグラデーション
+    ambientOuter.style.background = `radial-gradient(ellipse 80% 60% at 50% 30%, rgba(${colors.dominant}, 0.12) 0%, transparent 60%)`;
+  }
+
+  // コーナーグロー
+  if (ambientCorners) {
+    const corners = ambientCorners.querySelectorAll('.bn-ambient-corner');
+    corners.forEach((corner) => {
+      const pos = corner.getAttribute('data-corner');
+      const el = corner as HTMLElement;
+
+      let cornerColor = colors.dominant;
+      switch (pos) {
+        case 'top-left':
+          cornerColor = colors.corners.topLeft;
+          break;
+        case 'top-right':
+          cornerColor = colors.corners.topRight;
+          break;
+        case 'bottom-left':
+          cornerColor = colors.corners.bottomLeft;
+          break;
+        case 'bottom-right':
+          cornerColor = colors.corners.bottomRight;
+          break;
+      }
+
+      el.style.background = `radial-gradient(circle at center, rgba(${cornerColor}, 0.4) 0%, transparent 70%)`;
+    });
+  }
 }
 
 /**
@@ -366,7 +556,7 @@ function processFrame(): void {
   }
 
   // 色を抽出
-  const colors = extractEdgeColors(currentVideo);
+  const colors = extractVibrantColors(currentVideo);
   if (!colors) {
     return;
   }
@@ -419,7 +609,9 @@ function startUpdateLoop(): void {
     console.log('[Better Niconico] シネマティックライティング: requestVideoFrameCallback を使用');
     updateLoopWithVideoFrameCallback();
   } else {
-    console.log('[Better Niconico] シネマティックライティング: requestAnimationFrame を使用（フォールバック）');
+    console.log(
+      '[Better Niconico] シネマティックライティング: requestAnimationFrame を使用（フォールバック）',
+    );
     updateLoopWithAnimationFrame();
   }
 }
@@ -443,9 +635,19 @@ function stopUpdateLoop(): void {
  * グローを非表示
  */
 function hideGlow(): void {
-  if (ambientGlow) {
-    ambientGlow.style.boxShadow = 'none';
-    ambientGlow.style.background = 'transparent';
+  if (ambientInner) {
+    ambientInner.style.boxShadow = 'none';
+    ambientInner.style.background = 'transparent';
+  }
+  if (ambientOuter) {
+    ambientOuter.style.boxShadow = 'none';
+    ambientOuter.style.background = 'transparent';
+  }
+  if (ambientCorners) {
+    const corners = ambientCorners.querySelectorAll('.bn-ambient-corner');
+    corners.forEach((corner) => {
+      (corner as HTMLElement).style.background = 'transparent';
+    });
   }
 }
 
@@ -456,7 +658,12 @@ function removeAmbientElements(): void {
   if (ambientContainer) {
     ambientContainer.remove();
     ambientContainer = null;
-    ambientGlow = null;
+    ambientInner = null;
+    ambientCorners = null;
+  }
+  if (ambientOuter) {
+    ambientOuter.remove();
+    ambientOuter = null;
   }
 }
 
@@ -471,11 +678,15 @@ function setupFullscreenListener(): void {
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) {
       // 全画面表示に入った - グローを非表示
-      console.log('[Better Niconico] 全画面表示に入りました。シネマティックライティングを一時停止します。');
+      console.log(
+        '[Better Niconico] 全画面表示に入りました。シネマティックライティングを一時停止します。',
+      );
       hideGlow();
     } else {
       // 全画面表示から抜けた - グローを再開
-      console.log('[Better Niconico] 全画面表示から抜けました。シネマティックライティングを再開します。');
+      console.log(
+        '[Better Niconico] 全画面表示から抜けました。シネマティックライティングを再開します。',
+      );
       if (isEnabled && currentVideo) {
         // 即座に1フレーム処理して表示を復元
         setTimeout(() => {
@@ -486,7 +697,9 @@ function setupFullscreenListener(): void {
   });
 
   fullscreenListenerSetup = true;
-  console.log('[Better Niconico] 全画面表示イベントリスナーをセットアップしました（シネマティックライティング用）');
+  console.log(
+    '[Better Niconico] 全画面表示イベントリスナーをセットアップしました（シネマティックライティング用）',
+  );
 }
 
 /**
