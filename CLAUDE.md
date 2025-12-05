@@ -70,6 +70,7 @@ Detailed documentation is organized by topic:
 9. **Picture-in-Picture** - Watch videos with comments in PiP mode
 10. **Video Screenshot** - Capture current video frame with comments as PNG image
 11. **Allegation Assist** - Template-based auto-fill for violation report forms
+12. **Cinematic Lighting** - Ambient glow effect around video player
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 

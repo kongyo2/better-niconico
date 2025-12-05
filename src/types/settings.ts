@@ -81,6 +81,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   enableAllegationAssist: z.boolean().default(false),
   // 通報フォーム定型文テンプレート
   allegationTemplates: z.array(AllegationTemplateSchema).default(DEFAULT_ALLEGATION_TEMPLATES),
+  // シネマティックライティング（アンビエントモード）を有効化
+  enableCinematicLighting: z.boolean().default(false),
 });
 
 /**
@@ -106,6 +108,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   enableVideoScreenshot: false,
   enableAllegationAssist: false,
   allegationTemplates: DEFAULT_ALLEGATION_TEMPLATES,
+  enableCinematicLighting: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

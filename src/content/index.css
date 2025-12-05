@@ -298,4 +298,31 @@ body.bn-hide-supporter {
   line-height: 1.5;
 }
 
+/* シネマティックライティング（アンビエントモード） */
+.bn-ambient-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: visible;
+}
+
+.bn-ambient-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  /* グローのトランジション（色変化を滑らかに） */
+  transition:
+    box-shadow 0.3s ease-out,
+    background 0.3s ease-out;
+  /* ニコニコのダークモードと調和するためのブレンド */
+  mix-blend-mode: screen;
+}
+
 /* 追加のカスタムスタイルをここに記述 */
