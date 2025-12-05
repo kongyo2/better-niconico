@@ -37,6 +37,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
+    "@xpadev-net/niconicomments": "^0.2.76",
     "anime4k-webgpu": "^1.0.0",
     "neverthrow": "^8.2.0",
     "zod": "^4.1.12"

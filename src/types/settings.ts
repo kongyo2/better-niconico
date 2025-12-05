@@ -75,6 +75,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   hideNicoAds: z.boolean().default(false),
   // Picture-in-Picture機能を有効化
   enablePictureInPicture: z.boolean().default(false),
+  // PiP高パフォーマンスモード（niconicommentsを使用）
+  pipHighPerformanceMode: z.boolean().default(false),
   // 動画スクリーンショット機能を有効化
   enableVideoScreenshot: z.boolean().default(false),
   // 通報フォーム定型文入力補助機能を有効化
@@ -105,6 +107,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   hideSupporterButton: false,
   hideNicoAds: false,
   enablePictureInPicture: false,
+  pipHighPerformanceMode: false,
   enableVideoScreenshot: false,
   enableAllegationAssist: false,
   allegationTemplates: DEFAULT_ALLEGATION_TEMPLATES,

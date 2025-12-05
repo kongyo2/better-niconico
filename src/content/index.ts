@@ -37,7 +37,7 @@ async function applySettings(): Promise<void> {
     squareProfileIcons.apply(settings.squareProfileIcons);
     hideSupporterButton.apply(settings.hideSupporterButton);
     hideNicoAds.apply(settings.hideNicoAds);
-    pictureInPicture.apply(settings.enablePictureInPicture);
+    pictureInPicture.apply(settings.enablePictureInPicture, settings.pipHighPerformanceMode);
     videoScreenshot.apply(settings.enableVideoScreenshot);
     void allegationAssist.apply(settings.enableAllegationAssist);
     cinematicLighting.apply(settings.enableCinematicLighting);
@@ -55,7 +55,7 @@ async function applySettings(): Promise<void> {
   squareProfileIcons.apply(settings.squareProfileIcons);
   hideSupporterButton.apply(settings.hideSupporterButton);
   hideNicoAds.apply(settings.hideNicoAds);
-  pictureInPicture.apply(settings.enablePictureInPicture);
+  pictureInPicture.apply(settings.enablePictureInPicture, settings.pipHighPerformanceMode);
   videoScreenshot.apply(settings.enableVideoScreenshot);
   void allegationAssist.apply(settings.enableAllegationAssist);
   cinematicLighting.apply(settings.enableCinematicLighting);

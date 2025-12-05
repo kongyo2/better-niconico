@@ -34,6 +34,13 @@ import {
   videoDimensionsInvalidError,
   domElementNotFoundError,
 } from '../../types/errors';
+import {
+  initRenderer as initNiconicommentsRenderer,
+  cleanupRenderer as cleanupNiconicommentsRenderer,
+  drawCommentsAtTime,
+  getRendererCanvas,
+  isRendererReady,
+} from './niconicommentsRenderer';
 
 // マーカー属性
 const PIP_BUTTON_MARKER = 'data-bn-pip-button';
@@ -58,6 +65,10 @@ let mainVideo: HTMLVideoElement | null = null;
 let upscaledCanvas: HTMLCanvasElement | null = null; // アップスケールキャンバス（存在する場合）
 let commentCanvas: HTMLCanvasElement | null = null;
 let supporterCanvas: HTMLCanvasElement | null = null;
+let niconicommentsCanvas: HTMLCanvasElement | null = null; // 高パフォーマンスモード用
+
+// 高パフォーマンスモード設定
+let highPerformanceModeEnabled: boolean = false;
 
 // Video Upscalingのキャンバス要素ID（videoUpscaling.tsと同期）
 const UPSCALED_CANVAS_ID = 'bn-upscaled-canvas';
@@ -361,9 +372,24 @@ function createPiPVideo(stream: MediaStream): HTMLVideoElement {
 /**
  * フレームを合成してキャンバスに描画
  * アップスケーリングが有効な場合は高画質キャンバスを使用
+ * 高パフォーマンスモードではniconicommentsを使用してコメントを描画
  */
 function renderCompositeFrame(): void {
-  if (!mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+  if (!mainVideo || !pipCanvas || !pipCanvasContext) {
+    return;
+  }
+
+  // 高パフォーマンスモードの場合、niconicommentsでコメントを更新
+  if (highPerformanceModeEnabled && isRendererReady()) {
+    drawCommentsAtTime(mainVideo.currentTime);
+    niconicommentsCanvas = getRendererCanvas();
+  }
+
+  // コメントキャンバスを決定（高パフォーマンスモード vs 通常モード）
+  const activeCommentCanvas = highPerformanceModeEnabled ? niconicommentsCanvas : commentCanvas;
+
+  // 通常モードではcommentCanvasが必須
+  if (!highPerformanceModeEnabled && !commentCanvas) {
     return;
   }
 
@@ -421,23 +447,25 @@ function renderCompositeFrame(): void {
   }
 
   // コメントキャンバスをアスペクト比を保持して描画
-  const commentSize = calcSize(
-    commentCanvas.width,
-    commentCanvas.height,
-    pipCanvas.width,
-    pipCanvas.height,
-  );
-  pipCanvasContext.drawImage(
-    commentCanvas,
-    0,
-    0,
-    commentCanvas.width,
-    commentCanvas.height,
-    (pipCanvas.width - commentSize.width) / 2,
-    (pipCanvas.height - commentSize.height) / 2,
-    commentSize.width,
-    commentSize.height,
-  );
+  if (activeCommentCanvas && activeCommentCanvas.width > 0 && activeCommentCanvas.height > 0) {
+    const commentSize = calcSize(
+      activeCommentCanvas.width,
+      activeCommentCanvas.height,
+      pipCanvas.width,
+      pipCanvas.height,
+    );
+    pipCanvasContext.drawImage(
+      activeCommentCanvas,
+      0,
+      0,
+      activeCommentCanvas.width,
+      activeCommentCanvas.height,
+      (pipCanvas.width - commentSize.width) / 2,
+      (pipCanvas.height - commentSize.height) / 2,
+      commentSize.width,
+      commentSize.height,
+    );
+  }
 
   // captureStream(0) の場合、手動でフレームをキャプチャ
   if (pipStream) {
@@ -453,15 +481,22 @@ function renderCompositeFrame(): void {
  * 動画の実際のフレーム更新に同期して描画する
  */
 function compositeLoopWithVideoFrameCallback(): void {
-  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+  if (!isRunningInPIP || !mainVideo || !pipCanvas || !pipCanvasContext) {
     return;
   }
 
-  // コメントレイヤーの破棄検知
-  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
-    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
-    void reinitializePiP();
+  // 高パフォーマンスモードでない場合のみ、コメントキャンバスの存在を確認
+  if (!highPerformanceModeEnabled && !commentCanvas) {
     return;
+  }
+
+  // コメントレイヤーの破棄検知（通常モードのみ）
+  if (!highPerformanceModeEnabled && commentCanvas) {
+    if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
+      console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
+      void reinitializePiP();
+      return;
+    }
   }
 
   // フレームを描画
@@ -477,15 +512,22 @@ function compositeLoopWithVideoFrameCallback(): void {
  * requestAnimationFrame を使用した合成ループ（フォールバック）
  */
 function compositeLoopWithAnimationFrame(): void {
-  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+  if (!isRunningInPIP || !mainVideo || !pipCanvas || !pipCanvasContext) {
     return;
   }
 
-  // コメントレイヤーの破棄検知
-  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
-    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
-    void reinitializePiP();
+  // 高パフォーマンスモードでない場合のみ、コメントキャンバスの存在を確認
+  if (!highPerformanceModeEnabled && !commentCanvas) {
     return;
+  }
+
+  // コメントレイヤーの破棄検知（通常モードのみ）
+  if (!highPerformanceModeEnabled && commentCanvas) {
+    if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
+      console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
+      void reinitializePiP();
+      return;
+    }
   }
 
   // フレームを描画
@@ -536,6 +578,13 @@ async function startPiP(): Promise<void> {
 
   console.log('[Better Niconico] PiPを開始します...');
 
+  // 高パフォーマンスモードの場合、niconicommentsレンダラーを初期化
+  if (highPerformanceModeEnabled) {
+    console.log('[Better Niconico] 高パフォーマンスモード: niconicommentsを初期化中...');
+    initNiconicommentsRenderer();
+    niconicommentsCanvas = getRendererCanvas();
+  }
+
   // メインビデオを取得
   const videoResult = getMainVideo();
   if (videoResult.isErr()) {
@@ -550,13 +599,18 @@ async function startPiP(): Promise<void> {
     console.log('[Better Niconico] アップスケールキャンバスを検出しました（高画質モード）');
   }
 
-  // コメントキャンバスを取得
+  // コメントキャンバスを取得（通常モードでは必須、高パフォーマンスモードではオプショナル）
   const canvasResult = getCommentCanvas();
   if (canvasResult.isErr()) {
-    console.error('[Better Niconico] コメントキャンバスが見つかりません:', canvasResult.error);
-    return;
+    if (!highPerformanceModeEnabled) {
+      console.error('[Better Niconico] コメントキャンバスが見つかりません:', canvasResult.error);
+      return;
+    }
+    // 高パフォーマンスモードではniconicommentsを使うのでエラーにしない
+    console.log('[Better Niconico] 高パフォーマンスモード: ネイティブコメントキャンバスなしで動作');
+  } else {
+    commentCanvas = canvasResult.value;
   }
-  commentCanvas = canvasResult.value;
 
   // サポーターキャンバスを取得（オプショナル）
   const supporterResult = getSupporterCanvas();
@@ -612,12 +666,17 @@ async function startPiP(): Promise<void> {
     } else {
       mainVideo.style.visibility = 'hidden';
     }
-    commentCanvas.style.visibility = 'hidden';
+
+    // 通常モードの場合のみネイティブコメントキャンバスを非表示
+    if (commentCanvas && !highPerformanceModeEnabled) {
+      commentCanvas.style.visibility = 'hidden';
+    }
 
     // PiPを要求
     await pipVideo.requestPictureInPicture();
 
-    console.log('[Better Niconico] PiPを開始しました');
+    const modeLabel = highPerformanceModeEnabled ? '高パフォーマンスモード' : '通常モード';
+    console.log(`[Better Niconico] PiPを開始しました (${modeLabel})`);
   } catch (error) {
     console.error('[Better Niconico] PiPの開始に失敗:', error);
     stopPiP();
@@ -636,6 +695,12 @@ function stopPiP(): void {
 
   // 合成ループを停止
   stopCompositeLoop();
+
+  // 高パフォーマンスモードの場合、niconicommentsレンダラーをクリーンアップ
+  if (highPerformanceModeEnabled) {
+    cleanupNiconicommentsRenderer();
+    niconicommentsCanvas = null;
+  }
 
   // PiP video要素を削除
   if (pipVideo) {
@@ -665,8 +730,8 @@ function stopPiP(): void {
     mainVideo.style.visibility = '';
   }
 
-  // コメントを再表示
-  if (commentCanvas) {
+  // コメントを再表示（通常モードで非表示にしていた場合）
+  if (commentCanvas && !highPerformanceModeEnabled) {
     commentCanvas.style.visibility = '';
   }
 
@@ -758,8 +823,12 @@ function disableFeature(): void {
 /**
  * 設定を適用する（冪等性を保証）
  * @param enabled - true: PiP機能有効, false: PiP機能無効
+ * @param highPerformanceMode - true: niconicommentsを使用した高パフォーマンスモード
  */
-export function apply(enabled: boolean): void {
+export function apply(enabled: boolean, highPerformanceMode: boolean = false): void {
+  // 高パフォーマンスモード設定を更新
+  highPerformanceModeEnabled = highPerformanceMode;
+
   if (enabled) {
     enableFeature();
   } else {
