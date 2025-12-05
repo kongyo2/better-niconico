@@ -539,6 +539,8 @@ The Nico Ads section displays sponsored video advertisements that some users fin
 
 Enables Picture-in-Picture (PiP) mode for Niconico videos with comment overlay. Combines the main video and comment canvas into a single PiP window, allowing users to watch videos with comments while working on other tasks.
 
+**Video Upscaling Integration**: When Video Upscaling (Anime4K-WebGPU) is enabled, PiP automatically uses the upscaled canvas for higher quality output.
+
 ### CRITICAL Implementation Details
 
 #### 1. Current Niconico Video Page Structure (2025)
@@ -590,7 +592,7 @@ const canvas = commentContainer.querySelector('canvas');
 
 #### 4. Video and Comment Composition
 
-The feature creates a composite canvas that combines video, supporter view, and comments:
+The feature creates a composite canvas that combines video (or upscaled canvas), supporter view, and comments:
 
 ```typescript
 const outputCanvas = document.createElement('canvas');
@@ -599,56 +601,56 @@ outputCanvas.height = mainVideo.videoHeight;
 
 const ctx = outputCanvas.getContext('2d');
 
-// Animation loop using requestAnimationFrame (optimized with visibilitychange)
-function compositeLoop() {
+// Detect upscaled canvas (Video Upscaling integration)
+const upscaledCanvas = document.getElementById('bn-upscaled-canvas');
+const videoSource = upscaledCanvas || mainVideo; // Use upscaled if available
+
+// Animation loop using requestVideoFrameCallback (Chrome 83+)
+function compositeLoopWithVideoFrameCallback() {
   // Draw black background (letterboxing)
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Draw main video (with aspect ratio preservation)
-  const videoSize = calcSize(mainVideo.videoWidth, mainVideo.videoHeight,
-                             canvas.width, canvas.height);
-  ctx.drawImage(mainVideo,
-    (canvas.width - videoSize.width) / 2,
-    (canvas.height - videoSize.height) / 2,
-    videoSize.width, videoSize.height);
+  // Draw video source (upscaled canvas or main video) with aspect ratio preservation
+  const sourceWidth = upscaledCanvas ? upscaledCanvas.width : mainVideo.videoWidth;
+  const sourceHeight = upscaledCanvas ? upscaledCanvas.height : mainVideo.videoHeight;
+  const videoSize = calcSize(sourceWidth, sourceHeight, canvas.width, canvas.height);
+  ctx.drawImage(videoSource, ...);
 
   // Draw supporter view if visible (with aspect ratio preservation)
   if (supporterCanvas && isVisible(supporterContainer)) {
     const supporterSize = calcSize(supporterCanvas.width, supporterCanvas.height,
                                     canvas.width, canvas.height);
-    ctx.drawImage(supporterCanvas,
-      (canvas.width - supporterSize.width) / 2,
-      (canvas.height - supporterSize.height) / 2,
-      supporterSize.width, supporterSize.height);
+    ctx.drawImage(supporterCanvas, ...);
   }
 
   // Draw comment canvas on top (with aspect ratio preservation)
   const commentSize = calcSize(commentCanvas.width, commentCanvas.height,
                                 canvas.width, canvas.height);
-  ctx.drawImage(commentCanvas,
-    (canvas.width - commentSize.width) / 2,
-    (canvas.height - commentSize.height) / 2,
-    commentSize.width, commentSize.height);
+  ctx.drawImage(commentCanvas, ...);
 
-  // Optimize based on tab visibility
-  if (isHidden) {
-    setTimeout(compositeLoop, 1000 / 60);
-  } else {
-    requestAnimationFrame(compositeLoop);
+  // Manual frame capture for precise sync with captureStream(0)
+  const videoTrack = pipStream.getVideoTracks()[0];
+  if (videoTrack && 'requestFrame' in videoTrack) {
+    videoTrack.requestFrame();
   }
+
+  // Schedule next frame synced with actual video frame updates
+  mainVideo.requestVideoFrameCallback(() => compositeLoopWithVideoFrameCallback());
 }
 ```
 
-- **Frame rate**: 60fps via `requestAnimationFrame` (or `setTimeout` when tab hidden)
-- **Composition order**: Video → Supporter View → Comments (preserves proper layering)
+- **Frame sync**: Uses `requestVideoFrameCallback` for perfect sync with video frame updates (Chrome 83+)
+- **Fallback**: Falls back to `requestAnimationFrame` if `requestVideoFrameCallback` is not available
+- **Composition order**: Video (or upscaled canvas) → Supporter View → Comments (preserves proper layering)
 - **Aspect ratio**: Preserved with letterboxing (black bars) using `calcSize()` helper
-- **Performance**: Automatically switches to `setTimeout` when tab is hidden to reduce CPU usage
+- **Video Upscaling**: Automatically detects and uses upscaled canvas (`#bn-upscaled-canvas`) when available
 
 #### 5. MediaStream and PiP Video Creation
 
 ```typescript
-const stream = outputCanvas.captureStream(60);
+// captureStream(0) = manual frame control for perfect sync
+const stream = outputCanvas.captureStream(0);
 
 const pipVideo = document.createElement('video');
 pipVideo.autoplay = true;
@@ -660,7 +662,8 @@ await pipVideo.play();
 await pipVideo.requestPictureInPicture();
 ```
 
-- `canvas.captureStream(60)` creates MediaStream at 60fps
+- `canvas.captureStream(0)` creates MediaStream with manual frame control (no automatic capture)
+- Combined with `requestVideoFrameCallback` + `videoTrack.requestFrame()` for precise frame sync
 - PiP video element is hidden (`opacity: 0`, `position: fixed`)
 - `autoplay` and `muted` required for automatic playback
 - `controls: true` shows play/pause in PiP window
@@ -699,32 +702,31 @@ controlBarButtonGroup.insertBefore(button, fullscreenButton);
 
 ```typescript
 function stopPiP(): void {
-  // Stop animation loop (both requestAnimationFrame and setTimeout)
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-  if (timeoutId !== null) {
-    clearTimeout(timeoutId);
-    timeoutId = null;
-  }
-
-  // Remove visibilitychange listener
-  removeVisibilityChangeListener();
+  // Stop composite loop
+  stopCompositeLoop(); // Cancels both requestVideoFrameCallback and requestAnimationFrame
 
   // Remove PiP video
   pipVideo?.pause();
   pipVideo?.remove();
 
-  // Restore main video and comment visibility
-  mainVideo.style.visibility = '';
+  // Stop MediaStream tracks
+  pipStream?.getTracks().forEach(track => track.stop());
+
+  // Restore video/canvas visibility (handles upscaling mode)
+  if (upscaledCanvas) {
+    upscaledCanvas.style.visibility = '';
+  } else {
+    mainVideo.style.visibility = '';
+  }
   commentCanvas.style.visibility = '';
 
   // Clear references
   mainVideo = null;
+  upscaledCanvas = null;
   commentCanvas = null;
   supporterCanvas = null;
   pipCanvas = null;
+  pipStream = null;
 }
 ```
 
@@ -769,25 +771,35 @@ function getMainVideo(): Result<HTMLVideoElement, VideoError | PageError> {
 
 - **Picture-in-Picture API**: Chrome 69+, Edge 79+, Safari 13.1+
 - **Canvas.captureStream()**: Chrome 51+, Edge 79+, Firefox 43+
+- **requestVideoFrameCallback**: Chrome 83+ (falls back to `requestAnimationFrame` if not available)
 - **Modern browsers only**: Not supported in IE or old browsers
 
 ### Performance Considerations
 
-- **CPU usage**: ~5-10% on modern CPUs for 60fps canvas composition (foreground tab)
-- **CPU usage (optimized)**: ~1-2% when tab is hidden (uses `setTimeout` instead of `requestAnimationFrame`)
+- **CPU usage**: ~5-10% on modern CPUs for canvas composition (synced with video frames)
+- **Frame sync**: Uses `requestVideoFrameCallback` for optimal sync without wasted frames
 - **Memory**: ~50-100MB for canvas buffers and MediaStream
-- **Battery impact**: Moderate (continuous animation loop), automatically reduced when tab hidden
+- **Battery impact**: Moderate (continuous animation loop), but only renders when video frames update
 - **Why default OFF**: Performance impact, user opt-in preferred
 
-### Recent Improvements (January 2025)
+### Sync Fix (December 2025)
+
+Improved frame synchronization for smoother PiP playback:
+
+1. **requestVideoFrameCallback**: Changed from `requestAnimationFrame` to `requestVideoFrameCallback` (Chrome 83+) for perfect sync with actual video frame updates
+2. **Manual Frame Capture**: Uses `captureStream(0)` + `videoTrack.requestFrame()` for precise frame control instead of automatic 60fps capture
+3. **Video Upscaling Integration**: Automatically detects and uses upscaled canvas (`#bn-upscaled-canvas`) when Video Upscaling is enabled, providing higher quality PiP output
+4. **Simplified Architecture**: Removed `setTimeout`-based fallback for hidden tabs (video playback is usually paused anyway)
+5. **Fallback Mode**: Falls back to `requestAnimationFrame` if `requestVideoFrameCallback` is not available
+
+### Previous Improvements (January 2025)
 
 Based on [rutan/nicopip-chrome](https://github.com/rutan/nicopip-chrome) implementation:
 
-1. **visibilitychange Optimization**: Automatically switches to `setTimeout` when tab is hidden, reducing CPU usage by ~60-80%
-2. **Aspect Ratio Preservation**: Uses `calcSize()` helper to maintain proper aspect ratios with letterboxing (black bars)
-3. **Supporter View Composition**: Now includes supporter display canvas in PiP output (when visible)
-4. **Comment Layer Destruction Detection**: Automatically detects when comment canvas is destroyed and reinitializes PiP
-5. **Robust Cleanup**: Improved cleanup of event listeners and timers
+1. **Aspect Ratio Preservation**: Uses `calcSize()` helper to maintain proper aspect ratios with letterboxing (black bars)
+2. **Supporter View Composition**: Includes supporter display canvas in PiP output (when visible)
+3. **Comment Layer Destruction Detection**: Automatically detects when comment canvas is destroyed and reinitializes PiP
+4. **Robust Cleanup**: Improved cleanup of event listeners and timers
 
 **Key differences from reference implementation**:
 - Better Niconico: Integrated into unified settings system with persistent button
