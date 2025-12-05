@@ -1359,6 +1359,10 @@ Ambient lighting feature inspired by YouTube's ambient mode. Extracts vibrant co
 - **Corner glow**: Additional glow effects at the four corners
 - **Smooth transitions**: GPU-accelerated animations with cubic-bezier easing
 - **16x16 sampling**: Improved color accuracy while maintaining performance
+- **SPA navigation support**: Proper cleanup on back button and page transitions
+- **Video change detection**: Automatic reinitialization when video element changes
+- **Retry mechanism**: Automatic retry when video element not found (up to 10 attempts)
+- **Classic Layout compatibility**: Works correctly with restored classic video layout
 
 ### CRITICAL Implementation Details
 
@@ -1522,6 +1526,50 @@ if (supportsRequestVideoFrameCallback() && currentVideo) {
 - **Event-driven**: `fullscreenchange` event listener for reliable detection
 - **Behavior**: Hides glow when entering fullscreen, restores when exiting
 - **State preservation**: Remembers enabled state across fullscreen transitions
+
+### SPA Navigation Handling
+
+Niconico uses SPA (Single Page Application) architecture with History API for navigation. This requires special handling:
+
+```typescript
+// popstate event listener for back/forward buttons
+window.addEventListener('popstate', () => {
+  handlePageNavigation();
+});
+
+// URL change monitoring for History API navigation
+setInterval(() => {
+  if (lastPageUrl !== window.location.href) {
+    handlePageNavigation();
+  }
+  lastPageUrl = window.location.href;
+}, 500);
+```
+
+**Navigation scenarios handled**:
+1. **Leaving watch page**: Cleanup all elements and stop update loop
+2. **Moving to different video**: Cleanup and reinitialize for new video
+3. **Entering watch page**: Initialize if feature is enabled
+
+**Retry mechanism**:
+- When video element not found, retries up to 10 times with 500ms delay
+- Useful when navigating to a new video page where DOM is still loading
+
+### Classic Layout Compatibility
+
+The feature detects and adapts to Classic Layout mode:
+
+```typescript
+function isClassicLayoutEnabled(): boolean {
+  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  return playerArea?.getAttribute('data-bn-layout') === 'classic';
+}
+```
+
+**Compatibility measures**:
+- Outer glow element placed with absolute positioning (works with both layouts)
+- Existing elements are validated for correct parent placement
+- Elements are recreated if parent has changed (e.g., after layout switch)
 
 ### Browser Compatibility
 

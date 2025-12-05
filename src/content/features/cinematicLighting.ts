@@ -11,6 +11,7 @@
  * - Falls back to requestAnimationFrame if not supported
  * - Automatically disables in fullscreen mode
  * - Harmonizes with Niconico's existing dark mode
+ * - Compatible with Classic Layout feature
  *
  * 改善点 (2025/12):
  * - 多層グロー効果: 内側/外側の複数レイヤーで深みのある効果
@@ -18,6 +19,8 @@
  * - 広範囲グロー: プレイヤーエリアの外側にも光が広がる
  * - スムーズなトランジション: CSS変数とGPUアクセラレーション活用
  * - コーナーグロー: 四隅に追加のグロー効果
+ * - SPAナビゲーション対応: 戻るボタンやページ遷移時の適切なクリーンアップ
+ * - クラシックレイアウトとの互換性: グリッド構造変更時の適切な配置
  */
 
 // マーカー属性
@@ -47,6 +50,7 @@ let isEnabled: boolean = false;
 let videoFrameCallbackId: number | null = null;
 let animationFrameId: number | null = null;
 let currentVideo: HTMLVideoElement | null = null;
+let currentVideoSrc: string = ''; // 動画ソースを追跡（動画変更検出用）
 let samplingCanvas: HTMLCanvasElement | null = null;
 let samplingContext: CanvasRenderingContext2D | null = null;
 let ambientContainer: HTMLDivElement | null = null;
@@ -54,6 +58,8 @@ let ambientOuter: HTMLDivElement | null = null;
 let ambientInner: HTMLDivElement | null = null;
 let ambientCorners: HTMLDivElement | null = null;
 let fullscreenListenerSetup: boolean = false;
+let navigationListenerSetup: boolean = false;
+let lastPageUrl: string = ''; // ページURL追跡（SPA対応）
 
 // 前回の色（色変化が小さい場合の更新スキップ用）
 let lastColors: VibrantColors | null = null;
@@ -65,6 +71,12 @@ const COLOR_CHANGE_THRESHOLD = 15;
 const SATURATION_WEIGHT = 2.0; // 彩度の重要度
 const BRIGHTNESS_MIN = 30; // 最低輝度（これ以下は無視）
 const BRIGHTNESS_MAX = 230; // 最大輝度（これ以上は無視）
+
+// 再試行タイマー
+let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+const RETRY_DELAY = 500; // 再試行間隔 (ms)
+const MAX_RETRIES = 10; // 最大再試行回数
+let retryCount = 0;
 
 // エッジの色を表す型
 interface VibrantColors {
@@ -401,7 +413,46 @@ function findDominantColor(colors: Array<{ rgb: RGB; score: number }>): RGB {
 }
 
 /**
+ * クラシックレイアウトが有効かどうかを判定
+ */
+function isClassicLayoutEnabled(): boolean {
+  const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
+  if (!playerArea) {
+    return false;
+  }
+  return playerArea.getAttribute('data-bn-layout') === 'classic';
+}
+
+/**
+ * 既存のアンビエント要素をすべて削除
+ * DOM上に残っている要素を確実にクリーンアップ
+ */
+function cleanupExistingElements(): void {
+  // IDベースで既存要素を探して削除
+  const existingOuter = document.getElementById(AMBIENT_OUTER_ID);
+  if (existingOuter) {
+    existingOuter.remove();
+  }
+
+  const existingContainer = document.getElementById(AMBIENT_CONTAINER_ID);
+  if (existingContainer) {
+    existingContainer.remove();
+  }
+
+  // マーカー属性ベースでも検索（念のため）
+  document.querySelectorAll(`[${AMBIENT_OUTER_MARKER}]`).forEach((el) => el.remove());
+  document.querySelectorAll(`[${AMBIENT_CONTAINER_MARKER}]`).forEach((el) => el.remove());
+
+  // 参照をリセット
+  ambientOuter = null;
+  ambientContainer = null;
+  ambientInner = null;
+  ambientCorners = null;
+}
+
+/**
  * アンビエントグロー要素を作成
+ * クラシックレイアウトとの互換性を考慮
  */
 function createAmbientElements(): void {
   const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
@@ -411,10 +462,32 @@ function createAmbientElements(): void {
 
   // プレイヤーエリアの親（メイングリッド）を取得
   const mainGrid = playerArea.parentElement as HTMLElement;
+  if (!mainGrid) {
+    return;
+  }
+
+  // クラシックレイアウトの状態を確認
+  const classicLayout = isClassicLayoutEnabled();
+
+  // 既存要素が適切な場所にあるかチェック
+  const existingOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement;
+  const existingContainer = document.getElementById(AMBIENT_CONTAINER_ID) as HTMLDivElement;
+
+  // 既存要素が正しい親に配置されているか確認
+  if (existingOuter && existingOuter.parentElement !== mainGrid) {
+    existingOuter.remove();
+    ambientOuter = null;
+  }
+  if (existingContainer && existingContainer.parentElement !== playerArea) {
+    existingContainer.remove();
+    ambientContainer = null;
+    ambientInner = null;
+    ambientCorners = null;
+  }
 
   // 外側グロー用コンテナ（メイングリッドに配置）
   ambientOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement;
-  if (!ambientOuter && mainGrid) {
+  if (!ambientOuter) {
     ambientOuter = document.createElement('div');
     ambientOuter.id = AMBIENT_OUTER_ID;
     ambientOuter.setAttribute(AMBIENT_OUTER_MARKER, 'true');
@@ -423,6 +496,17 @@ function createAmbientElements(): void {
     // メイングリッドにposition: relativeを設定
     mainGrid.style.position = 'relative';
     mainGrid.insertBefore(ambientOuter, mainGrid.firstChild);
+  }
+
+  // クラシックレイアウト時は外側グローのグリッドエリアを調整
+  if (classicLayout) {
+    // クラシックレイアウトではグリッドが変更されているので、
+    // 外側グローをプレイヤーエリアの直下に配置（相対位置で）
+    ambientOuter.style.gridArea = '';
+    ambientOuter.style.position = 'absolute';
+  } else {
+    ambientOuter.style.gridArea = '';
+    ambientOuter.style.position = 'absolute';
   }
 
   // 内側グロー用コンテナ（プレイヤーエリアに配置）
@@ -440,7 +524,7 @@ function createAmbientElements(): void {
 
   // 内側グロー要素
   ambientInner = document.getElementById(AMBIENT_INNER_ID) as HTMLDivElement;
-  if (!ambientInner) {
+  if (!ambientInner && ambientContainer) {
     ambientInner = document.createElement('div');
     ambientInner.id = AMBIENT_INNER_ID;
     ambientInner.className = 'bn-ambient-inner';
@@ -449,7 +533,7 @@ function createAmbientElements(): void {
 
   // コーナーグロー要素
   ambientCorners = document.getElementById(AMBIENT_CORNERS_ID) as HTMLDivElement;
-  if (!ambientCorners) {
+  if (!ambientCorners && ambientContainer) {
     ambientCorners = document.createElement('div');
     ambientCorners.id = AMBIENT_CORNERS_ID;
     ambientCorners.className = 'bn-ambient-corners';
@@ -540,7 +624,7 @@ function updateGlow(colors: VibrantColors): void {
  * フレームを処理
  */
 function processFrame(): void {
-  if (!isEnabled || !currentVideo) {
+  if (!isEnabled) {
     return;
   }
 
@@ -550,8 +634,31 @@ function processFrame(): void {
     return;
   }
 
-  // 動画が有効かチェック
-  if (!isValidContentVideo(currentVideo)) {
+  // currentVideoがない、または動画が有効でない場合
+  if (!currentVideo || !isValidContentVideo(currentVideo)) {
+    // 新しい動画要素を探す
+    const newVideo = getVideoElement();
+    if (newVideo && newVideo !== currentVideo) {
+      console.log('[Better Niconico] 新しい動画要素を検出しました。再初期化します。');
+      currentVideo = newVideo;
+      currentVideoSrc = newVideo.src;
+      // 要素が正しく配置されているか確認
+      createAmbientElements();
+    } else if (!newVideo) {
+      // 動画がない場合はグローを非表示
+      hideGlow();
+      return;
+    }
+  }
+
+  // 動画ソースが変更された場合
+  if (currentVideo && currentVideo.src !== currentVideoSrc) {
+    console.log('[Better Niconico] 動画ソースが変更されました:', currentVideoSrc, '->', currentVideo.src);
+    currentVideoSrc = currentVideo.src;
+    lastColors = null; // 色をリセット
+  }
+
+  if (!currentVideo) {
     return;
   }
 
@@ -652,22 +759,6 @@ function hideGlow(): void {
 }
 
 /**
- * アンビエント要素を削除
- */
-function removeAmbientElements(): void {
-  if (ambientContainer) {
-    ambientContainer.remove();
-    ambientContainer = null;
-    ambientInner = null;
-    ambientCorners = null;
-  }
-  if (ambientOuter) {
-    ambientOuter.remove();
-    ambientOuter = null;
-  }
-}
-
-/**
  * 全画面表示イベントのリスナーをセットアップ
  */
 function setupFullscreenListener(): void {
@@ -703,37 +794,167 @@ function setupFullscreenListener(): void {
 }
 
 /**
- * 機能を有効化
+ * SPAナビゲーション用のリスナーをセットアップ
+ * 戻るボタンやページ遷移時に適切にクリーンアップ
  */
-function enableFeature(): void {
-  if (!isWatchPage()) {
+function setupNavigationListener(): void {
+  if (navigationListenerSetup) {
     return;
   }
 
-  if (isEnabled) {
+  // popstate イベント（戻る/進むボタン）
+  window.addEventListener('popstate', () => {
+    console.log('[Better Niconico] ナビゲーション検出（popstate）');
+    handlePageNavigation();
+  });
+
+  // URLの変更を定期的にチェック（History API使用時の対応）
+  // ニコニコはHistory APIでページ遷移する
+  setInterval(() => {
+    const currentUrl = window.location.href;
+    if (lastPageUrl && lastPageUrl !== currentUrl) {
+      console.log('[Better Niconico] URL変更検出:', lastPageUrl, '->', currentUrl);
+      handlePageNavigation();
+    }
+    lastPageUrl = currentUrl;
+  }, 500);
+
+  navigationListenerSetup = true;
+  lastPageUrl = window.location.href;
+  console.log('[Better Niconico] ナビゲーションリスナーをセットアップしました');
+}
+
+/**
+ * ページナビゲーション時の処理
+ */
+function handlePageNavigation(): void {
+  const wasWatchPage = lastPageUrl.includes('/watch/');
+  const isNowWatchPage = isWatchPage();
+
+  // watchページから離れた場合はクリーンアップ
+  if (wasWatchPage && !isNowWatchPage) {
+    console.log('[Better Niconico] watchページから離れました。シネマティックライティングを停止します。');
+    forceCleanup();
+    return;
+  }
+
+  // 異なるwatchページに移動した場合は再初期化
+  if (wasWatchPage && isNowWatchPage && lastPageUrl !== window.location.href) {
+    console.log('[Better Niconico] 別の動画ページに移動しました。シネマティックライティングを再初期化します。');
+    // 一度クリーンアップしてから再初期化を試みる
+    forceCleanup();
+    if (isEnabled) {
+      // 少し待ってから再初期化（DOMの更新を待つ）
+      setTimeout(() => {
+        retryCount = 0;
+        tryEnableFeature();
+      }, 300);
+    }
+    return;
+  }
+
+  // watchページに来た場合（設定が有効なら初期化）
+  if (!wasWatchPage && isNowWatchPage && isEnabled) {
+    console.log('[Better Niconico] watchページに入りました。シネマティックライティングを初期化します。');
+    retryCount = 0;
+    tryEnableFeature();
+  }
+}
+
+/**
+ * 強制クリーンアップ
+ * ページ遷移時など、確実に全てをクリーンアップする必要がある場合に使用
+ */
+function forceCleanup(): void {
+  // 再試行タイマーをクリア
+  if (retryTimeoutId !== null) {
+    clearTimeout(retryTimeoutId);
+    retryTimeoutId = null;
+  }
+  retryCount = 0;
+
+  // 更新ループを停止
+  stopUpdateLoop();
+
+  // DOM要素を削除
+  cleanupExistingElements();
+
+  // 状態をリセット（isEnabledは保持）
+  currentVideo = null;
+  currentVideoSrc = '';
+  samplingCanvas = null;
+  samplingContext = null;
+  lastColors = null;
+}
+
+/**
+ * 動画要素の変更を検出
+ */
+function hasVideoChanged(): boolean {
+  const video = getVideoElement();
+  if (!video) {
+    return currentVideo !== null; // 動画がなくなった
+  }
+
+  // srcが変わった場合
+  if (video.src !== currentVideoSrc) {
+    return true;
+  }
+
+  // 参照が変わった場合
+  if (video !== currentVideo) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * 再試行付きで機能を有効化
+ */
+function tryEnableFeature(): void {
+  if (!isWatchPage()) {
     return;
   }
 
   // 動画要素を取得
   const video = getVideoElement();
   if (!video) {
-    // 動画が見つからない場合は後で再試行される
+    // 動画が見つからない場合は再試行
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      console.log(`[Better Niconico] 動画要素が見つかりません。再試行 ${retryCount}/${MAX_RETRIES}...`);
+      retryTimeoutId = setTimeout(() => {
+        tryEnableFeature();
+      }, RETRY_DELAY);
+    } else {
+      console.warn('[Better Niconico] 動画要素が見つかりませんでした。シネマティックライティングを開始できません。');
+      retryCount = 0;
+    }
     return;
   }
 
-  // 全画面モードの場合は有効化しない
+  // 成功
+  retryCount = 0;
+  if (retryTimeoutId !== null) {
+    clearTimeout(retryTimeoutId);
+    retryTimeoutId = null;
+  }
+
+  // 全画面モードの場合は有効化しない（フラグは立てる）
   if (isFullscreenMode()) {
     console.log('[Better Niconico] 全画面表示中のため、シネマティックライティングを待機します');
-    isEnabled = true; // フラグは立てておく（全画面解除時に有効化するため）
     currentVideo = video;
+    currentVideoSrc = video.src;
     setupFullscreenListener();
+    setupNavigationListener();
     return;
   }
 
   console.log('[Better Niconico] シネマティックライティングを有効化します');
 
   currentVideo = video;
-  isEnabled = true;
+  currentVideoSrc = video.src;
 
   // サンプリングキャンバスを作成
   createSamplingCanvas();
@@ -744,6 +965,9 @@ function enableFeature(): void {
   // 全画面イベントリスナーをセットアップ
   setupFullscreenListener();
 
+  // ナビゲーションリスナーをセットアップ
+  setupNavigationListener();
+
   // 更新ループを開始
   startUpdateLoop();
 
@@ -751,26 +975,47 @@ function enableFeature(): void {
 }
 
 /**
+ * 機能を有効化
+ */
+function enableFeature(): void {
+  if (!isWatchPage()) {
+    return;
+  }
+
+  // 既に有効な場合
+  if (isEnabled) {
+    // 動画が変更された場合は再初期化
+    if (hasVideoChanged()) {
+      console.log('[Better Niconico] 動画要素が変更されました。シネマティックライティングを再初期化します。');
+      forceCleanup();
+      isEnabled = true;
+      retryCount = 0;
+      tryEnableFeature();
+    }
+    return;
+  }
+
+  isEnabled = true;
+  retryCount = 0;
+  tryEnableFeature();
+}
+
+/**
  * 機能を無効化
  */
 function disableFeature(): void {
   if (!isEnabled) {
+    // 無効化されていても残っている要素があればクリーンアップ
+    cleanupExistingElements();
     return;
   }
 
   console.log('[Better Niconico] シネマティックライティングを無効化します');
 
-  // 更新ループを停止
-  stopUpdateLoop();
+  // 強制クリーンアップを実行
+  forceCleanup();
 
-  // アンビエント要素を削除
-  removeAmbientElements();
-
-  // 状態をリセット
-  currentVideo = null;
-  samplingCanvas = null;
-  samplingContext = null;
-  lastColors = null;
+  // isEnabledをリセット
   isEnabled = false;
 
   console.log('[Better Niconico] シネマティックライティングが無効になりました');
