@@ -103,7 +103,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   enablePictureInPicture: z.boolean().default(false),
   enableVideoScreenshot: z.boolean().default(false),
   enableAllegationAssist: z.boolean().default(false),
-  allegationTemplates: z.array(AllegationTemplateSchema).default([]),
+  // Default templates defined before schema, used as Zod default
+  allegationTemplates: z.array(AllegationTemplateSchema).default(DEFAULT_ALLEGATION_TEMPLATES),
 });
 
 // TypeScript type is inferred from schema (single source of truth)
