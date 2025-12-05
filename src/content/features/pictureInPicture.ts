@@ -12,19 +12,18 @@
  * - Comment canvas: [data-name="comment"] canvas (1364x768)
  * - Supporter canvas: [data-name="supporter-content"] canvas (1280x720, now supported)
  * - Combines video, supporter view, and comments with aspect ratio preservation
- * - Uses requestAnimationFrame (foreground) or setTimeout (background) for optimal performance
- * - Uses canvas.captureStream(60) to create MediaStream for PiP video element
+ * - Uses requestVideoFrameCallback for perfect frame sync (Chrome 83+)
+ * - Falls back to requestAnimationFrame if requestVideoFrameCallback is not available
+ * - Uses canvas.captureStream(0) with manual frame capture for optimal sync
  * - Adds PiP button to player control bar (before fullscreen button)
  * - Button uses Niconico's native control bar styling for consistency
  * - Automatic reinitialization when comment layer is destroyed
- * - visibilitychange optimization reduces CPU usage by ~60-80% when tab is hidden
  *
- * RECENT IMPROVEMENTS (January 2025):
- * 1. visibilitychange handler for performance optimization
- * 2. Aspect ratio preservation with letterboxing (calcSize helper)
- * 3. Supporter View canvas composition
- * 4. Comment layer destruction detection with auto-reinitialization
- * 5. Robust cleanup of event listeners and timers
+ * SYNC FIX (December 2025):
+ * - Changed from requestAnimationFrame to requestVideoFrameCallback
+ * - requestVideoFrameCallback syncs with actual video frame updates, eliminating sync drift
+ * - captureStream(0) + requestFrame() gives precise frame control
+ * - Removed setTimeout-based fallback for hidden tabs (video playback is usually paused anyway)
  */
 
 import { Result, ok, err } from 'neverthrow';
@@ -48,17 +47,39 @@ const PIP_VIDEO_ID = 'bn-pip-video';
 
 // グローバル状態
 let isRunningInPIP: boolean = false;
-let isHidden: boolean = false;
-let animationFrameId: number | null = null;
-let timeoutId: number | null = null;
-let visibilityChangeHandler: (() => void) | null = null;
+let videoFrameCallbackId: number | null = null;
+let animationFrameId: number | null = null; // フォールバック用
 let pipButton: HTMLButtonElement | null = null;
 let pipCanvas: HTMLCanvasElement | null = null;
 let pipCanvasContext: CanvasRenderingContext2D | null = null;
 let pipVideo: HTMLVideoElement | null = null;
+let pipStream: MediaStream | null = null;
 let mainVideo: HTMLVideoElement | null = null;
+let upscaledCanvas: HTMLCanvasElement | null = null; // アップスケールキャンバス（存在する場合）
 let commentCanvas: HTMLCanvasElement | null = null;
 let supporterCanvas: HTMLCanvasElement | null = null;
+
+// Video Upscalingのキャンバス要素ID（videoUpscaling.tsと同期）
+const UPSCALED_CANVAS_ID = 'bn-upscaled-canvas';
+
+// requestVideoFrameCallback サポートチェック
+function supportsRequestVideoFrameCallback(): boolean {
+  return 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+}
+
+/**
+ * アップスケールされたキャンバスが存在するかチェック
+ * Video Upscaling機能が有効な場合、高画質キャンバスが存在する
+ */
+function getUpscaledCanvas(): HTMLCanvasElement | null {
+  const canvas = document.getElementById(UPSCALED_CANVAS_ID) as HTMLCanvasElement | null;
+  // キャンバスが存在し、表示されている場合のみ有効
+  if (canvas && canvas.style.display !== 'none' && canvas.width > 0 && canvas.height > 0) {
+    return canvas;
+  }
+  return null;
+}
+
 
 /**
  * 動画視聴ページかどうかを判定
@@ -338,17 +359,11 @@ function createPiPVideo(stream: MediaStream): HTMLVideoElement {
 }
 
 /**
- * requestAnimationFrameで動画とコメントを合成
+ * フレームを合成してキャンバスに描画
+ * アップスケーリングが有効な場合は高画質キャンバスを使用
  */
-function compositeLoop(): void {
-  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
-    return;
-  }
-
-  // コメントレイヤーの破棄検知
-  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
-    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
-    void reinitializePiP();
+function renderCompositeFrame(): void {
+  if (!mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
     return;
   }
 
@@ -356,20 +371,21 @@ function compositeLoop(): void {
   pipCanvasContext.fillStyle = '#000';
   pipCanvasContext.fillRect(0, 0, pipCanvas.width, pipCanvas.height);
 
-  // メインビデオをアスペクト比を保持して描画
-  if (mainVideo.videoWidth > 0 && mainVideo.videoHeight > 0) {
-    const videoSize = calcSize(
-      mainVideo.videoWidth,
-      mainVideo.videoHeight,
-      pipCanvas.width,
-      pipCanvas.height,
-    );
+  // アップスケールキャンバスが存在する場合はそれを使用（高画質）
+  // 存在しない場合は元の動画を使用
+  const videoSource: CanvasImageSource | null = upscaledCanvas || mainVideo;
+  const sourceWidth = upscaledCanvas ? upscaledCanvas.width : mainVideo.videoWidth;
+  const sourceHeight = upscaledCanvas ? upscaledCanvas.height : mainVideo.videoHeight;
+
+  // メイン映像をアスペクト比を保持して描画
+  if (sourceWidth > 0 && sourceHeight > 0 && videoSource) {
+    const videoSize = calcSize(sourceWidth, sourceHeight, pipCanvas.width, pipCanvas.height);
     pipCanvasContext.drawImage(
-      mainVideo,
+      videoSource,
       0,
       0,
-      mainVideo.videoWidth,
-      mainVideo.videoHeight,
+      sourceWidth,
+      sourceHeight,
       (pipCanvas.width - videoSize.width) / 2,
       (pipCanvas.height - videoSize.height) / 2,
       videoSize.width,
@@ -423,41 +439,89 @@ function compositeLoop(): void {
     commentSize.height,
   );
 
-  // 次のフレーム（タブの可視状態に応じて最適化）
-  if (isHidden) {
-    timeoutId = window.setTimeout(compositeLoop, 1000 / 60);
-  } else {
-    animationFrameId = requestAnimationFrame(compositeLoop);
-  }
-}
-
-/**
- * visibilitychange イベントをセットアップ
- */
-function setupVisibilityChangeListener(): void {
-  if (visibilityChangeHandler) {
-    return; // 既に設定済み
-  }
-
-  visibilityChangeHandler = () => {
-    isHidden = document.hidden;
-    if (isHidden) {
-      console.log('[Better Niconico] タブが非表示になりました（パフォーマンス最適化モード）');
-    } else {
-      console.log('[Better Niconico] タブが表示されました');
+  // captureStream(0) の場合、手動でフレームをキャプチャ
+  if (pipStream) {
+    const videoTrack = pipStream.getVideoTracks()[0];
+    if (videoTrack && 'requestFrame' in videoTrack) {
+      (videoTrack as MediaStreamVideoTrack & { requestFrame: () => void }).requestFrame();
     }
-  };
-
-  document.addEventListener('visibilitychange', visibilityChangeHandler, false);
+  }
 }
 
 /**
- * visibilitychange イベントを削除
+ * requestVideoFrameCallback を使用した合成ループ
+ * 動画の実際のフレーム更新に同期して描画する
  */
-function removeVisibilityChangeListener(): void {
-  if (visibilityChangeHandler) {
-    document.removeEventListener('visibilitychange', visibilityChangeHandler, false);
-    visibilityChangeHandler = null;
+function compositeLoopWithVideoFrameCallback(): void {
+  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+    return;
+  }
+
+  // コメントレイヤーの破棄検知
+  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
+    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
+    void reinitializePiP();
+    return;
+  }
+
+  // フレームを描画
+  renderCompositeFrame();
+
+  // 次のフレームを予約（動画フレームに同期）
+  videoFrameCallbackId = mainVideo.requestVideoFrameCallback(() => {
+    compositeLoopWithVideoFrameCallback();
+  });
+}
+
+/**
+ * requestAnimationFrame を使用した合成ループ（フォールバック）
+ */
+function compositeLoopWithAnimationFrame(): void {
+  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+    return;
+  }
+
+  // コメントレイヤーの破棄検知
+  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
+    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
+    void reinitializePiP();
+    return;
+  }
+
+  // フレームを描画
+  renderCompositeFrame();
+
+  // 次のフレームを予約
+  animationFrameId = requestAnimationFrame(compositeLoopWithAnimationFrame);
+}
+
+/**
+ * 合成ループを開始
+ */
+function startCompositeLoop(): void {
+  if (supportsRequestVideoFrameCallback() && mainVideo) {
+    console.log('[Better Niconico] requestVideoFrameCallback を使用（フレーム同期モード）');
+    compositeLoopWithVideoFrameCallback();
+  } else {
+    console.log('[Better Niconico] requestAnimationFrame を使用（フォールバックモード）');
+    compositeLoopWithAnimationFrame();
+  }
+}
+
+/**
+ * 合成ループを停止
+ */
+function stopCompositeLoop(): void {
+  // requestVideoFrameCallback をキャンセル
+  if (videoFrameCallbackId !== null && mainVideo) {
+    mainVideo.cancelVideoFrameCallback(videoFrameCallbackId);
+    videoFrameCallbackId = null;
+  }
+
+  // requestAnimationFrame をキャンセル
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
 }
 
@@ -480,6 +544,12 @@ async function startPiP(): Promise<void> {
   }
   mainVideo = videoResult.value;
 
+  // アップスケールキャンバスを検出（Video Upscaling機能との連携）
+  upscaledCanvas = getUpscaledCanvas();
+  if (upscaledCanvas) {
+    console.log('[Better Niconico] アップスケールキャンバスを検出しました（高画質モード）');
+  }
+
   // コメントキャンバスを取得
   const canvasResult = getCommentCanvas();
   if (canvasResult.isErr()) {
@@ -500,6 +570,7 @@ async function startPiP(): Promise<void> {
   }
 
   // 合成用キャンバスを作成
+  // アップスケールキャンバスが存在する場合はそのサイズを使用（高解像度）
   const compositeResult = createCompositeCanvas(mainVideo);
   if (compositeResult.isErr()) {
     console.error('[Better Niconico] 合成キャンバスの作成に失敗:', compositeResult.error);
@@ -508,29 +579,39 @@ async function startPiP(): Promise<void> {
   pipCanvas = compositeResult.value.canvas;
   pipCanvasContext = compositeResult.value.context;
 
-  // visibilitychange リスナーをセットアップ
-  setupVisibilityChangeListener();
-  isHidden = document.hidden;
+  // アップスケールキャンバスが存在する場合、PiPキャンバスのサイズを調整
+  if (upscaledCanvas) {
+    pipCanvas.width = upscaledCanvas.width;
+    pipCanvas.height = upscaledCanvas.height;
+    console.log(
+      `[Better Niconico] PiPキャンバスサイズを高画質に調整: ${pipCanvas.width}x${pipCanvas.height}`,
+    );
+  }
 
   // フラグを設定
   isRunningInPIP = true;
 
   // 合成ループを開始
-  compositeLoop();
+  startCompositeLoop();
 
-  // MediaStreamを作成（60fps）
-  const stream = pipCanvas.captureStream(60);
+  // MediaStreamを作成（0fps = 手動フレーム制御で完璧な同期を実現）
+  pipStream = pipCanvas.captureStream(0);
 
   // PiP用video要素を作成
-  pipVideo = createPiPVideo(stream);
+  pipVideo = createPiPVideo(pipStream);
   document.body.appendChild(pipVideo);
 
   try {
     // ビデオを再生
     await pipVideo.play();
 
-    // メインビデオとコメントを非表示に
-    mainVideo.style.visibility = 'hidden';
+    // アップスケーリング有効時はアップスケールキャンバスを非表示にする
+    // アップスケーリング無効時は元のビデオを非表示にする
+    if (upscaledCanvas) {
+      upscaledCanvas.style.visibility = 'hidden';
+    } else {
+      mainVideo.style.visibility = 'hidden';
+    }
     commentCanvas.style.visibility = 'hidden';
 
     // PiPを要求
@@ -553,20 +634,8 @@ function stopPiP(): void {
 
   console.log('[Better Niconico] PiPを停止します...');
 
-  // アニメーションループを停止
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-
-  // タイムアウトを停止
-  if (timeoutId !== null) {
-    clearTimeout(timeoutId);
-    timeoutId = null;
-  }
-
-  // visibilitychange リスナーを削除
-  removeVisibilityChangeListener();
+  // 合成ループを停止
+  stopCompositeLoop();
 
   // PiP video要素を削除
   if (pipVideo) {
@@ -577,26 +646,38 @@ function stopPiP(): void {
     pipVideo = null;
   }
 
+  // MediaStreamを停止
+  if (pipStream) {
+    pipStream.getTracks().forEach((track) => track.stop());
+    pipStream = null;
+  }
+
   // 合成キャンバスを削除
   pipCanvas = null;
   pipCanvasContext = null;
 
-  // メインビデオとコメントを再表示
-  if (mainVideo) {
+  // アップスケールキャンバスを再表示（アップスケーリングが有効だった場合）
+  if (upscaledCanvas) {
+    upscaledCanvas.style.visibility = '';
+    // 元動画はアップスケーリングによってdisplay:noneになっているので、そのまま維持
+  } else if (mainVideo) {
+    // アップスケーリングが無効な場合は元動画を再表示
     mainVideo.style.visibility = '';
   }
+
+  // コメントを再表示
   if (commentCanvas) {
     commentCanvas.style.visibility = '';
   }
 
   // 参照をクリア
   mainVideo = null;
+  upscaledCanvas = null;
   commentCanvas = null;
   supporterCanvas = null;
 
   // フラグをクリア
   isRunningInPIP = false;
-  isHidden = false;
 
   console.log('[Better Niconico] PiPを停止しました');
 }
@@ -611,18 +692,12 @@ async function reinitializePiP(): Promise<void> {
   // 現在のPiPを停止（ただしPiPウィンドウは維持したい）
   const wasPiPActive = isRunningInPIP;
 
-  // アニメーションループのみ停止
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-  if (timeoutId !== null) {
-    clearTimeout(timeoutId);
-    timeoutId = null;
-  }
+  // 合成ループを停止（mainVideoへの参照が残っている間に呼ぶ）
+  stopCompositeLoop();
 
   // 参照をクリア（PiPビデオは維持）
   mainVideo = null;
+  upscaledCanvas = null;
   commentCanvas = null;
   supporterCanvas = null;
 
@@ -675,9 +750,6 @@ function disableFeature(): void {
   if (isRunningInPIP) {
     stopPiP();
   }
-
-  // visibilitychange リスナーを削除（念のため）
-  removeVisibilityChangeListener();
 
   // PiPボタンを削除
   removePiPButton();
