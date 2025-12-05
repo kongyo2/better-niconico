@@ -24,7 +24,7 @@
    * fetchをフックしてコメントAPIレスポンスをキャプチャ
    */
   window.fetch = async function (...args): Promise<Response> {
-    const [input, init] = args;
+    const [input] = args;
 
     // URLを取得
     let url: string;
