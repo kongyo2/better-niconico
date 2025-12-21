@@ -18,6 +18,7 @@ import * as pictureInPicture from './features/pictureInPicture';
 import * as videoScreenshot from './features/videoScreenshot';
 import * as allegationAssist from './features/allegationAssist';
 import * as cinematicLighting from './features/cinematicLighting';
+import * as videoDownload from './features/videoDownload';
 
 /**
  * 設定を適用する（Result型を使用）
@@ -41,6 +42,7 @@ async function applySettings(): Promise<void> {
     videoScreenshot.apply(settings.enableVideoScreenshot);
     void allegationAssist.apply(settings.enableAllegationAssist);
     cinematicLighting.apply(settings.enableCinematicLighting);
+    videoDownload.apply(settings.enableVideoDownload);
     return;
   }
 
@@ -59,6 +61,7 @@ async function applySettings(): Promise<void> {
   videoScreenshot.apply(settings.enableVideoScreenshot);
   void allegationAssist.apply(settings.enableAllegationAssist);
   cinematicLighting.apply(settings.enableCinematicLighting);
+  videoDownload.apply(settings.enableVideoDownload);
 }
 
 /**

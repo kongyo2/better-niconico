@@ -83,6 +83,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   allegationTemplates: z.array(AllegationTemplateSchema).default(DEFAULT_ALLEGATION_TEMPLATES),
   // シネマティックライティング（アンビエントモード）を有効化
   enableCinematicLighting: z.boolean().default(false),
+  // 動画ダウンロード機能を有効化
+  enableVideoDownload: z.boolean().default(false),
 });
 
 /**
@@ -109,6 +111,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   enableAllegationAssist: false,
   allegationTemplates: DEFAULT_ALLEGATION_TEMPLATES,
   enableCinematicLighting: false,
+  enableVideoDownload: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

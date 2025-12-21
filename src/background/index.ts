@@ -38,7 +38,7 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
  * タブの更新を監視
  * ニコニコ動画のページが読み込まれたときにログを出力
  */
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url?.includes('nicovideo.jp')) {
     console.log(`[Better Niconico] ニコニコ動画のタブが読み込まれました: ${tab.url}`);
   }
