@@ -168,6 +168,7 @@ export async function downloadSegmentsForMux(
                         promises.push(p);
                     }
                 } else {
+                    // eslint-disable-next-line no-await-in-loop -- Promise pool pattern requires sequential await for concurrency control
                     await Promise.race(promises);
                 }
             }

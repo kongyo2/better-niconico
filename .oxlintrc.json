@@ -45,7 +45,9 @@
     "coverage",
     "*.min.js",
     "public",
-    "generate-icons.js"
+    "generate-icons.js",
+    // FFmpeg WASM low-level interface - no type definitions exist
+    "src/content/features/videoDownload/muxer.ts"
   ],
 
   // Environment declarations for browser extension
