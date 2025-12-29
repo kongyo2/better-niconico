@@ -44,4 +44,37 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   }
 });
 
+/**
+ * Content Scriptからのメッセージを処理
+ */
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'CHECK_NICOPEDIA_ARTICLE') {
+    const encodedTagName = message.tagName as string;
+
+    // Background Scriptからfetch（CORSの制限を回避）
+    fetch(`https://dic.nicovideo.jp/a/${encodedTagName}`, {
+      method: 'GET',
+      credentials: 'omit',
+    })
+      .then((response) => {
+        if (!response.ok) {
+          return { exists: false };
+        }
+        return response.text().then((html) => {
+          // 記事が存在しない場合は「まだ記事が書かれていません」が含まれる
+          const exists = !html.includes('まだ記事が書かれていません');
+          return { exists };
+        });
+      })
+      .catch(() => {
+        return { exists: false };
+      })
+      .then(sendResponse);
+
+    // 非同期レスポンスを返すためにtrueを返す
+    return true;
+  }
+  return false;
+});
+
 console.log('[Better Niconico] バックグラウンドサービスワーカーが初期化されました');

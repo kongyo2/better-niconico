@@ -424,13 +424,18 @@ body.bn-hide-supporter {
  * 大百科リンク復元
  * 2023年以前のニコニコ動画で使用されていたスタイルを再現
  * 元のクラス: .NicoDicIcon.is-available
+ * タグの内部（タグ名の後ろ）に配置
  */
 .bn-nicopedia-link {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 16px;
+  margin-left: 4px;
   flex-shrink: 0;
   text-decoration: none;
+  vertical-align: middle;
 }
 
 .bn-nicopedia-link:hover {
