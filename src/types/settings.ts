@@ -85,6 +85,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   enableCinematicLighting: z.boolean().default(false),
   // 動画ダウンロード機能を有効化
   enableVideoDownload: z.boolean().default(false),
+  // 動画タグの横に大百科リンクを復元
+  restoreNicopediaLink: z.boolean().default(false),
 });
 
 /**
@@ -112,6 +114,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   allegationTemplates: DEFAULT_ALLEGATION_TEMPLATES,
   enableCinematicLighting: false,
   enableVideoDownload: false,
+  restoreNicopediaLink: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';

@@ -419,3 +419,43 @@ body.bn-hide-supporter {
 }
 
 /* 追加のカスタムスタイルをここに記述 */
+
+/*
+ * 大百科リンク復元
+ * 2023年以前のニコニコ動画で使用されていたスタイルを再現
+ * 元のクラス: .NicoDicIcon.is-available
+ */
+.bn-nicopedia-link {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.bn-nicopedia-link:hover {
+  text-decoration: none;
+}
+
+/* アイコン部分（元の .NicoDicIcon を再現） */
+.bn-nicopedia-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #8c0000; /* 元のニコニコ大百科アイコンの色 */
+  color: #fff;
+  transition: background-color 0.15s ease;
+}
+
+.bn-nicopedia-icon svg {
+  width: 10px;
+  height: 10px;
+}
+
+.bn-nicopedia-link:hover .bn-nicopedia-icon {
+  background-color: #a00; /* ホバー時は少し明るく */
+}
+
