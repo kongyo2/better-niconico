@@ -1,24 +1,19 @@
 name: Jules Code Audit
 
 on:
+  push:
+    branches:
+      - main
+      - master
   pull_request:
     branches:
       - main
       - master
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
-    inputs:
-      audit_focus:
-        description: 'Focus area for audit (security, performance, quality, all)'
-        required: false
-        default: 'all'
 
 jobs:
   audit:
     name: Code Audit with Jules
     runs-on: ubuntu-latest
-    # Only run if JULES_API_KEY is configured
-    if: ${{ vars.JULES_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
       pull-requests: write
