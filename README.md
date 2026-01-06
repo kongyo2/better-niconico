@@ -6,6 +6,8 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kongyo2/better-niconico)
 
+[![CI](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml/badge.svg)](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml)
+
 ユーザーが各機能を個別にオン/オフできるカスタマイズ可能な拡張機能として設計されています。
 
 Chrome Webstore: https://chromewebstore.google.com/detail/plgkkapmiakgdndngkacndmgkehcfdgf?utm_source=item-share-cb
