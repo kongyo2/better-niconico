@@ -1,0 +1,133 @@
+name: Jules Code Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      audit_focus:
+        description: 'Focus area for audit (security, performance, quality, all)'
+        required: false
+        default: 'all'
+
+jobs:
+  audit:
+    name: Code Audit with Jules
+    runs-on: ubuntu-latest
+    # Only run if JULES_API_KEY is configured
+    if: ${{ vars.JULES_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Jules Security Audit
+        uses: google-labs-code/jules-invoke@v1
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: ${{ github.head_ref || github.ref_name }}
+          include_last_commit: true
+          include_commit_log: true
+          prompt: |
+            あなたはコードセキュリティ監査エージェントです。
+
+            【重要な制約】
+            - コードの変更は一切行わないでください
+            - プルリクエストの作成やブランチの変更は行わないでください
+            - 分析とレポートのみを行ってください
+
+            【監査対象】
+            このプルリクエストで変更されたコードを監査してください。
+            これはChrome拡張機能（Manifest V3）のTypeScriptプロジェクトです。
+
+            【監査項目】
+            1. セキュリティ脆弱性
+               - XSS（クロスサイトスクリプティング）のリスク
+               - インジェクション攻撃の可能性
+               - 安全でないデータ処理
+               - ハードコードされた認証情報やシークレット
+               - Chrome Extension APIの不適切な使用
+
+            2. コード品質
+               - TypeScriptの型安全性
+               - エラーハンドリングの適切性（neverthrowパターンの使用）
+               - 潜在的なバグやエッジケース
+
+            3. パフォーマンス
+               - メモリリークの可能性
+               - 非効率なDOM操作
+               - 不要な再レンダリング
+
+            【出力形式】
+            以下の形式でレポートを作成してください：
+
+            ## 🔍 Jules Code Audit Report
+
+            ### セキュリティ
+            - [Critical/High/Medium/Low/None] 発見された問題の説明
+
+            ### コード品質
+            - 発見された問題と推奨事項
+
+            ### パフォーマンス
+            - 最適化の提案
+
+            ### 総合評価
+            - 全体的な評価とサマリー
+
+      - name: Post audit summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## 🤖 Jules Code Audit
+
+            Jules AIによるコード監査が実行されました。
+
+            詳細な結果は[Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})を確認してください。
+
+            > **Note**: この監査は自動化されたAIレビューです。最終的な判断は人間のレビュアーが行ってください。
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Jules Code Audit')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
