@@ -6,7 +6,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kongyo2/better-niconico)
 
-[![CI](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml/badge.svg)](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml)  [![Jules Code Audit](https://github.com/kongyo2/better-niconico/actions/workflows/jules-audit.yml/badge.svg)](https://github.com/kongyo2/better-niconico/actions/workflows/jules-audit.yml)
+[![CI](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml/badge.svg)](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml) 
 
 ユーザーが各機能を個別にオン/オフできるカスタマイズ可能な拡張機能として設計されています。
 
