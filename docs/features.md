@@ -18,6 +18,8 @@ This document describes all features implemented in Better Niconico, with detail
 | Video Screenshot     | `src/content/features/videoScreenshot.ts`        | Canvas | OFF     |
 | Allegation Assist    | `src/content/features/allegationAssist.ts`       | DOM    | OFF     |
 | Cinematic Lighting   | `src/content/features/cinematicLighting.ts`      | Canvas | OFF     |
+| Video Download       | `src/content/features/videoDownload/`             | DOM    | OFF     |
+| Restore Nicopedia Link | `src/content/features/restoreNicopediaLink.ts` | DOM    | OFF     |
 
 ---
 
@@ -1613,6 +1615,8 @@ Some features only apply to specific pages:
 - Picture-in-Picture
 - Video Screenshot
 - Cinematic Lighting
+- Video Download
+- Restore Nicopedia Link
 
 **Video top page only** (`/video_top`):
 - Add Nico Rank Button
@@ -1627,3 +1631,377 @@ Some features only apply to specific pages:
 **Global features** (all pages):
 - Square Profile Icons
 - Hide Supporter Button
+
+---
+
+## 13. Video Download (動画ダウンロード)
+
+**Location**: `src/content/features/videoDownload/`
+**Default**: OFF
+**Page**: `/watch/*` only
+
+### Description
+
+Downloads Niconico videos as MP4 files by fetching HLS segments and muxing them together. Adds a download button to the player control bar.
+
+### Implementation Structure
+
+The feature is split into multiple modules:
+
+- **index.ts** - Main entry point, orchestrates the download process
+- **stream.ts** - Extracts master.m3u8 URL from video element, parses variant streams
+- **fetcher.ts** - Downloads HLS segments with progress tracking
+- **muxer.ts** - Muxes video and audio segments using M3U8 playlist approach
+- **saver.ts** - Saves the final MP4 file using Blob API
+- **ui.ts** - Creates and manages the download button in the control bar
+- **types.ts** - TypeScript type definitions
+
+### CRITICAL Implementation Details
+
+#### 1. Master URL Extraction
+
+```typescript
+function getMasterUrl(): Result<string, VideoError | PageError> {
+  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  if (!playerArea) {
+    return err(domElementNotFoundError('Player area not found'));
+  }
+
+  const videos = playerArea.querySelectorAll('video');
+  for (const video of videos) {
+    if (video.src && video.src.startsWith('blob:')) {
+      // Extract master.m3u8 from video element
+      // Niconico stores the HLS URL in a specific attribute
+    }
+  }
+}
+```
+
+- Extracts `master.m3u8` URL from video element on watch page
+- Validates URL is from Niconico's CDN
+- Returns Result type for error handling
+
+#### 2. Stream Parsing
+
+```typescript
+async function getVariantStreams(masterUrl: string): Result<VariantStreams, DownloadError> {
+  // Fetch master.m3u8 playlist
+  // Parse video and audio stream URLs
+  // Returns { video: { url, bandwidth }, audio: { url, bandwidth } }
+}
+```
+
+- Parses HLS master playlist to find video and audio variant streams
+- Selects appropriate quality variants
+- Handles both separate and multiplexed streams
+
+#### 3. Segment Download with Progress
+
+```typescript
+async function downloadSegmentsForMux(
+  streamUrl: string,
+  type: 'video' | 'audio',
+  onProgress: (progress: number) => void
+): Result<DownloadedData, DownloadError>
+```
+
+- Downloads video and audio segments in parallel
+- Tracks and reports download progress
+- Stores segments for muxing
+- Uses Promise.all for concurrent downloads
+
+#### 4. M3U8 Playlist Muxing
+
+```typescript
+async function muxWithPlaylist(
+  videoPlaylist: string,
+  videoSegments: Uint8Array[],
+  audioPlaylist: string,
+  audioSegments: Uint8Array[],
+  filename: string
+): Promise<Uint8Array>
+```
+
+- Uses FFmpeg-style M3U8 playlist approach (similar to nico_downloader)
+- Muxes video and audio segments into MP4 container
+- Handles segment timing and synchronization
+- Produces browser-compatible MP4 file
+
+#### 5. Download Button Integration
+
+The download button is added to the player control bar:
+
+```typescript
+function createDownloadButton(onClick: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.className = 'Pressable cursor_pointer';
+  button.style.color = '#FFFFFF';
+  button.setAttribute('aria-label', '動画をダウンロード');
+  // ... SVG icon
+  return button;
+}
+```
+
+- **Position**: Player control bar, before fullscreen button
+- **Styling**: Matches native Niconico control buttons
+- **Icon**: Download icon (arrow pointing downward)
+
+### Error Handling
+
+Uses Result types for type-safe error handling:
+
+```typescript
+try {
+  const masterUrlResult = getMasterUrl();
+  if (masterUrlResult.isErr()) {
+    throw masterUrlResult.error;
+  }
+  // ... continue with download
+} catch (e) {
+  alert(`ダウンロードに失敗しました: ${e.message}`);
+}
+```
+
+### Download Progress
+
+Progress is reported to browser console:
+
+```
+[BetterNiconico] Video Progress: 25.3%
+[BetterNiconico] Audio Progress: 50.1%
+[BetterNiconico] Download complete!
+```
+
+### Idempotency
+
+- **Button**: Uses `data-bn-download-button` marker
+- **State**: `isDownloading` flag prevents concurrent downloads
+- Safe to call `apply(true)` multiple times
+
+### Browser Compatibility
+
+- **Blob API**: All modern browsers
+- **URL.createObjectURL()**: All modern browsers
+- **HLS parsing**: Custom parser (no external dependencies)
+
+### Performance Considerations
+
+- **Memory**: Stores all segments in memory before muxing (can be large for HD videos)
+- **Network**: Downloads video and audio in parallel
+- **CPU**: Muxing is done in JavaScript (can be slow for long videos)
+
+### User Experience
+
+1. User enables "動画ダウンロード" in settings
+2. Download button appears on `/watch/*` pages (in control bar)
+3. User clicks button to start download
+4. Progress shown in console
+5. Alert shown when download completes
+6. MP4 file saved with video ID as filename (e.g., `sm9.mp4`)
+
+### Why This Feature Exists
+
+Niconico doesn't provide a native download feature. This feature allows users to save videos for offline viewing or archival purposes, which is useful for:
+- Content creators who want to backup their own videos
+- Users who want to watch offline
+- Archival purposes
+
+### Legal Note
+
+This feature should only be used for:
+- Downloading your own uploaded content
+- Personal backup of content you have permission to download
+- Educational/fair use purposes
+
+---
+
+## 14. Restore Nicopedia Link (大百科リンクの復元)
+
+**Location**: `src/content/features/restoreNicopediaLink.ts`
+**Default**: OFF
+**Page**: `/watch/*` only
+
+### Description
+
+Restores the old Niconico Dictionary (大百科) link next to video tags. This feature was present in older versions of Niconico but was removed. It adds a book icon next to each tag that links to the corresponding article in Niconico's dictionary.
+
+### CRITICAL Implementation Details
+
+#### 1. Tag Container Detection
+
+```typescript
+function getTagContainer(): HTMLElement | null {
+  // Only target tags in video info area (grid-area_[bottom])
+  const bottomArea = document.querySelector('.grid-area_\\[bottom\\]');
+  if (!bottomArea) return null;
+
+  // Tag container has flex-wrap class
+  const tagContainer = bottomArea.querySelector(
+    'div[class*="flex-wrap_wrap"]'
+  );
+  return tagContainer;
+}
+```
+
+- **Scope**: Only tags in the video info area (`.grid-area_[bottom]`)
+- **Excludes**: Tags in related videos, sidebar, and other areas
+- **Selector**: Targets div with `flex-wrap_wrap` class within bottom area
+
+#### 2. Article Existence Check
+
+```typescript
+async function checkArticleExists(encodedTagName: string): Promise<boolean> {
+  // Check session cache first
+  if (articleExistsCache.has(encodedTagName)) {
+    return articleExistsCache.get(encodedTagName)!;
+  }
+
+  // Send message to background script to fetch (avoid CORS)
+  const response = await chrome.runtime.sendMessage({
+    type: 'CHECK_NICOPEDIA_ARTICLE',
+    tagName: encodedTagName,
+  });
+
+  const exists = response?.exists ?? false;
+  articleExistsCache.set(encodedTagName, exists);
+  return exists;
+}
+```
+
+- **Background script**: Handles actual fetch request to avoid CORS
+- **Session cache**: Stores results to avoid redundant checks
+- **Parallel processing**: All tags checked simultaneously via `Promise.all()`
+
+#### 3. Icon Design
+
+```typescript
+const NICODIC_ICON_SVG = `<svg viewBox="0 0 100 100" ...>
+  <path d="M4 12a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4h92a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H62L50 24h38a4 4 0 0 1 4 4v68a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V28a4 4 0 0 1 4-4h18l12-12H4Zm26 52a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h40a2 2 0 0 0 2-2V66a2 2 0 0 0-2-2H30Zm0-28a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h40a2 2 0 0 0 2-2V38a2 2 0 0 0-2-2H30Z"
+  fill="currentColor"/>
+</svg>`;
+```
+
+- **Original design**: Replicates the old Niconico dictionary icon (book symbol)
+- **SVG format**: Scalable without quality loss
+- **Inline**: Added directly to DOM for performance
+
+#### 4. Link Creation
+
+```typescript
+function createNicopediaLink(encodedTagName: string): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.href = `https://dic.nicovideo.jp/a/${encodedTagName}`;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.title = `ニコニコ大百科で「${decodeURIComponent(encodedTagName)}」を見る`;
+
+  const iconSpan = document.createElement('span');
+  iconSpan.innerHTML = NICODIC_ICON_SVG;
+  link.appendChild(iconSpan);
+
+  // Prevent tag click when clicking icon
+  link.addEventListener('click', (e) => e.stopPropagation());
+
+  return link;
+}
+```
+
+- **Link target**: `https://dic.nicovideo.jp/a/{encodedTagName}`
+- **New tab**: Opens in new tab for convenience
+- **Click isolation**: Prevents triggering tag navigation when clicking dictionary link
+
+#### 5. Parallel Processing
+
+```typescript
+async function addNicopediaLinks(): Promise<void> {
+  const tags = tagContainer.querySelectorAll<HTMLAnchorElement>('a[href*="/tag/"]');
+
+  const tagPromises = Array.from(tags).map(async (tag) => {
+    if (tag.hasAttribute(MARKER)) return; // Skip processed
+
+    const match = tag.getAttribute('href')?.match(/\/tag\/([^?]+)/);
+    if (!match) return;
+
+    const encodedTagName = match[1];
+    tag.setAttribute(MARKER, 'true'); // Mark as processed
+
+    const exists = await checkArticleExists(encodedTagName);
+    if (!exists) return; // Only show if article exists
+
+    const link = createNicopediaLink(encodedTagName);
+    tag.appendChild(link);
+  });
+
+  await Promise.all(tagPromises);
+}
+```
+
+- **All tags processed in parallel**: Faster than sequential
+- **Idempotency**: `data-bn-nicopedia-processed` marker prevents duplicates
+- **Conditional display**: Only shows link if article exists
+
+### Idempotency
+
+- **Tag marker**: `data-bn-nicopedia-processed` on tag element
+- **Link marker**: `data-bn-nicopedia-link` on created link
+- **Cleanup**: Removes all links and markers when disabled
+
+### Cleanup
+
+```typescript
+function removeNicopediaLinks(): void {
+  const links = document.querySelectorAll(`[${LINK_MARKER}]`);
+  links.forEach((link) => link.remove());
+
+  const tags = document.querySelectorAll(`[${MARKER}]`);
+  tags.forEach((tag) => tag.removeAttribute(MARKER));
+}
+```
+
+When disabled, all dictionary links are removed and markers are cleared so they can be re-added on re-enable.
+
+### Browser Compatibility
+
+- **All modern browsers**: Uses standard DOM APIs
+- **Chrome extension APIs**: `chrome.runtime.sendMessage` for background fetch
+
+### Performance Considerations
+
+- **Network**: One API call per unique tag (cached per session)
+- **DOM**: Minimal impact (small SVG icons)
+- **Parallel**: All checks done simultaneously
+
+### User Experience
+
+1. User enables "大百科リンクの復元" in settings
+2. On `/watch/*` pages, book icons appear next to tags
+3. Icons only appear if dictionary article exists for that tag
+4. Clicking icon opens dictionary article in new tab
+5. Clicking tag still works normally (click isolated)
+
+### Why This Feature Exists
+
+Niconico removed the dictionary link feature in a UI update, but many users found it useful for:
+- Learning about unfamiliar tags/memes
+- Understanding cultural references
+- Finding related content through the dictionary
+
+The dictionary is a valuable resource for understanding Niconico's culture and context, and this feature restores that functionality.
+
+### Background Script Integration
+
+The feature requires a message handler in the background script:
+
+```typescript
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'CHECK_NICOPEDIA_ARTICLE') {
+    fetch(`https://dic.nicovideo.jp/a/${message.tagName}`)
+      .then(res => res.text())
+      .then(html => sendResponse({ exists: !html.includes('記事が見つかりません') }))
+      .catch(() => sendResponse({ exists: false }));
+    return true; // Keep channel open for async response
+  }
+});
+```
+
+This allows the content script to check article existence without CORS issues.

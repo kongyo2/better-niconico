@@ -53,7 +53,7 @@ The extension has three main components:
 Detailed documentation is organized by topic:
 
 - **[Architecture](docs/architecture.md)** - Extension components, settings system, build configuration
-- **[Features](docs/features.md)** - All 12 features with implementation details
+- **[Features](docs/features.md)** - All 14 features with implementation details
 - **[Development](docs/development.md)** - Workflow, debugging, testing, commands reference
 - **[Implementation Guide](docs/implementation.md)** - Adding features, best practices, patterns
 
@@ -71,6 +71,8 @@ Detailed documentation is organized by topic:
 10. **Video Screenshot** - Capture current video frame with comments as PNG image
 11. **Allegation Assist** - Template-based auto-fill for violation report forms
 12. **Cinematic Lighting** - Ambient glow effect around video player
+13. **Video Download** - Download videos as MP4 by fetching HLS segments
+14. **Restore Nicopedia Link** - Restores old Niconico Dic link next to tags
 
 See [docs/features.md](docs/features.md) for detailed implementation notes.
 
