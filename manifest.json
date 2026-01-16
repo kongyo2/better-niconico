@@ -13,7 +13,8 @@
       "resources": [
         "assets/*",
         "icons/*",
-        "ffmpeg/*"
+        "ffmpeg/*",
+        "scripts/*"
       ],
       "matches": [
         "https://*.nicovideo.jp/*"

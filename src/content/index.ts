@@ -20,6 +20,7 @@ import * as allegationAssist from './features/allegationAssist';
 import * as cinematicLighting from './features/cinematicLighting';
 import * as videoDownload from './features/videoDownload';
 import * as restoreNicopediaLink from './features/restoreNicopediaLink';
+import * as hideEasyComments from './features/hideEasyComments';
 
 /**
  * 設定を適用する（Result型を使用）
@@ -45,6 +46,7 @@ async function applySettings(): Promise<void> {
     cinematicLighting.apply(settings.enableCinematicLighting);
     videoDownload.apply(settings.enableVideoDownload);
     restoreNicopediaLink.apply(settings.restoreNicopediaLink);
+    hideEasyComments.apply(settings.hideEasyComments);
     return;
   }
 
@@ -65,6 +67,7 @@ async function applySettings(): Promise<void> {
   cinematicLighting.apply(settings.enableCinematicLighting);
   videoDownload.apply(settings.enableVideoDownload);
   restoreNicopediaLink.apply(settings.restoreNicopediaLink);
+  hideEasyComments.apply(settings.hideEasyComments);
 }
 
 /**

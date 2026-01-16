@@ -87,6 +87,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   enableVideoDownload: z.boolean().default(false),
   // 動画タグの横に大百科リンクを復元
   restoreNicopediaLink: z.boolean().default(false),
+  // かんたんコメントを非表示
+  hideEasyComments: z.boolean().default(false),
 });
 
 /**
@@ -115,6 +117,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   enableCinematicLighting: false,
   enableVideoDownload: false,
   restoreNicopediaLink: false,
+  hideEasyComments: false,
 };
 
 export const STORAGE_KEY = 'betterNiconicoSettings';
