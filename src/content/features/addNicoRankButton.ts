@@ -1,11 +1,39 @@
 /**
  * サイドバーにnico-rank.comへのボタンを追加する機能
  * video_topページの左サイドバーに「ニコラン」ボタンを追加します
+ *
+ * サイドバーは展開時と折りたたみ時で異なるCSSクラスを使用します:
+ * - 折りたたみ時 (幅80px): css-1i3qj3a, css-54sd46, css-ium6yj
+ * - 展開時 (幅226px): css-gzpr6t, css-1xvl3dk, css-xzkfql
  */
 
 const BUTTON_MARKER = 'data-bn-nico-rank-button';
 const CONTAINER_MARKER = 'data-bn-nico-rank-container';
 const NICO_RANK_URL = 'https://nico-rank.com/';
+
+/**
+ * サイドバーのCSSクラス定義
+ * 実際のページでは折りたたみ時と展開時でクラス名が異なる
+ */
+const SIDEBAR_CLASSES = {
+  /** 折りたたみ時 */
+  collapsed: {
+    container: 'css-1i3qj3a', // メニューアイテムコンテナ
+    innerDiv: 'css-54sd46', // 内部コンテナ
+    textClass: 'css-ium6yj', // テキストのクラス
+  },
+  /** 展開時 */
+  expanded: {
+    container: 'css-gzpr6t', // メニューアイテムコンテナ
+    innerDiv: 'css-1xvl3dk', // 内部コンテナ
+    textClass: 'css-xzkfql', // テキストのクラス
+  },
+  /** 共通 */
+  common: {
+    link: 'css-1i9dz1a', // リンクのクラス
+    iconContainer: 'css-14y3bdu', // アイコンコンテナ
+  },
+} as const;
 
 /**
  * 表彰台のSVGアイコンを生成
@@ -43,47 +71,102 @@ function getSidebarContainer(): HTMLElement | null {
 }
 
 /**
- * ランキングの親要素の次の兄弟要素にボタンが追加されているかチェック
+ * 親コンテナから展開状態かどうかを判定
+ * @param container - ランキングリンクの親コンテナ
+ * @returns true: 展開時, false: 折りたたみ時
  */
-function hasButtonAfterRanking(rankingParent: HTMLElement): boolean {
+function isExpandedState(container: HTMLElement): boolean {
+  return container.classList.contains(SIDEBAR_CLASSES.expanded.container);
+}
+
+/**
+ * ランキングの親要素の次の兄弟要素にボタンが追加されているかチェック
+ * @returns オブジェクト { exists: ボタンが存在するか, needsUpdate: クラス更新が必要か }
+ */
+function checkExistingButton(rankingParent: HTMLElement): { exists: boolean; needsUpdate: boolean } {
   // 次の兄弟要素をチェック
   const nextSibling = rankingParent.nextElementSibling as HTMLElement;
   if (!nextSibling) {
-    return false;
+    return { exists: false, needsUpdate: false };
   }
 
   // 次の兄弟要素がニコランボタンのコンテナかどうかをチェック
-  return (
+  const isNicoRankContainer =
     nextSibling.hasAttribute(CONTAINER_MARKER) ||
-    nextSibling.querySelector(`[${BUTTON_MARKER}]`) !== null
-  );
+    nextSibling.querySelector(`[${BUTTON_MARKER}]`) !== null;
+
+  if (!isNicoRankContainer) {
+    return { exists: false, needsUpdate: false };
+  }
+
+  // ボタンは存在する。クラスが現在のサイドバー状態と一致するか確認
+  const isExpanded = isExpandedState(rankingParent);
+  const expectedContainerClass = isExpanded
+    ? SIDEBAR_CLASSES.expanded.container
+    : SIDEBAR_CLASSES.collapsed.container;
+
+  // コンテナのクラスが期待するクラスと一致するか
+  const needsUpdate = nextSibling.className !== expectedContainerClass;
+
+  return { exists: true, needsUpdate };
+}
+
+/**
+ * 既存のニコランボタンを更新する
+ * サイドバーの状態が変わった場合、ボタンのクラスを更新する
+ */
+function updateExistingButton(nicoRankContainer: HTMLElement, isExpanded: boolean): void {
+  const classes = isExpanded ? SIDEBAR_CLASSES.expanded : SIDEBAR_CLASSES.collapsed;
+
+  // コンテナのクラスを更新
+  nicoRankContainer.className = classes.container;
+  nicoRankContainer.setAttribute(CONTAINER_MARKER, 'true');
+
+  // ボタン内部のクラスを更新
+  const button = nicoRankContainer.querySelector(`[${BUTTON_MARKER}]`);
+  if (button) {
+    // 内部divのクラスを更新
+    const innerDiv = button.querySelector('div');
+    if (innerDiv) {
+      innerDiv.className = classes.innerDiv;
+    }
+    // テキストのクラスを更新
+    const textP = button.querySelector('p');
+    if (textP) {
+      textP.className = classes.textClass;
+    }
+  }
 }
 
 /**
  * nico-rank.comボタンを作成
+ * @param isExpanded - サイドバーが展開状態かどうか
  */
-function createNicoRankButton(): HTMLElement {
+function createNicoRankButton(isExpanded: boolean): HTMLElement {
+  // 状態に応じたクラスを選択
+  const classes = isExpanded ? SIDEBAR_CLASSES.expanded : SIDEBAR_CLASSES.collapsed;
+
   // ランキングリンクの構造を正確に再現
   const link = document.createElement('a');
   link.href = NICO_RANK_URL;
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
-  link.className = 'css-1i9dz1a';
+  link.className = SIDEBAR_CLASSES.common.link;
   link.setAttribute(BUTTON_MARKER, 'true');
 
   // ランキングリンクと同じ内部構造を作成
   const containerDiv = document.createElement('div');
-  containerDiv.className = 'css-54sd46';
+  containerDiv.className = classes.innerDiv;
 
   // アイコン用のDIV（表彰台アイコンを追加）
   const iconDiv = document.createElement('div');
-  iconDiv.className = 'css-14y3bdu';
+  iconDiv.className = SIDEBAR_CLASSES.common.iconContainer;
   iconDiv.innerHTML = createPodiumIcon();
 
   // テキスト用のDIV
   const textDiv = document.createElement('div');
   const textParagraph = document.createElement('p');
-  textParagraph.className = 'css-ium6yj';
+  textParagraph.className = classes.textClass;
   textParagraph.textContent = 'ニコラン';
   textDiv.appendChild(textParagraph);
 
@@ -111,18 +194,36 @@ function addAllNicoRankButtons(): void {
 
   // すべてのランキングリンクを探す（展開時と折りたたみ時の両方）
   const rankingLinks = Array.from(
-    document.querySelectorAll<HTMLAnchorElement>('a.css-1i9dz1a'),
+    document.querySelectorAll<HTMLAnchorElement>(`a.${SIDEBAR_CLASSES.common.link}`),
   ).filter((link) => link.textContent?.trim() === 'ランキング' && link.href.includes('/ranking'));
 
+  let addedOrUpdated = false;
+
   for (const rankingLink of rankingLinks) {
-    // 各ランキングリンクの親要素を取得
-    const rankingParent = rankingLink.closest('.css-1i3qj3a, .css-gzpr6t') as HTMLElement;
+    // 各ランキングリンクの親要素を取得（展開時または折りたたみ時のコンテナ）
+    const rankingParent = rankingLink.closest(
+      `.${SIDEBAR_CLASSES.collapsed.container}, .${SIDEBAR_CLASSES.expanded.container}`,
+    ) as HTMLElement;
     if (!rankingParent) {
       continue;
     }
 
-    // ランキングの親要素の後にすでにボタンが追加されている場合はスキップ
-    if (hasButtonAfterRanking(rankingParent)) {
+    // 展開状態かどうかを判定
+    const isExpanded = isExpandedState(rankingParent);
+
+    // 既存のボタンをチェック
+    const { exists, needsUpdate } = checkExistingButton(rankingParent);
+
+    if (exists) {
+      if (needsUpdate) {
+        // 既存のボタンのクラスを更新
+        const nextSibling = rankingParent.nextElementSibling as HTMLElement;
+        if (nextSibling) {
+          updateExistingButton(nextSibling, isExpanded);
+          addedOrUpdated = true;
+        }
+      }
+      // 既に正しいクラスで存在する場合は何もしない
       continue;
     }
 
@@ -131,8 +232,8 @@ function addAllNicoRankButtons(): void {
     menuContainer.className = rankingParent.className;
     menuContainer.setAttribute(CONTAINER_MARKER, 'true');
 
-    // ボタンを作成
-    const button = createNicoRankButton();
+    // 状態に応じたボタンを作成
+    const button = createNicoRankButton(isExpanded);
     menuContainer.appendChild(button);
 
     // ランキングの親要素の後に挿入
@@ -142,9 +243,10 @@ function addAllNicoRankButtons(): void {
     } else {
       rankingParent.parentElement?.appendChild(menuContainer);
     }
+    addedOrUpdated = true;
   }
 
-  if (rankingLinks.length > 0) {
+  if (addedOrUpdated) {
     console.log('[Better Niconico] ニコランボタンを追加しました');
   }
 }
