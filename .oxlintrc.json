@@ -1,42 +1,39 @@
 {
   // Oxlint configuration for Chrome Extension Boilerplate
   // Based on oxc.rs documentation and best practices
-
   // Enable recommended plugins
-  "plugins": ["typescript", "promise", "import", "unicorn"],
-
+  "plugins": [
+    "typescript",
+    "promise",
+    "import",
+    "unicorn"
+  ],
   // Configure rule categories with severity levels
   "categories": {
     "correctness": "error", // Code that is outright wrong or useless
     "suspicious": "warn", // Code that is likely wrong or useless
     "perf": "warn" // Performance optimizations
   },
-
   // Specific rule overrides
   "rules": {
     // Console is allowed for debugging and logging in extensions
     "no-console": "off",
-
     // TypeScript strict rules
     "typescript/no-explicit-any": "error",
     "typescript/no-unsafe-assignment": "warn",
     "typescript/no-unsafe-call": "warn",
     "typescript/no-floating-promises": "error",
     "typescript/await-thenable": "error",
-
     // Promise handling
     "promise/no-new-statics": "error",
     "promise/always-return": "off", // Disabled: sendResponse is intentional side-effect
-
     // Import rules
     "import/no-duplicates": "warn",
     "import/no-unassigned-import": "off", // Allow side-effect imports like CSS
-
     // Code quality
     "no-unused-vars": "warn",
     "no-debugger": "error"
   },
-
   // Ignore patterns for build artifacts and dependencies
   "ignorePatterns": [
     "node_modules",
@@ -47,15 +44,16 @@
     "public",
     "generate-icons.js",
     // FFmpeg WASM low-level interface - no type definitions exist
-    "src/content/features/videoDownload/muxer.ts"
+    "src/content/features/videoDownload/muxer.ts",
+    // Test files - allow test-specific patterns (mocks, stubs, etc.)
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ],
-
   // Environment declarations for browser extension
   "env": {
     "browser": true,
     "es2021": true
   },
-
   // Global variables provided by Chrome Extension API
   "globals": {
     "chrome": "readonly"
