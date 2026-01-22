@@ -1,6 +1,6 @@
 # 開発スタイル
 
-TDD で開発する（探索 → Red → Green → Refactoring）。
+t_wadaの TDD で開発する（探索 → Red → Green → Refactoring）。
 KPI やカバレッジ目標が与えられたら、達成するまで試行する。
 不明瞭な指示は質問して明確にする。
 

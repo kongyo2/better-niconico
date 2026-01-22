@@ -268,6 +268,74 @@ function removeNicoRankButton(): void {
 }
 
 /**
+ * サイドバーのクラス属性変更を監視するMutationObserver
+ * サイドバーの展開/折りたたみ時にボタンのクラスを自動更新する
+ */
+let sidebarObserver: MutationObserver | null = null;
+
+/**
+ * サイドバーの監視を開始
+ * ランキングリンクの親要素のclass属性変更を監視し、
+ * 変更があればニコランボタンのクラスを更新する
+ */
+function startSidebarObserver(): void {
+  // 既にオブザーバーが存在する場合は何もしない
+  if (sidebarObserver) {
+    return;
+  }
+
+  // サイドバーコンテナを取得
+  const sidebarContainer = getSidebarContainer();
+  if (!sidebarContainer) {
+    return;
+  }
+
+  // MutationObserverを作成
+  sidebarObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      // class属性の変更を検知
+      if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+        const target = mutation.target as HTMLElement;
+
+        // ランキングリンクの親要素のクラス変更か確認
+        const isRankingContainer =
+          target.classList.contains(SIDEBAR_CLASSES.collapsed.container) ||
+          target.classList.contains(SIDEBAR_CLASSES.expanded.container);
+
+        if (isRankingContainer) {
+          // ランキングリンクが含まれているか確認
+          const rankingLink = target.querySelector(
+            `a.${SIDEBAR_CLASSES.common.link}[href*="/ranking"]`,
+          );
+          if (rankingLink && rankingLink.textContent?.trim() === 'ランキング') {
+            // ニコランボタンのクラスを更新
+            addAllNicoRankButtons();
+            break;
+          }
+        }
+      }
+    }
+  });
+
+  // サイドバー内の全要素のclass属性変更を監視
+  sidebarObserver.observe(sidebarContainer, {
+    attributes: true,
+    attributeFilter: ['class'],
+    subtree: true,
+  });
+}
+
+/**
+ * サイドバーの監視を停止
+ */
+function stopSidebarObserver(): void {
+  if (sidebarObserver) {
+    sidebarObserver.disconnect();
+    sidebarObserver = null;
+  }
+}
+
+/**
  * 設定を適用する
  * @param enabled - true: ボタンを追加, false: ボタンを削除
  */
@@ -275,7 +343,12 @@ export function apply(enabled: boolean): void {
   if (enabled) {
     // 展開時と折りたたみ時の両方に対応するため、すべてのランキングリンクに対してボタンを追加
     addAllNicoRankButtons();
+    // サイドバーのクラス変更監視を開始
+    startSidebarObserver();
   } else {
+    // 監視を停止
+    stopSidebarObserver();
     removeNicoRankButton();
   }
 }
+

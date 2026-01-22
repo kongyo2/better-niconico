@@ -26,6 +26,21 @@
  *     </a>
  *   </div>
  * </div>
+ *
+ * ■ サイドバー切り替え時の状態同期（修正済み）
+ *
+ * 問題（修正前）:
+ *   サイドバーを展開/折りたたむと、ニコニコ動画のJSが既存のメニュー項目の
+ *   CSSクラスを変更するが、拡張機能で追加したニコランボタンは更新されなかった。
+ *
+ * 解決策（実装済み）:
+ *   addNicoRankButton.ts 内で専用のMutationObserverを作成し、
+ *   サイドバー内のclass属性変更を監視。ランキングリンクのコンテナクラスが
+ *   変更されると、自動的にニコランボタンのクラスを更新する。
+ *
+ * テスト:
+ *   「should auto-update button when sidebar classes change」テストで
+ *   自動更新が機能することを検証している。
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { apply } from './addNicoRankButton';
@@ -89,11 +104,6 @@ function createExpandedMenuItemHTML(linkText: string, href: string): string {
   `;
 }
 
-// 後方互換性のためのエイリアス
-function createSidebarMenuItemHTML(linkText: string, href: string): string {
-  return createCollapsedMenuItemHTML(linkText, href);
-}
-
 /**
  * セパレータのHTML
  * 実際のニコニコ動画では <hr class="css-16zug1i"> を含む
@@ -124,7 +134,8 @@ function createExpandedSidebarHTML(items: Array<{ text: string; href: string }>)
 
 describe('addNicoRankButton', () => {
   beforeEach(() => {
-    // Reset DOM
+    // Reset DOM and observer state
+    apply(false); // オブザーバーを停止し、既存のボタンを削除
     document.body.innerHTML = '';
     // Mock location for video_top page
     vi.stubGlobal('location', {
@@ -725,5 +736,240 @@ describe('addNicoRankButton', () => {
       expect(updatedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`)).not.toBeNull();
       expect(updatedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`)).not.toBeNull();
     });
+
+    /**
+     * 重要: DOM変更後、apply(true) 呼び出し前の中間状態テスト
+     *
+     * このテストは、サイドバーが切り替わった直後（ニコニコ動画のJSがクラスを更新した後）
+     * かつ apply(true) が呼び出される前の状態を検証します。
+     *
+     * この中間状態では、ニコランボタンのクラスはまだ古い状態のままです。
+     * これは「正常な動作」であり、apply(true) が呼ばれることで解決されます。
+     *
+     * 実際の問題は、この apply(true) が適切なタイミングで呼ばれるかどうかです。
+     * 現在のMutationObserver設定では childList のみを監視しているため、
+     * クラス属性の変更だけでは apply(true) がトリガーされません。
+     */
+    it('should have stale classes before apply(true) is called after sidebar toggle', () => {
+      // 1. 折りたたみ状態でボタンを追加
+      document.body.innerHTML = createSidebarHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+      ]);
+      apply(true);
+
+      // 初期状態を確認
+      const initialContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+      expect(initialContainer?.className).toBe(SIDEBAR_CLASSES.collapsed.container);
+
+      // 2. ニコニコ動画のJSがランキングのクラスを展開時に変更（ニコランは変更されない）
+      const rankingContainer = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+
+      if (rankingContainer) {
+        rankingContainer.className = SIDEBAR_CLASSES.expanded.container;
+      }
+
+      // 3. この時点では apply(true) は呼ばれていない
+      //    ニコランボタンのコンテナはまだ古いクラスのまま
+      const staleContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+      const newRankingContainer = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.expanded.container}`);
+
+      // ニコランのクラスは古いまま（css-1i3qj3a）
+      expect(staleContainer?.className).toBe(SIDEBAR_CLASSES.collapsed.container);
+      // ランキングのクラスは新しい（css-gzpr6t）
+      expect(newRankingContainer?.className).toBe(SIDEBAR_CLASSES.expanded.container);
+      // 不一致状態
+      expect(staleContainer?.className).not.toBe(newRankingContainer?.className);
+
+      // 4. apply(true) を呼び出すと解決される
+      apply(true);
+      const updatedContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+      expect(updatedContainer?.className).toBe(SIDEBAR_CLASSES.expanded.container);
+    });
+
+    /**
+     * 連続した状態切り替えのテスト
+     *
+     * 短時間で複数回サイドバーが切り替わった場合の動作を確認
+     */
+    it('should handle rapid sidebar toggles correctly', () => {
+      // 折りたたみ状態で開始
+      document.body.innerHTML = createSidebarHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+      ]);
+      apply(true);
+      expect(document.querySelector(`[${CONTAINER_MARKER}]`)?.className).toBe(
+        SIDEBAR_CLASSES.collapsed.container,
+      );
+
+      // 展開に切り替え
+      const rankingContainer1 = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+      if (rankingContainer1) {
+        rankingContainer1.className = SIDEBAR_CLASSES.expanded.container;
+      }
+      apply(true);
+      expect(document.querySelector(`[${CONTAINER_MARKER}]`)?.className).toBe(
+        SIDEBAR_CLASSES.expanded.container,
+      );
+
+      // すぐに折りたたみに戻す
+      const rankingContainer2 = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.expanded.container}`);
+      if (rankingContainer2) {
+        rankingContainer2.className = SIDEBAR_CLASSES.collapsed.container;
+      }
+      apply(true);
+      expect(document.querySelector(`[${CONTAINER_MARKER}]`)?.className).toBe(
+        SIDEBAR_CLASSES.collapsed.container,
+      );
+
+      // 再び展開
+      const rankingContainer3 = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+      if (rankingContainer3) {
+        rankingContainer3.className = SIDEBAR_CLASSES.expanded.container;
+      }
+      apply(true);
+      expect(document.querySelector(`[${CONTAINER_MARKER}]`)?.className).toBe(
+        SIDEBAR_CLASSES.expanded.container,
+      );
+    });
+
+    /**
+     * ボタン内部のすべてのクラスが正しく更新されることを検証
+     */
+    it('should update all internal classes (container, innerDiv, textClass) on state change', () => {
+      // 折りたたみ状態でボタンを追加
+      document.body.innerHTML = createSidebarHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+      ]);
+      apply(true);
+
+      // 初期状態を確認
+      const button1 = document.querySelector(`[${BUTTON_MARKER}]`);
+      expect(button1?.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`)).not.toBeNull();
+      expect(button1?.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`)).not.toBeNull();
+      // 展開時のクラスは存在しない
+      expect(button1?.querySelector(`.${SIDEBAR_CLASSES.expanded.innerDiv}`)).toBeNull();
+      expect(button1?.querySelector(`.${SIDEBAR_CLASSES.expanded.textClass}`)).toBeNull();
+
+      // ランキングを展開状態に変更
+      const rankingContainer = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+      if (rankingContainer) {
+        rankingContainer.className = SIDEBAR_CLASSES.expanded.container;
+        const innerDiv = rankingContainer.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`);
+        if (innerDiv) {
+          innerDiv.className = SIDEBAR_CLASSES.expanded.innerDiv;
+        }
+        const textP = rankingContainer.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`);
+        if (textP) {
+          textP.className = SIDEBAR_CLASSES.expanded.textClass;
+        }
+      }
+
+      // apply(true) 呼び出し
+      apply(true);
+
+      // すべてのクラスが展開時のものに更新されていること
+      const button2 = document.querySelector(`[${BUTTON_MARKER}]`);
+      expect(button2?.querySelector(`.${SIDEBAR_CLASSES.expanded.innerDiv}`)).not.toBeNull();
+      expect(button2?.querySelector(`.${SIDEBAR_CLASSES.expanded.textClass}`)).not.toBeNull();
+      // 折りたたみ時のクラスは存在しない
+      expect(button2?.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`)).toBeNull();
+      expect(button2?.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`)).toBeNull();
+    });
+  });
+
+  /**
+   * サイドバー切り替え時の自動更新テスト
+   *
+   * MutationObserverがサイドバー内のclass属性変更を監視し、
+   * ランキングリンクのコンテナクラスが変更されると、自動的に
+   * ニコランボタンのクラスを更新する機能をテストする。
+   */
+  describe('sidebar toggle auto-updates button classes', () => {
+    /**
+     * サイドバーのクラス変更時に、ニコランボタンが自動更新されることを確認
+     */
+    it('should auto-update button when sidebar classes change', async () => {
+      // 1. 折りたたみ状態でボタンを追加
+      document.body.innerHTML = createSidebarHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+      ]);
+      apply(true);
+
+      // 初期状態を確認
+      const initialContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+      expect(initialContainer?.className).toBe(SIDEBAR_CLASSES.collapsed.container);
+
+      // 2. ニコニコ動画のJSがランキングとニコラン両方のクラスを展開時に変更
+      //    （実際のページではニコニコのJSがランキングのみ更新し、ニコランは更新しない）
+      const rankingContainer = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+
+      if (rankingContainer) {
+        rankingContainer.className = SIDEBAR_CLASSES.expanded.container;
+        const innerDiv = rankingContainer.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`);
+        if (innerDiv) {
+          innerDiv.className = SIDEBAR_CLASSES.expanded.innerDiv;
+        }
+        const textP = rankingContainer.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`);
+        if (textP) {
+          textP.className = SIDEBAR_CLASSES.expanded.textClass;
+        }
+      }
+
+      // MutationObserverのコールバックが実行されるのを待つ
+      // vi.waitFor を使って状態変更を待機（ポーリング）
+      await vi.waitFor(() => {
+        const nicoRankContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+        const rankingParent = document
+          .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+          ?.closest(`.${SIDEBAR_CLASSES.expanded.container}`);
+
+        // 期待: ニコランのクラスがランキングと一致している
+        expect(nicoRankContainer?.className).toBe(rankingParent?.className);
+      });
+    });
+
+    /**
+     * 実装が修正されるまで、明示的に apply(true) を呼び出す必要があることを示すテスト
+     */
+    it('should require manual apply(true) call to sync button classes (workaround)', () => {
+      // 折りたたみ状態でボタンを追加
+      document.body.innerHTML = createSidebarHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+      ]);
+      apply(true);
+
+      // ランキングのクラスを展開時に変更
+      const rankingContainer = document
+        .querySelector('a[href*="/ranking?ref=video_sidemenu"]')
+        ?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+      if (rankingContainer) {
+        rankingContainer.className = SIDEBAR_CLASSES.expanded.container;
+      }
+
+      // apply(true) を呼ばない状態で不一致を確認
+      const staleContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+      expect(staleContainer?.className).toBe(SIDEBAR_CLASSES.collapsed.container); // 古いまま
+      expect(staleContainer?.className).not.toBe(SIDEBAR_CLASSES.expanded.container);
+
+      // apply(true) を呼ぶと修正される（これは現在のworkaround）
+      apply(true);
+      const updatedContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+      expect(updatedContainer?.className).toBe(SIDEBAR_CLASSES.expanded.container);
+    });
   });
 });
+
