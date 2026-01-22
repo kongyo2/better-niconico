@@ -96,9 +96,10 @@ function createSidebarMenuItemHTML(linkText: string, href: string): string {
 
 /**
  * セパレータのHTML
+ * 実際のニコニコ動画では <hr class="css-16zug1i"> を含む
  */
 function createSeparatorHTML(): string {
-  return '<div class="css-1w0ym84"></div>';
+  return '<div class="css-1w0ym84"><hr class="css-16zug1i"></div>';
 }
 
 /**
