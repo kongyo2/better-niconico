@@ -80,7 +80,6 @@ function getUpscaledCanvas(): HTMLCanvasElement | null {
   return null;
 }
 
-
 /**
  * 動画視聴ページかどうかを判定
  */

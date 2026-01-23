@@ -56,8 +56,7 @@ describe('background/index', () => {
         'fetch',
         vi.fn().mockResolvedValue({
           ok: true,
-          text: () =>
-            Promise.resolve('<html><body>まだ記事が書かれていません</body></html>'),
+          text: () => Promise.resolve('<html><body>まだ記事が書かれていません</body></html>'),
         }),
       );
 

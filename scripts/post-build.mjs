@@ -13,22 +13,22 @@ const manifestPath = path.join(distDir, 'manifest.json');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
 // Find the nicovideo content script entry
-const contentScript = manifest.content_scripts?.find(
-    cs => cs.matches?.some(m => m.includes('nicovideo.jp'))
+const contentScript = manifest.content_scripts?.find((cs) =>
+  cs.matches?.some((m) => m.includes('nicovideo.jp')),
 );
 
 if (contentScript) {
-    // Prepend ffmpeg-core2.js to the js array
-    if (!contentScript.js.includes('ffmpeg/ffmpeg-core2.js')) {
-        contentScript.js.unshift('ffmpeg/ffmpeg-core2.js');
-        console.log('[post-build] Added ffmpeg-core2.js to content_scripts');
-    }
+  // Prepend ffmpeg-core2.js to the js array
+  if (!contentScript.js.includes('ffmpeg/ffmpeg-core2.js')) {
+    contentScript.js.unshift('ffmpeg/ffmpeg-core2.js');
+    console.log('[post-build] Added ffmpeg-core2.js to content_scripts');
+  }
 }
 
 // Remove scripting permission if present (not needed with direct content script)
 if (manifest.permissions?.includes('scripting')) {
-    manifest.permissions = manifest.permissions.filter(p => p !== 'scripting');
-    console.log('[post-build] Removed scripting permission');
+  manifest.permissions = manifest.permissions.filter((p) => p !== 'scripting');
+  console.log('[post-build] Removed scripting permission');
 }
 
 // Write updated manifest

@@ -455,8 +455,14 @@ describe('restoreClassicVideoLayout', () => {
 
       // Tailwindクラスが復元されている
       expect(parent.classList.contains('grid-tr_[min-content_min-content_1fr]')).toBe(true);
-      expect(parent.classList.contains('grid-template-areas_[_"player_sidebar"_"bottom_sidebar"_"bottom_sidebar"_]')).toBe(true);
-      expect(parent.classList.contains('grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)]')).toBe(true);
+      expect(
+        parent.classList.contains(
+          'grid-template-areas_[_"player_sidebar"_"bottom_sidebar"_"bottom_sidebar"_]',
+        ),
+      ).toBe(true);
+      expect(
+        parent.classList.contains('grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)]'),
+      ).toBe(true);
     });
 
     it('should reset sidebar styles when reverting to default', () => {
@@ -872,9 +878,7 @@ describe('restoreClassicVideoLayout', () => {
 
       apply(true);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('全画面表示中のため'),
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('全画面表示中のため'));
     });
 
     it('should log message when fullscreen listener is set up', () => {
@@ -975,14 +979,14 @@ describe('restoreClassicVideoLayout', () => {
 
       // 最初の呼び出しでリスナーがセットアップされる
       apply(true);
-      const setupCallCount = consoleLogSpy.mock.calls.filter(
-        (call) => call[0]?.includes('全画面表示イベントリスナーをセットアップしました'),
+      const setupCallCount = consoleLogSpy.mock.calls.filter((call) =>
+        call[0]?.includes('全画面表示イベントリスナーをセットアップしました'),
       ).length;
 
       // 2回目の呼び出しではリスナーは再セットアップされない
       apply(true);
-      const secondSetupCallCount = consoleLogSpy.mock.calls.filter(
-        (call) => call[0]?.includes('全画面表示イベントリスナーをセットアップしました'),
+      const secondSetupCallCount = consoleLogSpy.mock.calls.filter((call) =>
+        call[0]?.includes('全画面表示イベントリスナーをセットアップしました'),
       ).length;
 
       // セットアップは1回のみ
@@ -1006,9 +1010,13 @@ describe('restoreClassicVideoLayout', () => {
       apply(true);
 
       const parent = document.querySelector('.parent-grid') as HTMLElement;
-      expect(parent.style.gridTemplateAreas).toBe('"bottom sidebar" "player sidebar" "bn-bottom sidebar"');
+      expect(parent.style.gridTemplateAreas).toBe(
+        '"bottom sidebar" "player sidebar" "bn-bottom sidebar"',
+      );
       expect(parent.style.gridTemplateRows).toBe('auto auto auto');
-      expect(parent.style.gridTemplateColumns).toBe('var(--watch-player-width) var(--watch-sidebar-width)');
+      expect(parent.style.gridTemplateColumns).toBe(
+        'var(--watch-player-width) var(--watch-sidebar-width)',
+      );
       expect(parent.style.alignItems).toBe('start');
     });
 

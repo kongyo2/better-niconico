@@ -87,7 +87,10 @@ function createNicopediaLink(encodedTagName: string): HTMLAnchorElement {
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
   link.className = 'bn-nicopedia-link';
-  link.setAttribute('title', 'ニコニコ大百科で「' + decodeURIComponent(encodedTagName) + '」を見る');
+  link.setAttribute(
+    'title',
+    'ニコニコ大百科で「' + decodeURIComponent(encodedTagName) + '」を見る',
+  );
   link.setAttribute(LINK_MARKER, 'true');
 
   // アイコン用のspan要素（元のNicoDicIconクラスの構造を再現）

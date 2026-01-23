@@ -69,9 +69,7 @@ describe('videoDownload/stream', () => {
 
       const result = getMasterUrl();
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toBe(
-        'https://delivery.domand.nicovideo.jp/video.m3u8',
-      );
+      expect(result._unsafeUnwrap()).toBe('https://delivery.domand.nicovideo.jp/video.m3u8');
     });
 
     it('should find URL in player area candidates', () => {

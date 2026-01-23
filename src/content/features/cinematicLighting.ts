@@ -293,7 +293,8 @@ function extractVibrantColors(video: HTMLVideoElement): VibrantColors | null {
           // コーナーの色を収集
           if (x < cornerSize && y < cornerSize) cornerTopLeft.push({ rgb, score });
           if (x >= SAMPLE_SIZE - cornerSize && y < cornerSize) cornerTopRight.push({ rgb, score });
-          if (x < cornerSize && y >= SAMPLE_SIZE - cornerSize) cornerBottomLeft.push({ rgb, score });
+          if (x < cornerSize && y >= SAMPLE_SIZE - cornerSize)
+            cornerBottomLeft.push({ rgb, score });
           if (x >= SAMPLE_SIZE - cornerSize && y >= SAMPLE_SIZE - cornerSize)
             cornerBottomRight.push({ rgb, score });
         }
@@ -653,7 +654,12 @@ function processFrame(): void {
 
   // 動画ソースが変更された場合
   if (currentVideo && currentVideo.src !== currentVideoSrc) {
-    console.log('[Better Niconico] 動画ソースが変更されました:', currentVideoSrc, '->', currentVideo.src);
+    console.log(
+      '[Better Niconico] 動画ソースが変更されました:',
+      currentVideoSrc,
+      '->',
+      currentVideo.src,
+    );
     currentVideoSrc = currentVideo.src;
     lastColors = null; // 色をリセット
   }
@@ -833,14 +839,18 @@ function handlePageNavigation(): void {
 
   // watchページから離れた場合はクリーンアップ
   if (wasWatchPage && !isNowWatchPage) {
-    console.log('[Better Niconico] watchページから離れました。シネマティックライティングを停止します。');
+    console.log(
+      '[Better Niconico] watchページから離れました。シネマティックライティングを停止します。',
+    );
     forceCleanup();
     return;
   }
 
   // 異なるwatchページに移動した場合は再初期化
   if (wasWatchPage && isNowWatchPage && lastPageUrl !== window.location.href) {
-    console.log('[Better Niconico] 別の動画ページに移動しました。シネマティックライティングを再初期化します。');
+    console.log(
+      '[Better Niconico] 別の動画ページに移動しました。シネマティックライティングを再初期化します。',
+    );
     // 一度クリーンアップしてから再初期化を試みる
     forceCleanup();
     if (isEnabled) {
@@ -855,7 +865,9 @@ function handlePageNavigation(): void {
 
   // watchページに来た場合（設定が有効なら初期化）
   if (!wasWatchPage && isNowWatchPage && isEnabled) {
-    console.log('[Better Niconico] watchページに入りました。シネマティックライティングを初期化します。');
+    console.log(
+      '[Better Niconico] watchページに入りました。シネマティックライティングを初期化します。',
+    );
     retryCount = 0;
     tryEnableFeature();
   }
@@ -923,12 +935,16 @@ function tryEnableFeature(): void {
     // 動画が見つからない場合は再試行
     if (retryCount < MAX_RETRIES) {
       retryCount++;
-      console.log(`[Better Niconico] 動画要素が見つかりません。再試行 ${retryCount}/${MAX_RETRIES}...`);
+      console.log(
+        `[Better Niconico] 動画要素が見つかりません。再試行 ${retryCount}/${MAX_RETRIES}...`,
+      );
       retryTimeoutId = setTimeout(() => {
         tryEnableFeature();
       }, RETRY_DELAY);
     } else {
-      console.warn('[Better Niconico] 動画要素が見つかりませんでした。シネマティックライティングを開始できません。');
+      console.warn(
+        '[Better Niconico] 動画要素が見つかりませんでした。シネマティックライティングを開始できません。',
+      );
       retryCount = 0;
     }
     return;
@@ -986,7 +1002,9 @@ function enableFeature(): void {
   if (isEnabled) {
     // 動画が変更された場合は再初期化
     if (hasVideoChanged()) {
-      console.log('[Better Niconico] 動画要素が変更されました。シネマティックライティングを再初期化します。');
+      console.log(
+        '[Better Niconico] 動画要素が変更されました。シネマティックライティングを再初期化します。',
+      );
       forceCleanup();
       isEnabled = true;
       retryCount = 0;

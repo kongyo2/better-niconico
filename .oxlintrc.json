@@ -2,12 +2,7 @@
   // Oxlint configuration for Chrome Extension Boilerplate
   // Based on oxc.rs documentation and best practices
   // Enable recommended plugins
-  "plugins": [
-    "typescript",
-    "promise",
-    "import",
-    "unicorn"
-  ],
+  "plugins": ["typescript", "promise", "import", "unicorn"],
   // Configure rule categories with severity levels
   "categories": {
     "correctness": "error", // Code that is outright wrong or useless

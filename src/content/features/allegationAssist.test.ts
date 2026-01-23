@@ -146,7 +146,9 @@ describe('allegationAssist', () => {
       select.dispatchEvent(new Event('change'));
 
       // Check form was filled
-      const commentTextarea = document.querySelector('textarea[name="comment"]') as HTMLTextAreaElement;
+      const commentTextarea = document.querySelector(
+        'textarea[name="comment"]',
+      ) as HTMLTextAreaElement;
       expect(commentTextarea.value).toBe(DEFAULT_ALLEGATION_TEMPLATES[0].comment);
 
       const reasonSelect = document.querySelector('select[name="reason_id"]') as HTMLSelectElement;
@@ -165,7 +167,9 @@ describe('allegationAssist', () => {
       await apply(true);
 
       const select = document.querySelector(`[${DROPDOWN_MARKER}]`) as HTMLSelectElement;
-      const commentTextarea = document.querySelector('textarea[name="comment"]') as HTMLTextAreaElement;
+      const commentTextarea = document.querySelector(
+        'textarea[name="comment"]',
+      ) as HTMLTextAreaElement;
 
       // Select invalid template
       select.value = 'nonexistent-id';

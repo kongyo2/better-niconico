@@ -643,7 +643,9 @@ describe('addNicoRankButton', () => {
       const collapsedButton = document.querySelector(`[${BUTTON_MARKER}]`);
       const collapsedContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
       expect(collapsedContainer?.className).toBe(SIDEBAR_CLASSES.collapsed.container);
-      expect(collapsedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`)).not.toBeNull();
+      expect(
+        collapsedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`),
+      ).not.toBeNull();
 
       // 2. サイドバーが展開された時のDOM変更をシミュレート
       //    実際のページでは、ニコニコ動画のJSがランキングリンクのクラスを更新する
@@ -734,7 +736,9 @@ describe('addNicoRankButton', () => {
 
       // ボタン内部のクラスも折りたたみ時のクラスに更新されていること
       expect(updatedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.innerDiv}`)).not.toBeNull();
-      expect(updatedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`)).not.toBeNull();
+      expect(
+        updatedButton?.querySelector(`.${SIDEBAR_CLASSES.collapsed.textClass}`),
+      ).not.toBeNull();
     });
 
     /**
@@ -972,4 +976,3 @@ describe('addNicoRankButton', () => {
     });
   });
 });
-

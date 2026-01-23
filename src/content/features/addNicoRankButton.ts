@@ -83,7 +83,10 @@ function isExpandedState(container: HTMLElement): boolean {
  * ランキングの親要素の次の兄弟要素にボタンが追加されているかチェック
  * @returns オブジェクト { exists: ボタンが存在するか, needsUpdate: クラス更新が必要か }
  */
-function checkExistingButton(rankingParent: HTMLElement): { exists: boolean; needsUpdate: boolean } {
+function checkExistingButton(rankingParent: HTMLElement): {
+  exists: boolean;
+  needsUpdate: boolean;
+} {
   // 次の兄弟要素をチェック
   const nextSibling = rankingParent.nextElementSibling as HTMLElement;
   if (!nextSibling) {
@@ -351,4 +354,3 @@ export function apply(enabled: boolean): void {
     removeNicoRankButton();
   }
 }
-
