@@ -190,28 +190,57 @@ describe('restoreNicopediaLink', () => {
   /**
    * 実際のニコニコ動画ページのDOM構造に基づくテスト
    *
-   * 実際の構造:
-   * .grid-area_[bottom]
+   * 実際のページ構造 (2026年1月時点で検証済み):
+   * .grid-area_[bottom].d_flex.flex-d_column.gap_x2
    *   └── div.pos_relative.d_flex.flex-wrap_wrap.gap_base  ← タグコンテナ
-   *         └── a[data-scope="hover-card"]
-   *               └── <span>タグ名</span>
+   *         ├── a[data-scope="hover-card"][href*="/tag/"]  ← タグリンク (複数)
+   *         │     └── <span>タグ名</span>
+   *         └── button[data-element-name="tag_edit"]       ← タグ編集ボタン
+   *
+   * 注意:
+   * - サイドバー(.grid-area_[sidebar])内にもflex-wrap_wrapを持つ要素が存在するが、
+   *   そちらはタグではなく投稿日時・再生回数などのメタ情報を含む
+   * - 実装はgrid-area_[bottom]内のみを対象としているため、サイドバーは正しく除外される
    */
   describe('realistic DOM structure', () => {
     /**
      * 実際のニコニコ動画のタグリンク構造を再現
-     * 実際のクラス: d_inline-flex h_x4 px_x2 ai_center bdr_full bg-c_action.base
-     *              flex-wrap_nowrap fw_bold ov_hidden [&:...]
-     * 実際の属性: data-scope, data-part, dir, id, data-state, data-anchor-*
+     *
+     * 実際のクラス (2026年1月時点):
+     *   d_inline-flex h_x4 px_x2 ai_center bdr_full bg-c_action.base
+     *   flex-wrap_nowrap fw_bold ov_hidden
+     *   [&:has(>_a:nth-child(1):hover)]:bg-c_action.baseHover
+     *   [&_>_span]:lc_1
+     *
+     * 実際の属性:
+     *   data-scope="hover-card", data-part="trigger", dir="ltr",
+     *   id="hover-card:...:trigger", data-state="closed",
+     *   data-anchor="1", data-anchor-page="watch", data-anchor-area="tags",
+     *   data-anchor-href="/tag/..."
      */
     function createRealisticTagHTML(tagName: string, encoded?: string): string {
       const encodedName = encoded || encodeURIComponent(tagName);
       const uniqueId = `hover-card:test-${Math.random().toString(36).slice(2)}:trigger`;
+      // 実際のページと完全に一致するクラス名（Tailwind CSS擬似要素スタイルを含む）
+      const tagLinkClass = [
+        'd_inline-flex',
+        'h_x4',
+        'px_x2',
+        'ai_center',
+        'bdr_full',
+        'bg-c_action.base',
+        'flex-wrap_nowrap',
+        'fw_bold',
+        'ov_hidden',
+        '[&:has(>_a:nth-child(1):hover)]:bg-c_action.baseHover',
+        '[&_>_span]:lc_1',
+      ].join(' ');
       return `
         <a data-scope="hover-card" data-part="trigger"
            dir="ltr" id="${uniqueId}" data-state="closed"
            data-anchor="1" data-anchor-page="watch" data-anchor-area="tags"
            data-anchor-href="/tag/${encodedName}"
-           class="d_inline-flex h_x4 px_x2 ai_center bdr_full bg-c_action.base flex-wrap_nowrap fw_bold ov_hidden"
+           class="${tagLinkClass}"
            href="/tag/${encodedName}">
           <span>${tagName}</span>
         </a>
@@ -219,15 +248,61 @@ describe('restoreNicopediaLink', () => {
     }
 
     /**
-     * 実際のニコニコ動画のタグコンテナ構造を再現
+     * 実際のニコニコ動画のタグ編集ボタン構造を再現
      */
-    function createRealisticTagContainerHTML(tags: string[]): string {
+    function createTagEditButtonHTML(): string {
+      const buttonClass = [
+        'Pressable',
+        'cursor_pointer',
+        'd_inline-flex',
+        'ai_center',
+        'jc_center',
+        'gap_x0_5',
+        'px_x2',
+        'bdr_full',
+        'fs_base',
+        'fw_bold',
+        'button-color_base',
+        'white-space_nowrap',
+        'us_none',
+        'hover:cursor_pointer',
+        'disabled:pointer-events_none',
+        '[&_>_svg]:w_auto',
+        '[&_>_svg]:h_x3',
+        'h_x4',
+      ].join(' ');
+      return `
+        <button class="${buttonClass}" tabindex="0" type="button"
+                data-element-page="watch" data-element-area="tags"
+                data-element-name="tag_edit" data-element-click="1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" class="w_font h_font">
+            <path fill-rule="evenodd" d="m18.85 2.43 2.72 2.72"></path>
+          </svg>タグ編集
+        </button>
+      `;
+    }
+
+    /**
+     * 実際のニコニコ動画のタグコンテナ構造を再現
+     *
+     * 実際の構造:
+     * - 親: .grid-area_[bottom].d_flex.flex-d_column.gap_x2
+     * - タグコンテナ: .pos_relative.d_flex.flex-wrap_wrap.gap_base
+     * - タグコンテナ内: タグリンク(複数) + タグ編集ボタン
+     */
+    function createRealisticTagContainerHTML(
+      tags: string[],
+      options: { includeEditButton?: boolean } = {},
+    ): string {
+      const { includeEditButton = true } = options;
       const tagsHTML = tags.map((t) => createRealisticTagHTML(t)).join('');
+      const editButtonHTML = includeEditButton ? createTagEditButtonHTML() : '';
       return `
         <div class="grid-area_[bottom] d_flex flex-d_column gap_x2">
           <div class="d_flex jc_space-between ai_flex-start">タイトル等</div>
           <div class="pos_relative d_flex flex-wrap_wrap gap_base">
             ${tagsHTML}
+            ${editButtonHTML}
           </div>
           <section>コメント等</section>
         </div>
@@ -349,6 +424,131 @@ describe('restoreNicopediaLink', () => {
       // サイドバーのタグは処理されない
       const sidebarTag = document.querySelector('.sidebar a');
       expect(sidebarTag?.hasAttribute(MARKER)).toBe(false);
+    });
+
+    it('should ignore tag edit button in tag container', async () => {
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ exists: true });
+
+      document.body.innerHTML = createRealisticTagContainerHTML(['陰陽師', '公式'], {
+        includeEditButton: true,
+      });
+
+      apply(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // タグリンクのみが処理される（タグ編集ボタンは処理されない）
+      const processedTags = document.querySelectorAll(`[${MARKER}]`);
+      expect(processedTags.length).toBe(2);
+
+      // タグ編集ボタンにはマーカーが付いていないことを確認
+      const editButton = document.querySelector('button[data-element-name="tag_edit"]');
+      expect(editButton).not.toBeNull();
+      expect(editButton?.hasAttribute(MARKER)).toBe(false);
+    });
+
+    /**
+     * サイドバー(.grid-area_[sidebar])内にもflex-wrap_wrapを持つ要素が存在するが、
+     * それはメタ情報（投稿日時、再生回数、コメント数）を含む要素であり、
+     * タグリンクではない。実装はgrid-area_[bottom]内のflex-wrap_wrapを探すため、
+     * サイドバーの要素は正しく無視される。
+     */
+    it('should not process flex-wrap_wrap elements in sidebar', async () => {
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ exists: true });
+
+      // 実際のページ構造を再現:
+      // - grid-area_[bottom]内のタグコンテナ
+      // - grid-area_[sidebar]内のメタ情報（flex-wrap_wrapを持つがタグリンクではない）
+      document.body.innerHTML = `
+        ${createRealisticTagContainerHTML(['ターゲットタグ'])}
+        <div class="grid-area_[sidebar]">
+          <div class="d_flex gap_base flex-wrap_wrap mb_x0_5">
+            <time class="d_flex ai_center gap_x0_5">2024/1/1</time>
+            <p class="d_flex ai_center gap_x0_5">10万</p>
+            <p class="d_flex ai_center gap_x0_5">1000</p>
+          </div>
+        </div>
+      `;
+
+      apply(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // grid-area_[bottom]内のタグのみ処理される
+      const processedTags = document.querySelectorAll(`[${MARKER}]`);
+      expect(processedTags.length).toBe(1);
+
+      // サイドバー内の要素は処理されていないことを確認
+      const sidebarFlexWrap = document.querySelector(
+        '.grid-area_\\[sidebar\\] [class*="flex-wrap_wrap"]',
+      );
+      expect(sidebarFlexWrap).not.toBeNull();
+      expect(sidebarFlexWrap?.querySelectorAll(`[${MARKER}]`).length).toBe(0);
+    });
+
+    it('should work without tag edit button', async () => {
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ exists: true });
+
+      document.body.innerHTML = createRealisticTagContainerHTML(['テストタグ'], {
+        includeEditButton: false,
+      });
+
+      apply(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const processedTags = document.querySelectorAll(`[${MARKER}]`);
+      expect(processedTags.length).toBe(1);
+    });
+
+    it('should process multiple tags with Tailwind CSS pseudo-element classes', async () => {
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ exists: true });
+
+      // 実際のページで確認された11タグを再現
+      const realTags = [
+        '陰陽師',
+        'レッツゴー！陰陽師',
+        '公式',
+        '音楽',
+        'ゲーム',
+        '重要ニコニコ文化財',
+        '3月6日投稿動画',
+        '伝説',
+        '弾幕動画',
+        'ニコニコ神社',
+        'sm9',
+      ];
+
+      document.body.innerHTML = createRealisticTagContainerHTML(realTags);
+
+      apply(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // 全てのタグが処理されることを確認
+      const processedTags = document.querySelectorAll(`[${MARKER}]`);
+      expect(processedTags.length).toBe(11);
+
+      // 各タグにTailwind CSS擬似要素クラスが含まれていることを確認
+      const firstTag = document.querySelector('a[href*="/tag/"]');
+      expect(firstTag?.className).toContain('[&:has(>_a:nth-child(1):hover)]');
+      expect(firstTag?.className).toContain('[&_>_span]:lc_1');
+    });
+
+    it('should correctly process tags with data-anchor-href attribute', async () => {
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ exists: true });
+
+      document.body.innerHTML = createRealisticTagContainerHTML(['VOCALOID']);
+
+      apply(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // data-anchor-href属性も正しく設定されていることを確認
+      const tag = document.querySelector(`[${MARKER}]`);
+      expect(tag).not.toBeNull();
+      expect(tag?.getAttribute('data-anchor-href')).toBe('/tag/VOCALOID');
+      expect(tag?.getAttribute('href')).toBe('/tag/VOCALOID');
     });
   });
 });
