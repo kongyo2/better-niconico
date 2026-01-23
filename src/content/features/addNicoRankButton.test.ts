@@ -975,4 +975,134 @@ describe('addNicoRankButton', () => {
       expect(updatedContainer?.className).toBe(SIDEBAR_CLASSES.expanded.container);
     });
   });
+
+  /**
+   * セパレータの扱いに関するテスト
+   *
+   * 実際のニコニコ動画のサイドバーでは、メニューアイテム間にセパレータが存在する:
+   * - セパレータ: <div class="css-1w0ym84"><hr class="css-16zug1i"></div>
+   * - 構造: メニューアイテム → セパレータ → メニューアイテム → セパレータ ...
+   *
+   * ニコランボタンはランキングの直後、既存のセパレータの前に挿入される。
+   */
+  describe('separator handling', () => {
+    /**
+     * セパレータを含むサイドバー構造を作成（実際のページと同じ構造）
+     */
+    function createSidebarWithSeparatorsHTML(
+      items: Array<{ text: string; href: string }>,
+    ): string {
+      const itemsHTML = items
+        .map((item) => createCollapsedMenuItemHTML(item.text, item.href))
+        .join(createSeparatorHTML());
+      // 最後のアイテムの後にもセパレータを追加（実際のページと同様）
+      return `<div class="simplebar-content">${itemsHTML}${createSeparatorHTML()}</div>`;
+    }
+
+    it('should insert button before existing separator (between ranking and next item)', () => {
+      // 実際のページのDOM構造を再現: ランキング → セパレータ → Nアニメ
+      document.body.innerHTML = createSidebarWithSeparatorsHTML([
+        { text: 'マイリスト', href: '/my/mylist?ref=video_sidemenu' },
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+        { text: 'Nアニメ', href: 'https://anime.nicovideo.jp/free?ref=video_sidemenu' },
+      ]);
+
+      apply(true);
+
+      // ランキングコンテナを取得
+      const rankingLink = document.querySelector('a[href*="/ranking?ref=video_sidemenu"]');
+      const rankingContainer = rankingLink?.closest(`.${SIDEBAR_CLASSES.collapsed.container}`);
+
+      // ニコランコンテナを取得
+      const nicoRankContainer = document.querySelector(`[${CONTAINER_MARKER}]`);
+
+      // ニコランボタンがランキングの直後に挿入されているか確認
+      expect(nicoRankContainer).not.toBeNull();
+      expect(rankingContainer?.nextElementSibling).toBe(nicoRankContainer);
+
+      // ニコランの次がセパレータであることを確認
+      const afterNicoRank = nicoRankContainer?.nextElementSibling;
+      expect(afterNicoRank?.className).toBe('css-1w0ym84');
+      expect(afterNicoRank?.querySelector('hr')).not.toBeNull();
+    });
+
+    it('should not create duplicate separators', () => {
+      document.body.innerHTML = createSidebarWithSeparatorsHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+        { text: 'Nアニメ', href: 'https://anime.nicovideo.jp/free?ref=video_sidemenu' },
+      ]);
+
+      // 挿入前のセパレータ数をカウント
+      const separatorsBefore = document.querySelectorAll('.css-1w0ym84').length;
+
+      apply(true);
+
+      // 挿入後のセパレータ数をカウント（変わらないはず）
+      const separatorsAfter = document.querySelectorAll('.css-1w0ym84').length;
+
+      expect(separatorsAfter).toBe(separatorsBefore);
+    });
+
+    it('should preserve separator between nicorank button and next menu item', () => {
+      document.body.innerHTML = createSidebarWithSeparatorsHTML([
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+        { text: 'Nアニメ', href: 'https://anime.nicovideo.jp/free?ref=video_sidemenu' },
+      ]);
+
+      apply(true);
+
+      // 順序を確認: ランキング → ニコラン → セパレータ → Nアニメ
+      const sidebar = document.querySelector('.simplebar-content');
+      const children = Array.from(sidebar?.children || []);
+
+      // ニコランコンテナを見つける
+      const nicoRankIndex = children.findIndex(
+        (child) => child.hasAttribute(CONTAINER_MARKER),
+      );
+      expect(nicoRankIndex).toBeGreaterThan(-1);
+
+      // ニコランの次がセパレータであることを確認
+      const nextElement = children[nicoRankIndex + 1];
+      expect(nextElement?.className).toBe('css-1w0ym84');
+      expect(nextElement?.querySelector('hr')).not.toBeNull();
+
+      // セパレータの次がNアニメであることを確認
+      const nAnimeElement = children[nicoRankIndex + 2];
+      const nAnimeLink = nAnimeElement?.querySelector('a[href*="anime.nicovideo.jp"]');
+      expect(nAnimeLink).not.toBeNull();
+    });
+
+    it('should maintain correct order: ranking -> nicorank -> separator -> next item', () => {
+      document.body.innerHTML = createSidebarWithSeparatorsHTML([
+        { text: 'マイリスト', href: '/my/mylist?ref=video_sidemenu' },
+        { text: 'ランキング', href: '/ranking?ref=video_sidemenu' },
+        { text: 'Nアニメ', href: 'https://anime.nicovideo.jp/free?ref=video_sidemenu' },
+      ]);
+
+      apply(true);
+
+      const sidebar = document.querySelector('.simplebar-content');
+      const children = Array.from(sidebar?.children || []);
+
+      // 各要素の情報を取得
+      const structure = children.map((child) => {
+        const element = child as HTMLElement;
+        if (element.hasAttribute(CONTAINER_MARKER)) {
+          return 'nicorank';
+        }
+        if (element.querySelector('hr')) {
+          return 'separator';
+        }
+        const text = element.querySelector('p')?.textContent?.trim();
+        return text || 'unknown';
+      });
+
+      // ランキングとニコランの位置を確認
+      const rankingIndex = structure.indexOf('ランキング');
+      const nicoRankIndex = structure.indexOf('nicorank');
+
+      expect(nicoRankIndex).toBe(rankingIndex + 1);
+      expect(structure[nicoRankIndex + 1]).toBe('separator');
+    });
+  });
 });
