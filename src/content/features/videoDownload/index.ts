@@ -51,13 +51,16 @@ async function handleDownload() {
 
     // 4. Mux using M3U8 playlist approach (like nico_downloader)
     const videoId = window.location.pathname.split('/').pop() || 'video';
-    const muxedData = await muxWithPlaylist(
+    const muxResult = await muxWithPlaylist(
       videoResult.value.playlist,
       videoResult.value.segments,
       audioResult.value.playlist,
       audioResult.value.segments,
       `${videoId}.mp4`,
     );
+
+    if (muxResult.isErr()) throw muxResult.error;
+    const muxedData = muxResult.value;
 
     // 5. Save MP4
     saveAsFile(muxedData, `${videoId}.mp4`, 'video/mp4');
