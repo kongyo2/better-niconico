@@ -965,6 +965,188 @@ describe('restoreClassicVideoLayout', () => {
     });
   });
 
+  describe('realistic DOM from actual site investigation (2026-01)', () => {
+    it('should handle video with series section (8 children)', () => {
+      // シリーズに属する動画のDOM構造（sm43000000で確認）
+      // シリーズセクションが詳細情報と親作品・子作品の間に存在
+      document.body.innerHTML = `
+        <section class="d_grid grid-template-areas_[_'player_sidebar'_'bottom_sidebar'_'bottom_sidebar'_] grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)] grid-tr_[min-content_min-content_1fr]">
+          <div class="grid-area_[player]">
+            <div class="PlayerPresenter">Player</div>
+          </div>
+          <div class="grid-area_[bottom] d_flex flex-d_column gap_x2">
+            <div id="title-area" class="d_flex jc_space-between ai_flex-start gap_var(--watch-video-information-gap) w_100%">
+              <h1 class="fs_xl fw_bold">動画タイトル</h1>
+            </div>
+            <div id="tags-area" class="pos_relative d_flex flex-wrap_wrap gap_base">
+              <a>タグ1</a>
+              <a>タグ2</a>
+            </div>
+            <section id="detail-info" class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% d_flex flex-d_column">
+              <h1>動画の詳細情報</h1>
+            </section>
+            <div id="series-section" class="bdr_m ov_hidden">
+              <div class="pos_relative p_x2 d_flex gap_x2">シリーズ情報</div>
+            </div>
+            <section id="parent-child" class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% p_x3 d_flex flex-d_column gap_x2">
+              <h1>この動画の親作品・子作品</h1>
+            </section>
+            <section id="nicoad" class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% p_x3 d_flex flex-d_column gap_x2">
+              <h1>ニコニ広告</h1>
+            </section>
+            <div id="feedback" class="d_flex jc_flex-end">
+              <a>視聴ページに関するフィードバック</a>
+            </div>
+            <div id="sticky-ads" class="pos_sticky top_[calc({sizes.commonHeader.inViewHeight}_+_{sizes.webHeader.height}_+_var(--watch-layout-gap-height))]">
+              <div id="ads-container">広告</div>
+            </div>
+          </div>
+          <div class="grid-area_[sidebar]">
+            <div class="d_flex flex-d_column gap_x2">サイドバー</div>
+          </div>
+        </section>
+      `;
+
+      apply(true);
+
+      const bottomContainer = document.getElementById(BOTTOM_CONTAINER_ID);
+      const bottomArea = document.querySelector('.grid-area_\\[bottom\\]') as HTMLElement;
+
+      // 6つの要素が下部コンテナに移動（詳細情報、シリーズ、親子作品、ニコニ広告、フィードバック、sticky広告）
+      expect(bottomContainer?.children.length).toBe(6);
+      expect(bottomContainer?.querySelector('#detail-info')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#series-section')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#parent-child')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#nicoad')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#feedback')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#sticky-ads')).not.toBeNull();
+
+      // タイトルとタグのみがbottomAreaに残る
+      expect(bottomArea.querySelector('#title-area')).not.toBeNull();
+      expect(bottomArea.querySelector('#tags-area')).not.toBeNull();
+      expect(bottomArea.querySelector('#detail-info')).toBeNull();
+    });
+
+    it('should handle video without series section (7 children)', () => {
+      // シリーズに属さない動画のDOM構造（sm9, sm45000000で確認）
+      document.body.innerHTML = `
+        <section class="d_grid grid-template-areas_[_'player_sidebar'_'bottom_sidebar'_'bottom_sidebar'_] grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)] grid-tr_[min-content_min-content_1fr]">
+          <div class="grid-area_[player]">
+            <div class="PlayerPresenter">Player</div>
+          </div>
+          <div class="grid-area_[bottom] d_flex flex-d_column gap_x2">
+            <div id="title-area" class="d_flex jc_space-between ai_flex-start gap_var(--watch-video-information-gap) w_100%">
+              <h1 class="fs_xl fw_bold">新・豪血寺一族 -煩悩解放 - レッツゴー！陰陽師</h1>
+            </div>
+            <div id="tags-area" class="pos_relative d_flex flex-wrap_wrap gap_base">
+              <a>陰陽師</a>
+              <a>レッツゴー！陰陽師</a>
+            </div>
+            <section id="detail-info" class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% d_flex flex-d_column">
+              <h1>動画の詳細情報</h1>
+            </section>
+            <section id="parent-child" class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% p_x3 d_flex flex-d_column gap_x2">
+              <h1>この動画の親作品・子作品</h1>
+            </section>
+            <section id="nicoad" class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% p_x3 d_flex flex-d_column gap_x2">
+              <h1>ニコニ広告</h1>
+            </section>
+            <div id="feedback" class="d_flex jc_flex-end">
+              <a>視聴ページに関するフィードバック</a>
+            </div>
+            <div id="sticky-ads" class="pos_sticky top_[calc({sizes.commonHeader.inViewHeight}_+_{sizes.webHeader.height}_+_var(--watch-layout-gap-height))]">
+              <div>広告</div>
+            </div>
+          </div>
+          <div class="grid-area_[sidebar]">
+            <div class="d_flex flex-d_column gap_x2">サイドバー</div>
+          </div>
+        </section>
+      `;
+
+      apply(true);
+
+      const bottomContainer = document.getElementById(BOTTOM_CONTAINER_ID);
+      const bottomArea = document.querySelector('.grid-area_\\[bottom\\]') as HTMLElement;
+
+      // 5つの要素が下部コンテナに移動（詳細情報、親子作品、ニコニ広告、フィードバック、sticky広告）
+      expect(bottomContainer?.children.length).toBe(5);
+      expect(bottomContainer?.querySelector('#detail-info')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#parent-child')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#nicoad')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#feedback')).not.toBeNull();
+      expect(bottomContainer?.querySelector('#sticky-ads')).not.toBeNull();
+
+      // タイトルとタグのみがbottomAreaに残る
+      expect(bottomArea.querySelector('#title-area')).not.toBeNull();
+      expect(bottomArea.querySelector('#tags-area')).not.toBeNull();
+    });
+
+    it('should use exact CSS class patterns from the actual site', () => {
+      // 実際のサイトで確認したクラスパターンを使用
+      document.body.innerHTML = `
+        <section class="d_grid grid-template-areas_[_\"player_sidebar\"_\"bottom_sidebar\"_\"bottom_sidebar\"_] grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)] grid-tr_[min-content_min-content_1fr] jc_center rg_x1_5 cg_x3 pb_x10">
+          <div class="grid-area_[player]"></div>
+          <div class="grid-area_[bottom] d_flex flex-d_column gap_x2">
+            <div class="d_flex jc_space-between ai_flex-start gap_var(--watch-video-information-gap) w_100%">
+              <h1>タイトル</h1>
+            </div>
+            <div class="pos_relative d_flex flex-wrap_wrap gap_base"></div>
+            <section class="bg-c_layer.surfaceHighEm bdr_m ov_hidden w_100% d_flex flex-d_column">
+              <h1>動画の詳細情報</h1>
+            </section>
+          </div>
+          <div class="grid-area_[sidebar]"></div>
+        </section>
+      `;
+
+      apply(true);
+
+      const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
+      expect(playerArea?.getAttribute(LAYOUT_MARKER)).toBe('classic');
+    });
+
+    it('should correctly restore layout with series section to default', () => {
+      // クラシックレイアウトが適用された状態からデフォルトに戻す
+      document.body.innerHTML = `
+        <section class="parent-grid d_grid">
+          <div class="grid-area_[player]" ${LAYOUT_MARKER}="classic" style="align-self: start"></div>
+          <div class="grid-area_[bottom]" ${LAYOUT_MARKER}="classic" style="align-self: start">
+            <div id="title-area">タイトル</div>
+            <div id="tags-area">タグ</div>
+          </div>
+          <div class="grid-area_[sidebar]" style="max-height: calc(100vh - 80px); overflow-y: auto; position: sticky; top: 80px;"></div>
+          <div id="${BOTTOM_CONTAINER_ID}" data-bn-bottom-container="true" style="grid-area: bn-bottom;">
+            <section id="detail-info"><h1>動画の詳細情報</h1></section>
+            <div id="series-section" class="bdr_m ov_hidden">シリーズ</div>
+            <section id="parent-child"><h1>この動画の親作品・子作品</h1></section>
+            <section id="nicoad"><h1>ニコニ広告</h1></section>
+            <div id="feedback">フィードバック</div>
+            <div id="sticky-ads">広告</div>
+          </div>
+        </section>
+      `;
+
+      apply(false);
+
+      const bottomArea = document.querySelector('.grid-area_\\[bottom\\]') as HTMLElement;
+      const bottomContainer = document.getElementById(BOTTOM_CONTAINER_ID);
+
+      // 下部コンテナは削除されている
+      expect(bottomContainer).toBeNull();
+
+      // 全ての要素がbottomAreaに戻されている
+      expect(bottomArea.querySelector('#title-area')).not.toBeNull();
+      expect(bottomArea.querySelector('#tags-area')).not.toBeNull();
+      expect(bottomArea.querySelector('#detail-info')).not.toBeNull();
+      expect(bottomArea.querySelector('#series-section')).not.toBeNull();
+      expect(bottomArea.querySelector('#parent-child')).not.toBeNull();
+      expect(bottomArea.querySelector('#nicoad')).not.toBeNull();
+      expect(bottomArea.querySelector('#feedback')).not.toBeNull();
+      expect(bottomArea.querySelector('#sticky-ads')).not.toBeNull();
+    });
+  });
+
   describe('module state isolation', () => {
     it('should not have lingering fullscreen listeners from previous tests', async () => {
       document.body.innerHTML = `
