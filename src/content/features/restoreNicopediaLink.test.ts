@@ -199,13 +199,19 @@ describe('restoreNicopediaLink', () => {
   describe('realistic DOM structure', () => {
     /**
      * 実際のニコニコ動画のタグリンク構造を再現
+     * 実際のクラス: d_inline-flex h_x4 px_x2 ai_center bdr_full bg-c_action.base
+     *              flex-wrap_nowrap fw_bold ov_hidden [&:...]
+     * 実際の属性: data-scope, data-part, dir, id, data-state, data-anchor-*
      */
     function createRealisticTagHTML(tagName: string, encoded?: string): string {
       const encodedName = encoded || encodeURIComponent(tagName);
+      const uniqueId = `hover-card:test-${Math.random().toString(36).slice(2)}:trigger`;
       return `
         <a data-scope="hover-card" data-part="trigger"
+           dir="ltr" id="${uniqueId}" data-state="closed"
            data-anchor="1" data-anchor-page="watch" data-anchor-area="tags"
-           class="d_inline-flex h_x4 px_x2 ai_center bdr_full bg-c_action.base"
+           data-anchor-href="/tag/${encodedName}"
+           class="d_inline-flex h_x4 px_x2 ai_center bdr_full bg-c_action.base flex-wrap_nowrap fw_bold ov_hidden"
            href="/tag/${encodedName}">
           <span>${tagName}</span>
         </a>
