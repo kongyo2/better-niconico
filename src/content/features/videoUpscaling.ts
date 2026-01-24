@@ -626,7 +626,7 @@ function stopVideoObserver(): void {
  * 設定を適用する（冪等性を保証）
  * @param enabled - true: アップスケーリング有効, false: アップスケーリング無効
  */
-export function apply(enabled: boolean): void {
+export async function apply(enabled: boolean): Promise<void> {
   currentEnabled = enabled;
 
   if (enabled) {
@@ -634,7 +634,7 @@ export function apply(enabled: boolean): void {
     setupFullscreenListener();
     // 動画要素監視をセットアップ（初回のみ）
     setupVideoObserver();
-    void enableUpscaling();
+    await enableUpscaling();
   } else {
     disableUpscaling();
     // 動画監視を停止
