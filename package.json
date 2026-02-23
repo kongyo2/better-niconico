@@ -20,7 +20,7 @@
     "test:cov": "vitest run --coverage"
   },
   "keywords": [
-    "chrome-extension",
+    "firefox-extension",
     "nicovideo",
     "niconico",
     "typescript",
@@ -29,7 +29,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.2.1",
     "@resvg/resvg-js": "^2.6.2",
     "@types/chrome": "^0.0.268",
     "@vitest/coverage-v8": "^4.0.17",
@@ -39,6 +38,7 @@
     "prettier": "3.6.2",
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
+    "vite-plugin-web-extension": "^4.5.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.17"
   },
