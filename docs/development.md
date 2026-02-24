@@ -1,148 +1,178 @@
-# Development Guide
+# 開発ガイド
 
-This document covers the development workflow, commands, debugging, and testing.
+このドキュメントは、`better-niconico` の実装・スクリプト定義に合わせた開発手順をまとめたものです。
 
-## Development Commands
+## 1. 前提環境
 
-### Primary Commands
+- Node.js: `24+` 推奨（ローカル運用方針）
+- パッケージマネージャ: `npm`
+- 対象ブラウザ: Chrome (Manifest V3)
+
+補足:
+- CI（`.github/workflows/ci.yml`）は現在 Node `20` で実行されています。
+
+## 2. セットアップ
 
 ```bash
-# Development mode with hot reload (uses nodemon to watch files)
-npm run dev
-
-# Production build (includes icon generation)
-npm run build
-
-# Development build with watch mode
-npm run preview
+npm install
 ```
 
-### Utility Commands
+## 3. 主要コマンド
+
+### 3.1 開発・ビルド
 
 ```bash
-# Generate PNG icons from SVG source
-npm run generate-icons
+# 変更監視しつつ開発ビルド（nodemon経由）
+npm run dev
 
-# Clean build artifacts
+# 本番ビルド（アイコン生成 + vite build + post-build）
+npm run build
+
+# 開発モードでwatchビルド
+npm run preview
+
+# dist削除
 npm run clean
 ```
 
-### Linting Commands
+### 3.2 品質チェック
 
 ```bash
-# Lint without output (silent mode)
+# lint（silent）
 npm run lint
 
-# Lint with strict mode (fail on warnings)
+# lint（warningも失敗扱い）
 npm run lint:strict
 
-# Auto-fix linting issues
+# lint自動修正
 npm run lint:fix
+
+# prettier整形
+npm run format
+
+# prettier検査
+npm run format:check
 ```
 
-## Loading the Extension in Chrome
+### 3.3 テスト
 
-1. Run `npm run build` (production) or `npm run dev` (development)
-2. Navigate to `chrome://extensions/`
-3. Enable "Developer mode"
-4. Click "Load unpacked" and select the `dist/` directory
-5. For development mode (`npm run dev`):
-   - Changes auto-rebuild via nodemon
-   - Click the reload icon in `chrome://extensions/` to see updates
-   - Or use Chrome Extension Reloader for automatic refresh
+```bash
+# 単体テスト一括
+npm run test
 
-## Typical Development Workflow
+# 監視モード
+npm run test:watch
 
-1. **Start development server**: `npm run dev`
-2. **Make changes** to feature files in `src/content/features/`
-3. **Reload extension** in Chrome (click reload icon in chrome://extensions/)
-4. **Test on target pages**:
-   - Watch page: https://www.nicovideo.jp/watch/sm9
-   - Video top page: https://www.nicovideo.jp/video_top
-5. **Check console** for `[Better Niconico]` logs and errors
-6. **Lint before commit**: `npm run lint:strict`
+# カバレッジ付き
+npm run test:cov
+```
 
-## Debugging and Testing
+## 4. Chrome での読み込み
 
-### Chrome DevTools Console
+1. `npm run build`（または `npm run dev`）
+2. `chrome://extensions/` を開く
+3. デベロッパーモードを ON
+4. 「パッケージ化されていない拡張機能を読み込む」から `dist/` を選択
+5. コード更新後は拡張機能をリロードし、対象ページも再読み込みする
 
-- All features log their actions with `[Better Niconico]` prefix
-- Check console for warnings about validation failures
-- Monitor for excessive log spam (indicates non-idempotent code)
+## 5. 推奨開発フロー（t_wada式TDD）
 
-### Testing Strategy
+本リポジトリでは以下の順序を基本とします。
 
-1. Test with extension on a fresh page load
-2. Test toggling settings on/off multiple times
-3. Test on pages with dynamic content loading (scroll, click tabs)
-4. Check that unrelated sections remain unaffected
+1. 探索
+2. Red
+3. Green
+4. Refactor
 
-### CRITICAL: MCP Chrome Testing Limitations
+### 5.1 探索
 
-- Claude Code has access to a **plain Chrome browser via MCP tools** for automated testing
-- This Chrome instance is a **dedicated, isolated environment** that **CANNOT load Chrome extensions**
-- Extension injection into MCP Chrome is **technically impossible** - it's designed for automated testing only
-- This MCP Chrome is **completely separate** from the user's regular Chrome browser
-- The user **cannot inject extensions** into the MCP Chrome either
-- **Only the user** can test the extension in their own Chrome browser (which Claude cannot access)
-- Therefore, Claude **cannot verify** actual extension behavior, UI changes, or feature functionality
-- Claude can only:
-  - Read/analyze code and CSS
-  - Make code changes based on user descriptions
-  - Build the extension (`npm run build`)
-  - View static snapshots/screenshots provided by the user
-- **User must manually test** all changes in their own Chrome browser after:
-  1. Running `npm run build` (or using `npm run dev` for auto-rebuild)
-  2. Reloading the extension in `chrome://extensions/`
-  3. Refreshing the target nicovideo.jp page
+- 対象機能の既存実装を確認（`src/content/features/*`）
+- セレクタ依存がある場合は実ページDOMも確認
+- 既存テスト（`*.test.ts`）から期待挙動・境界条件を確認
 
-### Common Issues
+### 5.2 Red
 
-- **Extension doesn't load**: Check `dist/manifest.json` exists and is valid
-- **Changes don't appear**: Hard reload the page (Ctrl+Shift+R) after reloading extension
-- **Features conflict**: Check console for excessive logging (indicates idempotency issues)
-- **Build fails**: Run `npm run clean` then `npm run build`
-- **Massive whitespace in classic layout**: Check grid template rows should be `auto auto auto`, not `min-content`. Sidebar should have `max-height` constraint. Tailwind grid classes (`grid-tr_`, `grid-template-areas_`, `grid-tc_`) should be removed before applying inline styles.
-- **Fullscreen black screen with classic layout**:
-  - Verify `isFullscreenMode()` uses Fullscreen API (`document.fullscreenElement`) as primary detection
-  - Ensure `setupFullscreenListener()` is properly registering `fullscreenchange` event listener
-  - Check that `fullscreenchange` handler calls `restoreDefaultLayout()` when entering fullscreen
-  - Confirm console logs show: `[Better Niconico] 全画面表示に入りました。レイアウトをデフォルトに戻します。`
-  - After exiting fullscreen, verify logs show: `[Better Niconico] 全画面表示から抜けました。` and `[Better Niconico] クラシックレイアウトを再適用します。`
-  - The event-driven approach is essential - MutationObserver alone cannot reliably catch fullscreen transitions
-  - Reference: [niconico-classic](https://github.com/Bymnet1845/niconico-classic/blob/develop/style/video-common.css#L142-L156)
+- 先に失敗するテストを書く
+- 既存仕様を壊さないよう、失敗範囲を明確化する
 
-## Build System Details
+### 5.3 Green
 
-See [architecture.md](architecture.md#build-system-details) for detailed build system information.
+- 最小変更でテストを通す
+- まずは正しさ優先（最適化は後）
 
-## Icon Generation
+### 5.4 Refactor
 
-The extension icon (`public/icons/icon.svg`) follows this design:
-- **Black gradient background** - Matches Niconico brand colors (#1a1a1a to #000000)
-- **White smile face** - Niconico's iconic symbol
-- **Red plus badge** - Indicates "Better" (improvement) over standard Niconico
+- 冗長コード整理
+- 命名・責務分離の改善
+- 冪等性（`apply()` の多重呼び出し耐性）を維持
 
-Generate all sizes with `npm run generate-icons` after editing SVG.
+## 6. テスト構成
 
-## General Development Notes
+- フレームワーク: Vitest
+- DOM環境: `happy-dom`
+- セットアップ: `src/test/setup.ts`
+  - `chrome.storage`, `chrome.runtime`, `chrome.tabs` をモック
+- 対象: `src/**/*.test.ts`
 
-### MutationObserver
+重点確認ポイント:
 
-Essential for Niconico because content loads dynamically. Observer watches for new DOM nodes and re-applies settings. However, MutationObserver alone is **insufficient for all DOM changes** - some transitions (like fullscreen mode) require dedicated event listeners.
+1. `apply(true)` / `apply(false)` の往復
+2. 同じ `apply(true)` を複数回呼んだ時の冪等性
+3. 動的DOM変化（MutationObserver前提）
+4. 関連機能との共存（例: PiP × Upscaling）
 
-### Event Listeners vs MutationObserver
+## 7. デバッグの実務ポイント
 
-- Use **event listeners** for: User-triggered state changes (fullscreen, resize, focus), browser API events, media events
-- Use **MutationObserver** for: Dynamic content loading, DOM element additions/removals by the site
-- Example: Fullscreen transitions require `fullscreenchange` event listener; MutationObserver cannot reliably detect the transition moment
+- コンソール接頭辞: `[Better Niconico]` / `[BetterNiconico]`
+- 設定不整合時は `loadSettings()` が `Result` エラーを返す
+- Content Script は設定取得失敗時に `DEFAULT_SETTINGS` で継続する
+- watchページでは `fullscreenchange` 由来の分岐が多いため、全画面遷移を必ず確認する
 
-### Chrome Storage
+## 8. 実ページ確認チェックリスト
 
-- Settings sync across devices where user is logged into Chrome
-- Always check `chrome.runtime.lastError` in Chrome API callbacks
+### 8.1 watchページ (`/watch/*`)
 
-### TypeScript
+1. `.grid-area_\[player\]` が存在する
+2. `button[aria-label="全画面表示する"]` が存在する
+3. コメントキャンバス `[data-name="comment"] canvas` を取得できる
+4. サポーターキャンバス `[data-name="supporter-content"] canvas` を取得できる
 
-- Avoid `any`, use `unknown` or proper types
-- Import types from `vite` when needed (e.g., `NormalizedOutputOptions`)
+### 8.2 video_top (`/video_top`)
+
+1. `.simplebar-content` が存在する
+2. `a[href*="/ranking?ref=video_sidemenu"]` が存在する
+3. `.TagPushVideosContainer` / `.OnTvAnimeVideosContainer` を検出できる
+4. 非表示機能が `.BaseLayout-block` 単位で効くことを確認する
+
+## 9. よくある不具合と対処
+
+### 9.1 ボタンが増殖する
+
+- 原因: 既存マーカー未確認で要素を重複追加
+- 対処: `data-bn-*` マーカー確認を追加
+
+### 9.2 全画面で表示が崩れる
+
+- 原因: 全画面中にグリッドやCanvas状態を強制変更
+- 対処: `fullscreenchange` を基準に一時停止/再開を実装
+
+### 9.3 動画ダウンロードが失敗する
+
+- 原因候補:
+  - master URL 抽出失敗
+  - セグメント取得失敗
+  - FFmpeg初期化失敗
+- 対処:
+  - `console` の `FFMPEG_*` / `FETCH_ERROR` を確認
+  - `post-build` で `ffmpeg-core2.js` が manifest に挿入されているか確認
+
+### 9.4 変更が反映されない
+
+- 拡張機能のリロード漏れ
+- ページ側キャッシュ（ハードリロードで確認）
+
+## 10. 参照ドキュメント
+
+- [architecture.md](./architecture.md)
+- [features.md](./features.md)
+- [implementation.md](./implementation.md)

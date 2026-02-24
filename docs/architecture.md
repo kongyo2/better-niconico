@@ -1,303 +1,169 @@
-# Architecture
-
-This document describes the technical architecture of the Better Niconico extension.
-
-## Extension Components
-
-**Target Site**: `*://*.nicovideo.jp/*` (all Niconico domains)
-
-The extension has three main components:
-
-### 1. Background Service Worker
-
-**File**: `src/background/index.ts`
-
-- Runs in the background
-- Handles extension lifecycle events (install/update)
-- Monitors tab updates for nicovideo.jp pages
-- Cannot access DOM
-
-### 2. Content Script
-
-**File**: `src/content/index.ts`
-
-- Injected into nicovideo.jp pages
-- Has access to page DOM
-- Applies UI modifications based on user settings
-- Uses **MutationObserver** to handle dynamically loaded content
-- Listens for settings changes via `chrome.storage.onChanged`
-
-### 3. Popup UI
-
-**Directory**: `src/popup/`
-
-- Popup displayed when clicking extension icon
-- Modern dark theme design with categorized tabs
-- Tab navigation: 動画 (Video) | UI/表示 (UI/Display) | システム (System)
-- Card-based layout with feature icons and descriptions
-- Reads and writes settings to `chrome.storage.sync`
-- Settings changes are immediately reflected on active pages
-
-#### Design System
-
-- **Color Scheme**: Dark theme with CSS custom properties
-  - Background: `#0f0f0f` (primary), `#1a1a1a` (secondary), `#252525` (tertiary)
-  - Accent: `#0099e5` (Niconico blue) with gradient support
-  - Text: White/gray hierarchy for readability
-- **Layout**: Fixed dimensions (360x520px) with scrollable content area
-- **Components**:
-  - Header: Logo icon, title, version badge, tab navigation
-  - Settings container: Scrollable card grid per category
-  - Footer: Status message, GitHub link
-- **Interactions**: Smooth transitions, hover effects, toggle switches
-
-#### Implementation Pattern
-
-The popup uses a category-based architecture (`src/popup/popup.ts`):
-
-```typescript
-type SettingCategory = 'video' | 'ui' | 'system';
-
-interface SettingConfig {
-  id: keyof BetterNiconicoSettings;
-  label: string;
-  description: string;
-  category: SettingCategory;
-  icon?: string; // SVG path data
-}
-
-const SETTINGS_CONFIG: SettingConfig[] = [
-  {
-    id: 'enableVideoUpscaling',
-    label: '動画アップスケーリング',
-    description: 'Anime4K-WebGPUを使用して動画を高画質化します',
-    category: 'video',
-    icon: 'M15 10l4.553...' // SVG path
-  },
-  // ...
-];
-```
-
-- **Dynamic rendering**: Settings cards generated from `SETTINGS_CONFIG` array
-- **Tab filtering**: Shows only settings matching active tab category
-- **Icon support**: Heroicons-style SVG icons (20x20px stroke)
-- **Instant persistence**: Changes auto-save to `chrome.storage.sync`
-
-## Settings System Architecture
-
-Settings are centrally defined in `src/types/settings.ts` using **Zod schema validation**:
-
-```typescript
-import { z } from 'zod';
-
-// Zod schema defines both validation rules and default values
-export const BetterNiconicoSettingsSchema = z.object({
-  hidePremiumSection: z.boolean().default(true),
-  hideOnAirAnime: z.boolean().default(true),
-  restoreClassicVideoLayout: z.boolean().default(false),
-  enableVideoUpscaling: z.boolean().default(false),
-  showNicoRankButton: z.boolean().default(true),
-  squareProfileIcons: z.boolean().default(false),
-  hideSupporterButton: z.boolean().default(false),
-  hideNicoAds: z.boolean().default(false),
-  enablePictureInPicture: z.boolean().default(false),
-  enableVideoScreenshot: z.boolean().default(false),
-  enableAllegationAssist: z.boolean().default(false),
-  // Default templates defined before schema, used as Zod default
-  allegationTemplates: z.array(AllegationTemplateSchema).default(DEFAULT_ALLEGATION_TEMPLATES),
-});
-
-// TypeScript type is inferred from schema (single source of truth)
-export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema>;
-
-export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
-  // ... defaults match schema
-};
-
-export const STORAGE_KEY = 'betterNiconicoSettings';
-```
-
-### Settings Validation
-
-**Runtime validation with Zod ensures data integrity:**
-
-- All settings loaded from `chrome.storage.sync` are validated against the schema
-- Invalid or corrupt data triggers fallback to `DEFAULT_SETTINGS`
-- Missing fields are automatically filled with schema defaults
-- Type safety is guaranteed at both compile-time (TypeScript) and runtime (Zod)
-
-**Benefits:**
-
-1. **Backward compatibility**: Old settings without new fields automatically get defaults
-2. **Forward compatibility**: Extra fields are ignored during parsing
-3. **Type safety**: TypeScript type is always in sync with Zod schema
-4. **Error reporting**: Detailed validation errors help debug storage issues
-
-### Settings Flow
-
-1. Settings are stored in `chrome.storage.sync` (synced across devices)
-2. Popup UI reads/writes settings when user toggles features
-3. Content script listens to `chrome.storage.onChanged` and re-applies all features
-4. Settings changes trigger immediate re-application via `applySettings()`
-5. Each feature module's `apply()` function is called with the current setting value
-
-## Content Script Pattern & Modular Architecture
-
-The content script (`src/content/index.ts`) uses this pattern:
-
-1. **Initialization**: Load settings and apply on page load
-2. **MutationObserver**: Re-apply settings when DOM changes (Niconico loads content dynamically)
-3. **Storage Listener**: Re-apply settings when user changes them in popup
-4. **Modular Features**: Each feature is a separate module in `src/content/features/`
-
-### Feature Module Pattern
-
-Each feature module in `src/content/features/*.ts` exports an `apply(enabled: boolean)` function:
-
-```typescript
-/**
- * Each feature module exports an apply(enabled: boolean) function
- * This keeps features isolated and maintainable
- */
-export function apply(enabled: boolean): void {
-  if (enabled) {
-    // Enable the feature
-  } else {
-    // Disable the feature
-  }
-}
-```
-
-### Main Content Script Integration
-
-The main content script imports and applies all features:
-
-```typescript
-import * as hidePremiumSection from './features/hidePremiumSection';
-import * as hideOnAirAnime from './features/hideOnAirAnime';
-import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
-import * as videoUpscaling from './features/videoUpscaling';
-import * as addNicoRankButton from './features/addNicoRankButton';
-import * as squareProfileIcons from './features/squareProfileIcons';
-import * as hideSupporterButton from './features/hideSupporterButton';
-import * as hideNicoAds from './features/hideNicoAds';
-import * as pictureInPicture from './features/pictureInPicture';
-import * as allegationAssist from './features/allegationAssist';
-
-async function applySettings(): Promise<void> {
-  const settings = await loadSettings();
-  hidePremiumSection.apply(settings.hidePremiumSection);
-  hideOnAirAnime.apply(settings.hideOnAirAnime);
-  restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
-  videoUpscaling.apply(settings.enableVideoUpscaling);
-  addNicoRankButton.apply(settings.showNicoRankButton);
-  squareProfileIcons.apply(settings.squareProfileIcons);
-  hideSupporterButton.apply(settings.hideSupporterButton);
-  hideNicoAds.apply(settings.hideNicoAds);
-  pictureInPicture.apply(settings.enablePictureInPicture);
-  void allegationAssist.apply(settings.enableAllegationAssist);
-}
-```
-
-## TypeScript Configuration
-
-- **Strict mode** enabled with `noUnusedLocals` and `noUnusedParameters`
-- **Path aliases** configured:
-  - `@/*` → `src/*`
-  - `@content/*` → `src/content/*`
-  - `@background/*` → `src/background/*`
-- `vite-tsconfig-paths` plugin enables path alias resolution in Vite
-
-## Manifest Configuration
-
-- `manifest.json`: Base configuration
-- `manifest.dev.json`: Development overrides (adds "[DEV]" suffix to name)
-- `vite.config.ts` merges manifests and injects version from `package.json`
-- **Permissions**: storage (for settings persistence)
-- **Host permissions**: `*://*.nicovideo.jp/*` (Niconico only)
-- **Popup**: `src/popup/popup.html` (shown when clicking extension icon)
-
-### CRITICAL: CSS Handling in Manifest
-
-**DO NOT** manually add `"css"` entries to `manifest.json` in the `content_scripts` section. The @crxjs/vite-plugin automatically handles CSS injection when `injectCss: true` is set in `vite.config.ts` (line 26).
-
-If you manually add CSS paths like `"css": ["src/content/index.css"]`, the build will fail because the source path doesn't exist in the `dist/` folder. The plugin automatically compiles CSS to `assets/*.css` and injects the correct path during build.
-
-**Correct pattern** (in manifest.json):
-
-```json
-"content_scripts": [{
-  "matches": ["*://*.nicovideo.jp/*"],
-  "js": ["src/content/index.ts"],
-  "run_at": "document_end"
-  // No "css" array needed - handled by @crxjs/vite-plugin
-}]
-```
-
-## Build System Details
-
-- **Development**: Nodemon watches `src/`, config files, and manifests, rebuilds on changes
-  - When files change, nodemon runs `vite build --mode development`
-  - Extension auto-reloads in Chrome (requires initial manual load)
-  - Check `nodemon.json` for watched files and ignored patterns
-- **Production**: Minified, no sourcemaps, custom plugin removes dev-only icons
-- **Icon Generation**: `generate-icons.js` converts `public/icons/icon.svg` to PNG sizes (16, 32, 48, 128) using @resvg/resvg-js
-- **Custom Plugin** (`custom-vite-plugins.ts`): Strips dev icons from production builds
-
-### Icon Design Guidelines
-
-The extension icon (`public/icons/icon.svg`) follows this design:
-- **Black gradient background** - Matches Niconico brand colors (#1a1a1a to #000000)
-- **White smile face** - Niconico's iconic symbol
-- **Red plus badge** - Indicates "Better" (improvement) over standard Niconico
-- Generate all sizes with `npm run generate-icons` after editing SVG
-
-## Linting with Oxlint
-
-Fast Rust-based linter configured in `.oxlintrc.json`:
-- TypeScript plugin with `no-explicit-any` as error (use proper types or `unknown`)
-- Floating promises detection (errors on unhandled promises)
-- Console logging allowed (common in extensions)
-- Side-effect imports allowed (CSS imports)
-
-## Dependencies
-
-### Runtime Dependencies
-
-| Package          | Version | Purpose                                         | Size Impact |
-| ---------------- | ------- | ----------------------------------------------- | ----------- |
-| `anime4k-webgpu` | ^1.0.0  | AI-powered video upscaling                      | ~3.4MB      |
-| `neverthrow`     | ^8.2.0  | Type-safe Result types for error handling       | ~10KB       |
-| `zod`            | ^4.1.12 | TypeScript-first schema validation for settings | ~2KB        |
-
-**Total runtime bundle size**: ~3.42MB
-
-**Notes**:
-
-- `anime4k-webgpu` contributes most to bundle size (contains WebGPU shaders and CNN/GAN neural network weights)
-- Video upscaling is opt-in (default OFF) to minimize impact on users who don't need it
-- Zod adds minimal overhead (2KB) for comprehensive validation
-
-### Development Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `@crxjs/vite-plugin` | Chrome extension development and HMR |
-| `vite` | Build tool and dev server |
-| `typescript` | Type checking and compilation |
-| `oxlint` | Fast Rust-based linting |
-| `nodemon` | Auto-rebuild on file changes |
-| `@resvg/resvg-js` | SVG to PNG icon generation |
-| `vite-tsconfig-paths` | TypeScript path alias resolution |
-
-### Bundle Size Considerations
-
-The content script bundle includes:
-
-1. **Anime4K-WebGPU** (~100KB)
-   - Required for video upscaling feature
-   - Only active when user enables upscaling
-
-**Mitigation strategies**:
-- Feature is default OFF (user opt-in)
-- Future: Consider code splitting with dynamic imports
+# アーキテクチャ
+
+このドキュメントは、`better-niconico` の現行実装（`main`ブランチ相当）を基準に、構成・責務・データフローを整理したものです。
+
+## 1. 全体像
+
+`better-niconico` は Manifest V3 の Chrome 拡張です。主な実行単位は以下の3つです。
+
+1. Background Service Worker（`src/background/index.ts`）
+2. Content Script（`src/content/index.ts`）
+3. Popup UI（`src/popup/*`）
+
+対象ドメインは `*://*.nicovideo.jp/*` です。
+
+## 2. 実行コンポーネント
+
+### 2.1 Background Service Worker
+
+- ファイル: `src/background/index.ts`
+- 主な責務:
+  - インストール時の初期メタデータ保存（`initialized`, `installedAt`）
+  - 更新時ログ出力
+  - `nicovideo.jp` タブ更新ログ出力
+  - `CHECK_NICOPEDIA_ARTICLE` メッセージ処理
+- `CHECK_NICOPEDIA_ARTICLE` 処理:
+  - `https://dic.nicovideo.jp/a/{tag}` を `fetch`
+  - HTML に `まだ記事が書かれていません` を含むかで存在判定
+  - Content Script 側へ `{ exists: boolean }` を返却
+
+### 2.2 Content Script
+
+- ファイル: `src/content/index.ts`
+- 注入タイミング: `document_end`
+- 主な責務:
+  - 設定ロードと全機能の適用
+  - `chrome.storage.onChanged` 監視による再適用
+  - DOM追加時の再適用（`MutationObserver`）
+  - Popup とのメッセージ連携（`getSettings`, `updateSettings`）
+- 適用順序（現行実装）:
+  1. `hidePremiumSection`
+  2. `hideOnAirAnime`
+  3. `restoreClassicVideoLayout`
+  4. `videoUpscaling`
+  5. `addNicoRankButton`
+  6. `squareProfileIcons`
+  7. `hideSupporterButton`
+  8. `hideNicoAds`
+  9. `pictureInPicture`
+  10. `videoScreenshot`
+  11. `allegationAssist`
+  12. `cinematicLighting`
+  13. `videoDownload`
+  14. `restoreNicopediaLink`
+
+### 2.3 Popup UI
+
+- ファイル: `src/popup/popup.html`, `src/popup/popup.ts`, `src/popup/popup.css`, `src/popup/popup-editor.css`
+- 主な責務:
+  - 設定の表示・切り替え
+  - カテゴリタブ切り替え（`video` / `ui` / `system`）
+  - 設定保存（`saveSettings`）
+  - 通報テンプレート CRUD UI（`enableAllegationAssist` の action）
+- 画面仕様:
+  - 固定サイズ: `360 x 520`
+  - ステータスメッセージ表示
+  - バージョン表示（`chrome.runtime.getManifest().version`）
+
+## 3. 設定モデル
+
+- 定義: `src/types/settings.ts`
+- 保存キー: `betterNiconicoSettings`
+- バリデーション: Zod (`BetterNiconicoSettingsSchema`)
+- 実行時型安全化: `loadSettings` / `saveSettings` で `safeParse`
+
+### 3.1 設定項目（現行）
+
+| キー | 型 | デフォルト |
+|---|---|---|
+| `hidePremiumSection` | boolean | `true` |
+| `hideOnAirAnime` | boolean | `true` |
+| `restoreClassicVideoLayout` | boolean | `false` |
+| `enableVideoUpscaling` | boolean | `false` |
+| `showNicoRankButton` | boolean | `true` |
+| `squareProfileIcons` | boolean | `false` |
+| `hideSupporterButton` | boolean | `false` |
+| `hideNicoAds` | boolean | `false` |
+| `enablePictureInPicture` | boolean | `false` |
+| `enableVideoScreenshot` | boolean | `false` |
+| `enableAllegationAssist` | boolean | `false` |
+| `allegationTemplates` | `AllegationTemplate[]` | 4件の既定テンプレート |
+| `enableCinematicLighting` | boolean | `false` |
+| `enableVideoDownload` | boolean | `false` |
+| `restoreNicopediaLink` | boolean | `false` |
+
+### 3.2 設定ロード失敗時の扱い
+
+`src/content/index.ts` では `loadSettings()` がエラーの場合でも処理を継続し、`DEFAULT_SETTINGS` を適用します。これにより、保存データ破損時でも機能停止を避けます。
+
+## 4. エラーハンドリング方針
+
+- 共通エラー型: `src/types/errors.ts`
+- 非同期エラー表現:
+  - `neverthrow` の `Result` / `ResultAsync` を利用
+- 主な適用箇所:
+  - Storage API ラッパ（`src/utils/storage.ts`）
+  - PiP / スクリーンショット（動画要素検出の失敗を型で扱う）
+  - 動画ダウンロード（ダウンロード・FFmpeg処理失敗を型で扱う）
+
+## 5. マニフェストとビルド
+
+### 5.1 Manifest（`manifest.json`）
+
+- `manifest_version`: 3
+- `permissions`: `storage`
+- `host_permissions`: `*://*.nicovideo.jp/*`
+- `background.service_worker`: `src/background/index.ts`
+- `content_scripts.js`: `src/content/index.ts`
+- `action.default_popup`: `src/popup/popup.html`
+- `web_accessible_resources`:
+  - `assets/*`
+  - `icons/*`
+  - `ffmpeg/*`
+
+### 5.2 Vite 構成（`vite.config.ts`）
+
+- `@crxjs/vite-plugin` を利用
+- `manifest.json` + `manifest.dev.json` をマージ
+- `version` は `package.json` から注入
+- `contentScripts.injectCss: true` のため、manifest に CSS を手書きしない
+
+### 5.3 Post Build（`scripts/post-build.mjs`）
+
+ビルド後に `dist/manifest.json` を書き換え、`ffmpeg/ffmpeg-core2.js` を content scripts へ先頭挿入します。動画ダウンロード機能の FFmpeg 実行に必須です。
+
+## 6. テスト基盤
+
+- テストフレームワーク: Vitest
+- DOM環境: `happy-dom`
+- セットアップ: `src/test/setup.ts`
+  - `chrome.*` API のモックを定義
+- テスト配置: `src/**/*.test.ts`
+- カバレッジ対象: `src/**/*.ts`（`types`, `test`, `*.test.ts` など除外）
+
+## 7. 実ページ整合確認（2026-02-24 実施）
+
+実装で依存する主要セレクタについて、実ページで存在確認を行いました。
+
+### `/watch/sm9`
+
+- 確認できたセレクタ:
+  - `.grid-area_\[player\]`
+  - `.grid-area_\[bottom\]`
+  - `.grid-area_\[sidebar\]`
+  - `[data-name="comment"] canvas`
+  - `[data-name="supporter-content"] canvas`
+  - `#nv_watch_VideoAdContainer`
+  - `button[aria-label="全画面表示する"]`
+
+### `/video_top`
+
+- 確認できたセレクタ:
+  - `.simplebar-content`
+  - `.TagPushVideosContainer`
+  - `.OnTvAnimeVideosContainer`
+  - `.BaseLayout-block`
+  - `a.css-1i9dz1a[href*="/ranking?ref=video_sidemenu"]`
+  - 折りたたみ時コンテナ `.css-1i3qj3a`
+
+上記は、`hidePremiumSection` / `hideOnAirAnime` / `addNicoRankButton` / watchページ系機能の現行実装と一致しています。

@@ -1,211 +1,58 @@
-# Implementation Guide
+# 実装ガイド
 
-This document covers how to add new features, implementation patterns, and best practices.
+このドキュメントは、`better-niconico` に新規機能や改修を入れるときの実装手順を、現行コード構成に合わせて整理したものです。
 
-## Adding New Features
+## 1. 目的
 
-### Step-by-Step Guide
+1. 実装の責務分離を保つ
+2. `apply(enabled)` の冪等性を保つ
+3. 設定スキーマとUIを常に同期させる
+4. 探索 → Red → Green → Refactor の順で安全に変更する
 
-#### 1. Create Feature Module
+## 2. 新機能追加フロー（標準）
 
-Create `src/content/features/myNewFeature.ts`:
+## 2.1 探索
 
-```typescript
+1. 似た機能を `src/content/features/` から1つ選ぶ
+2. 対象ページのDOMを確認する
+3. 既存テスト（`*.test.ts`）の粒度を確認する
+
+最初に決めること:
+
+- 対象ページ（`/watch/*`, `/video_top`, `garage.nicovideo.jp/allegation/*` など）
+- 実装方式（CSSクラス付与型 / DOM挿入型 / 非同期処理型）
+- 有効時・無効時の明確な対
+
+## 2.2 Red
+
+1. まず失敗するテストを書く
+2. 成功条件は1つに絞る
+3. 既存機能の回帰を同時に確認する
+
+## 2.3 Green
+
+1. 最小コードでテストを通す
+2. 例外時も機能全体を止めない
+3. 追加要素には `data-bn-*` マーカーを付ける
+
+## 2.4 Refactor
+
+1. 命名を揃える
+2. 分岐を整理する
+3. 不要なログや重複処理を削る
+4. 冪等性テストを再実行する
+
+## 3. 追加時に必ず更新する箇所
+
+## 3.1 機能モジュールを作成
+
+- 追加先: `src/content/features/<featureName>.ts`
+- 公開関数: `export function apply(enabled: boolean): void`（または `Promise<void>`）
+
+基本形:
+
+```ts
 export function apply(enabled: boolean): void {
-  if (enabled) {
-    // Enable feature logic
-    const element = document.querySelector('.TargetSelector');
-    if (element) {
-      (element as HTMLElement).style.display = 'none';
-    }
-  } else {
-    // Disable feature logic
-    const element = document.querySelector('.TargetSelector');
-    if (element) {
-      (element as HTMLElement).style.display = '';
-    }
-  }
-}
-```
-
-#### 2. Add Setting to Zod Schema
-
-Update `src/types/settings.ts` by adding to the **Zod schema** (TypeScript type updates automatically):
-
-```typescript
-export const BetterNiconicoSettingsSchema = z.object({
-  hidePremiumSection: z.boolean().default(true),
-  myNewFeature: z.boolean().default(false), // Add here with .default()
-  // ... other settings
-});
-
-// TypeScript type is inferred from schema - no manual update needed
-export type BetterNiconicoSettings = z.infer<typeof BetterNiconicoSettingsSchema>;
-
-// Update DEFAULT_SETTINGS to match schema defaults
-export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
-  hidePremiumSection: true,
-  myNewFeature: false, // Add default (must match schema)
-  // ... other settings
-};
-```
-
-**IMPORTANT:**
-
-- **Always add `.default()` to new schema fields** for backward compatibility
-- TypeScript type is automatically inferred via `z.infer` - don't manually update the interface
-- Runtime validation ensures data integrity when loading settings
-
-#### 3. Import and Apply in Content Script
-
-Update `src/content/index.ts`:
-
-```typescript
-import * as myNewFeature from './features/myNewFeature';
-
-async function applySettings(): Promise<void> {
-  const settings = await loadSettings();
-  // ... existing features
-  myNewFeature.apply(settings.myNewFeature);
-}
-```
-
-#### 4. Add to Settings Configuration
-
-Update `src/popup/popup.ts` by adding to the `SETTINGS_CONFIG` array:
-
-```typescript
-const SETTINGS_CONFIG: SettingConfig[] = [
-  // ... existing settings
-  {
-    id: 'myNewFeature',
-    label: '新機能のラベル',
-    description: '機能の説明文',
-    category: 'video', // or 'ui' or 'system'
-    icon: 'M4 6h16M4 12h16M4 18h16' // Optional: Heroicons SVG path (20x20 stroke)
-  },
-];
-```
-
-**Category Guidelines**:
-- `'video'`: Video playback, enhancement, capture features (e.g., upscaling, PiP, screenshot)
-- `'ui'`: Visual appearance, layout, hiding elements (e.g., hide ads, square icons, classic layout)
-- `'system'`: Extension behavior, experimental features
-
-**Icon Guidelines** (optional):
-- Use [Heroicons](https://heroicons.com/) outline style (20x20px, stroke-based)
-- Provide only the SVG `<path>` `d` attribute value
-- If omitted, setting card displays without icon
-
-That's all! The popup UI automatically:
-- Renders the setting card in the appropriate tab
-- Handles toggle state persistence
-- Shows status messages on save
-
-## Popup UI Development
-
-### Architecture Overview
-
-The popup UI uses a modern, category-based architecture with the following structure:
-
-- **Tab System**: Three categories (Video, UI, System) organize settings logically
-- **Dynamic Rendering**: Settings cards generated from configuration array
-- **Icon Support**: Optional Heroicons-style SVG icons for visual clarity
-- **Dark Theme**: CSS custom properties for consistent, modern appearance
-
-### Settings Configuration Structure
-
-All popup settings are defined in a single `SETTINGS_CONFIG` array:
-
-```typescript
-interface SettingConfig {
-  id: keyof BetterNiconicoSettings;     // Must match settings.ts interface
-  label: string;                         // Display name (Japanese)
-  description: string;                   // Brief explanation (Japanese)
-  category: 'video' | 'ui' | 'system';  // Tab category
-  icon?: string;                         // Optional: SVG path d attribute
-}
-```
-
-### Category Organization
-
-**Video Tab** (`category: 'video'`):
-- Video enhancement features (upscaling, quality)
-- Video interaction features (PiP, screenshot)
-- Video layout modifications
-
-**UI/表示 Tab** (`category: 'ui'`):
-- Visual hiding/showing elements
-- Layout and appearance changes
-- Profile and UI customizations
-
-**System Tab** (`category: 'system'`):
-- Extension behavior settings
-- Advanced/experimental features
-- Developer options (future use)
-
-### Adding Icons to Settings
-
-Icons use the [Heroicons](https://heroicons.com/) outline icon set (20x20px, 2px stroke):
-
-1. Browse [Heroicons](https://heroicons.com/) and find an appropriate icon
-2. Copy the SVG `<path d="...">` attribute value
-3. Add to the `icon` property in `SETTINGS_CONFIG`
-
-**Example**:
-```typescript
-{
-  id: 'enableVideoUpscaling',
-  label: '動画アップスケーリング',
-  description: 'Anime4K-WebGPUを使用して動画を高画質化します',
-  category: 'video',
-  icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'
-}
-```
-
-**Icon not required**: Settings without icons display cleanly without the icon area.
-
-### Customizing Popup Appearance
-
-The popup's visual design is controlled by CSS custom properties in `src/popup/popup.css`:
-
-```css
-:root {
-  /* Colors */
-  --bg-primary: #0f0f0f;
-  --bg-secondary: #1a1a1a;
-  --accent-color: #0099e5;
-  /* ... more variables */
-}
-```
-
-**To customize**:
-- Modify CSS variables in `:root` selector
-- Adjust spacing with `--spacing-*` variables
-- Change border radius with `--radius-*` variables
-- Update transition speeds with `--transition-*` variables
-
-### Page-Specific Features
-
-Some features only apply to specific pages. Use the following pattern:
-
-```typescript
-/**
- * Check if the current page is a watch page
- */
-function isWatchPage(): boolean {
-  return window.location.pathname.startsWith('/watch/');
-}
-
-export function apply(enabled: boolean): void {
-  // For features that only work on specific pages
-  if (!isWatchPage()) {
-    // Clean up if feature was previously enabled
-    disableFeature();
-    return;
-  }
-
-  // Apply feature only on target pages
   if (enabled) {
     enableFeature();
   } else {
@@ -214,286 +61,167 @@ export function apply(enabled: boolean): void {
 }
 ```
 
-## Implementation Patterns
+## 3.2 設定スキーマへ追加
 
-### CSS-Based vs DOM Manipulation Features
+更新先: `src/types/settings.ts`
 
-There are two main approaches for implementing features:
+1. `BetterNiconicoSettingsSchema` に項目追加（`z.boolean().default(...)`）
+2. `DEFAULT_SETTINGS` へ同キーを追加
+3. 必要なら関連型（テンプレート型など）を追加
 
-#### 1. CSS-Based Features (Preferred for styling changes)
+注意:
 
-Use body class toggle (e.g., `body.bn-square-icons`) and define CSS rules that apply when class is present.
+- `.default()` は必須（後方互換のため）
+- `z.infer` で型を引いているため、型定義は手書きしない
 
-**Advantages**:
-- Highest performance (no DOM iteration)
-- Automatically applies to dynamically loaded content
-- Simple to implement and maintain
-- Easy to debug (inspect body classes in DevTools)
+## 3.3 Content Scriptへ接続
 
-**When to use**: Visual styling changes, icon shapes, colors, layouts that can be controlled via CSS
+更新先: `src/content/index.ts`
 
-**Examples**: `squareProfileIcons`, `hideSupporterButton` features
+1. 機能モジュールを `import` する
+2. `applySettings()` で `settings.<yourKey>` を渡して呼ぶ
 
-**Feature module**:
-```typescript
-export function apply(enabled: boolean): void {
-  if (enabled) {
-    document.body.classList.add('bn-feature-class');
-  } else {
-    document.body.classList.remove('bn-feature-class');
-  }
-}
+## 3.4 Popupへ表示
+
+更新先: `src/popup/popup.ts`
+
+- `SETTINGS_CONFIG` に1エントリ追加
+  - `id`: 設定キー（`keyof BetterNiconicoSettings`）
+  - `label`: 表示名
+  - `description`: 説明
+  - `category`: `video | ui | system`
+  - `icon`（任意）
+
+通報テンプレート管理のような追加UIが必要な場合:
+
+- `actionButton` を使って専用ビューを開く
+
+## 3.5 ドキュメントを更新
+
+- `docs/features.md`
+- `docs/architecture.md`（必要に応じて）
+
+## 4. 実装パターン
+
+## 4.1 CSSクラス付与型（推奨）
+
+例: `squareProfileIcons`, `hideSupporterButton`
+
+- JSは `body` へのクラス付与/削除だけにする
+- 実際の見た目は `src/content/index.css` に寄せる
+
+利点:
+
+1. 高速
+2. DOM再描画時も追従しやすい
+3. `apply()` の冪等性を保ちやすい
+
+## 4.2 セクション非表示型
+
+例: `hidePremiumSection`, `hideOnAirAnime`, `hideNicoAds`
+
+- 直接要素ではなく、セクション単位（`closest(...)`）で扱う
+- 本文テキスト検証で誤爆を防ぐ
+- `data-bn-*` マーカーで再処理抑制
+
+## 4.3 DOM挿入型
+
+例: `addNicoRankButton`, `restoreNicopediaLink`
+
+- 挿入済み判定を先に行う
+- 追加要素に専用ID/マーカーを付ける
+- 無効化時は「追加したものだけ」削除する
+
+## 4.4 非同期処理型
+
+例: `videoUpscaling`, `pictureInPicture`, `videoDownload`, `allegationAssist`
+
+- `Result` / `ResultAsync` で失敗を局所化
+- 前提要素がないときは例外でなく早期return
+- 再試行/再初期化が必要なら状態変数を明示管理
+
+## 5. watchページ実装の注意点
+
+## 5.1 セレクタエスケープ
+
+`querySelector` で Tailwind由来の `[]` を含むクラスを使う場合はエスケープする。
+
+```ts
+document.querySelector('.grid-area_\\[player\\]');
 ```
 
-**CSS file**:
-```css
-body.bn-feature-class .target-selector {
-  /* Your styles here */
-}
-```
+## 5.2 全画面イベント
 
-#### 2. DOM Manipulation Features (For structural changes)
+- `MutationObserver` だけでは不十分
+- `fullscreenchange` を基準に有効/無効を切り替える
+- 全画面中に無理にDOM構造を変えない
 
-Query and modify DOM elements directly.
+## 5.3 動画要素の選別
 
-**Advantages**:
-- Can hide/show/move elements
-- Can inject new HTML elements
-- Full control over DOM structure
+watchページには複数 `video` が存在するため、以下を除外する。
 
-**Disadvantages**:
-- More complex (requires idempotency checks)
-- May need MutationObserver awareness
-- Higher performance cost if iterating many elements
+1. 広告コンテナ内動画（`#nv_watch_VideoAdContainer`）
+2. `src` が空の要素
+3. `videoWidth` / `videoHeight` が0の要素
 
-**When to use**: Hiding sections, adding buttons, restructuring layout, injecting new elements
+## 6. MutationObserver とイベントの使い分け
 
-**Examples**: `hidePremiumSection`, `addNicoRankButton`, `restoreClassicVideoLayout`
+Observerを使うケース:
 
-#### Hybrid Approach
+1. ノード追加/削除の検知
+2. SPAで差し替えられる領域の再適用
 
-Some features use both approaches. For example, `restoreClassicVideoLayout` manipulates DOM to move elements but also modifies CSS Grid properties for layout.
+イベントを使うケース:
 
-## DOM Manipulation Best Practices
+1. `fullscreenchange`
+2. `popstate`
+3. UIボタンクリックやユーザー操作
 
-### Hiding Sections Properly
+原則:
 
-**IMPORTANT**: When hiding sections on video_top page:
+- 状態遷移はイベント
+- DOM断片の再出現はObserver
 
-- **DO NOT** hide elements directly (e.g., `.TagPushVideosContainer`, `.OnTvAnimeVideosContainer`)
-- **ALWAYS** use `.closest('.BaseLayout-block')` to hide the parent container
-- **WHY**: Each section has a `.Separator` element (border) inside the parent `.BaseLayout-block`. If you hide only the content container, the separator remains visible, creating a visual bug.
+## 7. 冪等性チェックリスト
 
-```typescript
-// ❌ WRONG - leaves separator visible
-const container = document.querySelector('.TagPushVideosContainer');
-container.style.display = 'none';
+`apply(true)` 側:
 
-// ✅ CORRECT - hides entire block including separator
-const container = document.querySelector('.TagPushVideosContainer');
-const parentBlock = container.closest('.BaseLayout-block');
-parentBlock.style.display = 'none';
-```
+1. 既に有効状態なら何もしない
+2. 既存マーカー/既存要素を先に確認
+3. 二重 `addEventListener` を避ける
 
-### Watch Page Layout Structure
+`apply(false)` 側:
 
-- `.grid-area_[player]` - Video player container
-- `.grid-area_[bottom]` - Video information (title, tags, uploader info)
-- `.grid-area_[sidebar]` - Right sidebar (recommendations, comments)
-- **Parent uses CSS Grid with `grid-template-areas`**
+1. 追加要素の確実な削除
+2. スタイル・クラスの復元
+3. Observer / ループ / Timer の停止
 
-### CRITICAL - CSS Grid Architecture
+## 8. テスト追加ガイド
 
-Niconico's watch page uses CSS Grid's `grid-template-areas` property to control layout. This means:
+## 8.1 最低限のテストセット
 
-- **DOM element order does not affect visual layout** - Grid items are positioned by their `grid-area` CSS property
-- To change layout, modify the parent's `grid-template-areas` property, not DOM order
-- Default: `'"player sidebar" "bottom sidebar" "bottom sidebar"'`
-- Classic layout (implemented by extension): `'"bottom sidebar" "player sidebar" "bn-bottom sidebar"'`
-  - `bottom`: Video info (title, tags, uploader) - moved to top
-  - `player`: Video player - middle
-  - `bn-bottom`: Parent/child works and ads - kept at bottom (custom grid area created by extension)
+1. `enabled=true` で期待動作
+2. `enabled=false` で復元
+3. 同じ `apply(true)` を連続実行しても重複しない
+4. ページ条件不一致で何もしない
 
-### CSS Class Escaping
+## 8.2 追加すると良いテスト
 
-When selecting classes with special characters (like brackets), escape them in `querySelector`:
+1. 実DOMに近い構造でのテスト
+2. 競合しやすい機能との併用
+3. 失敗系（要素未存在・fetch失敗・API失敗）
 
-```typescript
-// Class: .grid-area_[player]
-document.querySelector('.grid-area_\\[player\\]')
-```
+## 9. 変更前セルフチェック
 
-### Advanced DOM Manipulation for Layout Changes
+1. `npm run lint:strict`
+2. `npm run test`
+3. 必要なら `npm run build`
+4. docs更新（仕様の同期）
 
-For complex layout modifications that require moving elements between containers:
+## 10. 実装上の禁止事項
 
-#### 1. Create Managed Containers
-
-Create containers with unique IDs and marker attributes:
-
-```typescript
-const CONTAINER_ID = 'bn-custom-container';
-const CONTAINER_MARKER = 'data-bn-custom';
-
-let container = document.getElementById(CONTAINER_ID);
-if (!container) {
-  container = document.createElement('div');
-  container.id = CONTAINER_ID;
-  container.setAttribute(CONTAINER_MARKER, 'true');
-  container.style.gridArea = 'custom-area'; // Set grid area
-  parent.appendChild(container);
-}
-```
-
-#### 2. Move Elements Safely
-
-Check parent before moving:
-
-```typescript
-const section = getSectionElement();
-if (section && section.parentElement === sourceContainer) {
-  targetContainer.appendChild(section); // Moves the element
-}
-```
-
-#### 3. Clean Up Properly
-
-When feature is disabled:
-
-```typescript
-const container = document.getElementById(CONTAINER_ID);
-if (container) {
-  // Move all children back to original location
-  while (container.firstChild) {
-    originalContainer.appendChild(container.firstChild);
-  }
-  // Remove the created container
-  container.remove();
-}
-```
-
-#### 4. Update Grid Layout
-
-Accommodate new areas:
-
-```typescript
-parent.style.gridTemplateAreas = '"area1 sidebar" "area2 sidebar" "custom-area sidebar"';
-parent.style.gridTemplateRows = 'auto auto auto';
-parent.style.alignItems = 'start';
-
-// If sidebar spans multiple rows, constrain its height
-const sidebar = document.querySelector('.grid-area_\\[sidebar\\]');
-if (sidebar) {
-  sidebar.style.maxHeight = 'calc(100vh - 80px)';
-  sidebar.style.overflowY = 'auto';
-  sidebar.style.position = 'sticky';
-  sidebar.style.top = '80px';
-}
-```
-
-**Why this matters**: Complex features like `restoreClassicVideoLayout` need to move some elements but not others. Creating intermediate containers with CSS Grid areas allows precise control over layout without affecting DOM structure outside the feature's scope.
-
-### CSS Grid Row Sizing Pitfall
-
-When working with CSS Grid layouts, especially with items that span multiple rows:
-
-#### The Problem
-
-If a grid item (like `.grid-area_[sidebar]`) spans all rows and has large content (~5460px), it will dominate the row sizing calculation. Using `grid-template-rows: min-content min-content min-content` causes each row to expand to accommodate the spanning item, creating massive rows (1600-1900px each) even when individual items are much smaller.
-
-#### The Solution
-
-- Use `grid-template-rows: auto auto auto` instead of `min-content`
-- Constrain the spanning item with `max-height` and `overflow-y: auto`
-- Use `position: sticky` for better UX (keeps sidebar visible while scrolling)
-- Set `align-items: start` on the grid container and `align-self: start` on grid items
-
-#### Why This Works
-
-By constraining the sidebar's height and using `auto` for row sizing, the grid rows size based on their direct children rather than the spanning sidebar. This prevents unwanted whitespace above/below content.
-
-#### Tailwind Class Conflicts
-
-Niconico uses Tailwind's arbitrary value classes like `grid-tr_[min-content_min-content_1fr]`. These can conflict with inline styles. When modifying grid properties, remove the conflicting Tailwind classes first, then apply inline styles.
-
-## Idempotency and MutationObserver Considerations
-
-### Why Idempotency Matters
-
-**CRITICAL**: Since the content script uses MutationObserver to handle dynamic content, all feature `apply()` functions **MUST be idempotent** (safe to call multiple times).
-
-- MutationObserver triggers on every DOM change
-- Without idempotency checks, features may cause infinite loops or performance issues
-- Features may undo each other if they modify the same elements
-
-### Best Practices
-
-#### 1. Check Current State Before Modifying DOM
-
-```typescript
-// ✅ GOOD - Check if already in desired state
-if (element.style.display === 'none') {
-  return; // Already hidden, do nothing
-}
-element.style.display = 'none';
-```
-
-#### 2. Use Marker Attributes to Track Processing
-
-```typescript
-const MARKER = 'data-bn-processed';
-
-if (element.getAttribute(MARKER) === 'true') {
-  return; // Already processed
-}
-element.style.display = 'none';
-element.setAttribute(MARKER, 'true');
-```
-
-#### 3. Verify CSS State Before Modifying Styles
-
-```typescript
-// For layout features that modify CSS
-const parent = element.parentElement as HTMLElement;
-
-if (parent.style.gridTemplateAreas === desiredLayout) {
-  return; // Already in desired layout
-}
-parent.style.gridTemplateAreas = desiredLayout;
-```
-
-#### 4. Add Content Validation for Safety
-
-```typescript
-// When hiding elements, verify it's the intended target
-const textContent = element.textContent || '';
-if (!textContent.includes('ExpectedKeyword')) {
-  // Silently skip - content may not be loaded yet due to MutationObserver timing
-  // Avoid console.warn() here as it creates noise during dynamic content loading
-  return; // Don't hide unintended elements
-}
-```
-
-## Feature Testing Checklist
-
-When implementing a new feature, test the following:
-
-1. ✅ Feature works on a fresh page load
-2. ✅ Toggling setting on/off works correctly multiple times
-3. ✅ Feature handles dynamic content loading (scroll, click tabs)
-4. ✅ Unrelated sections remain unaffected
-5. ✅ No console errors or excessive logging
-6. ✅ Feature is idempotent (calling `apply()` multiple times is safe)
-7. ✅ Feature cleans up properly when disabled
-8. ✅ Feature respects page-specific constraints (if applicable)
-
-## Common Pitfalls
-
-- **Not handling page-specific features**: Always check if feature should apply to current page
-- **Forgetting idempotency**: Always add checks to prevent redundant operations
-- **Direct element hiding**: Use `.closest()` to hide parent containers, not direct elements
-- **Ignoring CSS Grid layout**: Niconico uses `grid-template-areas`, so DOM order doesn't affect visual layout
-- **Not cleaning up**: Always remove created elements/classes when feature is disabled
-- **Excessive logging**: Avoid logging in idempotent checks (creates noise)
-- **Using `min-content` for grid rows**: Use `auto` and constrain spanning items with `max-height`
-- **Not handling fullscreen mode**: Use Fullscreen API and event listeners for reliable detection
+1. `settings.ts` のキー追加漏れ
+2. Popup設定とスキーマの不一致
+3. マーカーなしDOM挿入
+4. 無効化時クリーンアップ未実装
+5. 全画面遷移を考慮しない watch機能追加

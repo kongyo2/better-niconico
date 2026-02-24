@@ -45,6 +45,7 @@ coverage/
 # Temporary folders
 tmp/
 temp/
+.npm-cache/
 
 # Generated PNG icons (optional - comment out if you want to commit them)
 # public/icons/*.png
