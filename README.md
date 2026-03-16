@@ -6,7 +6,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kongyo2/better-niconico)
 
-[![CI](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml/badge.svg)](https://github.com/kongyo2/better-niconico/actions/workflows/ci.yml) 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/C0C51W3HQH)
 
 ユーザーが各機能を個別にオン/オフできるカスタマイズ可能な拡張機能として設計されています。
 
