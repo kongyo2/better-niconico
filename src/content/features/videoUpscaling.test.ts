@@ -19,7 +19,7 @@ const UPSCALING_INACTIVE = 'inactive';
 const CANVAS_ID = 'bn-upscaled-canvas';
 
 // モック関数をhoistedで事前に作成
-const { mockRender, MockModeA } = vi.hoisted(() => {
+const { mockRender, MockModeA, MockModeAA } = vi.hoisted(() => {
   const mockRender = vi.fn().mockResolvedValue(undefined);
 
   class MockModeA {
@@ -28,13 +28,20 @@ const { mockRender, MockModeA } = vi.hoisted(() => {
     constructor(public options: unknown) {}
   }
 
-  return { mockRender, MockModeA };
+  class MockModeAA {
+    pass = vi.fn();
+    getOutputTexture = vi.fn().mockReturnValue({});
+    constructor(public options: unknown) {}
+  }
+
+  return { mockRender, MockModeA, MockModeAA };
 });
 
 // anime4k-webgpuのモック
 vi.mock('anime4k-webgpu', () => ({
   render: mockRender,
   ModeA: MockModeA,
+  ModeAA: MockModeAA,
 }));
 
 // window.locationのモック
@@ -70,14 +77,16 @@ function setupWebGPUMock(supported: boolean = true) {
 }
 
 // 実際のニコニコ動画のDOM構造を再現
-function createNiconicoPlayerDOM(options: {
-  hasMainVideo?: boolean;
-  hasAdVideos?: boolean;
-  mainVideoSrc?: string;
-  mainVideoWidth?: number;
-  mainVideoHeight?: number;
-  isFullscreen?: boolean;
-} = {}) {
+function createNiconicoPlayerDOM(
+  options: {
+    hasMainVideo?: boolean;
+    hasAdVideos?: boolean;
+    mainVideoSrc?: string;
+    mainVideoWidth?: number;
+    mainVideoHeight?: number;
+    isFullscreen?: boolean;
+  } = {},
+) {
   const {
     hasMainVideo = true,
     hasAdVideos = true,
@@ -93,12 +102,16 @@ function createNiconicoPlayerDOM(options: {
     <div class="grid-area_[player]">
       <div class="pos_relative ${fullscreenClass}">
         ${hasMainVideo ? '<video id="main-video"></video>' : ''}
-        ${hasAdVideos ? `
+        ${
+          hasAdVideos
+            ? `
           <div id="nv_watch_VideoAdContainer">
             <video id="ad-video-1"></video>
             <video id="ad-video-2"></video>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
     </div>
   `;
@@ -124,10 +137,28 @@ function createNiconicoPlayerDOM(options: {
   }
 }
 
+function mockElementRect(element: Element, width: number, height: number) {
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    value: vi.fn(() => ({
+      x: 0,
+      y: 0,
+      width,
+      height,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: height,
+      toJSON: () => ({}),
+    })),
+    configurable: true,
+  });
+}
+
 describe('videoUpscaling', () => {
   let apply: typeof import('./videoUpscaling').apply;
   let render: typeof import('anime4k-webgpu').render;
   let ModeA: typeof import('anime4k-webgpu').ModeA;
+  let ModeAA: typeof import('anime4k-webgpu').ModeAA;
 
   beforeEach(async () => {
     // DOM をリセット
@@ -136,6 +167,11 @@ describe('videoUpscaling', () => {
     // fullscreenElement をリセット
     Object.defineProperty(document, 'fullscreenElement', {
       value: null,
+      configurable: true,
+    });
+
+    Object.defineProperty(window, 'devicePixelRatio', {
+      value: 1,
       configurable: true,
     });
 
@@ -152,12 +188,16 @@ describe('videoUpscaling', () => {
     const anime4kModule = await import('anime4k-webgpu');
     render = anime4kModule.render;
     ModeA = anime4kModule.ModeA;
+    ModeAA = anime4kModule.ModeAA;
 
     // モックの呼び出し履歴をクリア（インポート後に行う）
     vi.mocked(render).mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    if (apply) {
+      await apply(false);
+    }
     vi.restoreAllMocks();
   });
 
@@ -267,13 +307,48 @@ describe('videoUpscaling', () => {
       expect(canvas?.height).toBe(720);
     });
 
-    it('動画要素が非表示になる', async () => {
+    it('表示サイズとDPRに合わせて低解像度動画を4倍までアップスケールする', async () => {
+      createNiconicoPlayerDOM({
+        mainVideoWidth: 640,
+        mainVideoHeight: 360,
+      });
+      const mainVideo = document.getElementById('main-video') as HTMLVideoElement;
+      mockElementRect(mainVideo, 960, 540);
+      Object.defineProperty(window, 'devicePixelRatio', {
+        value: 2,
+        configurable: true,
+      });
+
+      await apply(true);
+
+      const canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;
+      expect(canvas?.width).toBe(1920);
+      expect(canvas?.height).toBe(1080);
+    });
+
+    it('高解像度動画は表示サイズ以上に無駄な2倍化をしない', async () => {
+      createNiconicoPlayerDOM({
+        mainVideoWidth: 1920,
+        mainVideoHeight: 1080,
+      });
+      const mainVideo = document.getElementById('main-video') as HTMLVideoElement;
+      mockElementRect(mainVideo, 960, 540);
+
+      await apply(true);
+
+      const canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;
+      expect(canvas?.width).toBe(960);
+      expect(canvas?.height).toBe(540);
+    });
+
+    it('動画要素はレイアウトを維持したまま非表示になる', async () => {
       createNiconicoPlayerDOM();
 
       await apply(true);
 
       const mainVideo = document.getElementById('main-video') as HTMLVideoElement;
-      expect(mainVideo.style.display).toBe('none');
+      expect(mainVideo.style.display).toBe('');
+      expect(mainVideo.style.visibility).toBe('hidden');
     });
 
     it('動画要素にアクティブマーカーが設定される', async () => {
@@ -330,10 +405,11 @@ describe('videoUpscaling', () => {
       await apply(true);
 
       const mainVideo = document.getElementById('main-video') as HTMLVideoElement;
-      expect(mainVideo.style.display).toBe('none');
+      expect(mainVideo.style.visibility).toBe('hidden');
 
       apply(false);
       expect(mainVideo.style.display).toBe('');
+      expect(mainVideo.style.visibility).toBe('');
     });
 
     it('動画要素のマーカーがinactiveになる', async () => {
@@ -409,7 +485,7 @@ describe('videoUpscaling', () => {
       expect(renderCall.pipelineBuilder).toBeInstanceOf(Function);
     });
 
-    it('pipelineBuilderがModeAパイプラインを作成する', async () => {
+    it('低解像度動画では高品質のModeAAパイプラインを作成する', async () => {
       createNiconicoPlayerDOM({
         mainVideoWidth: 480,
         mainVideoHeight: 360,
@@ -425,7 +501,8 @@ describe('videoUpscaling', () => {
 
       // パイプラインが1つ返されることを確認
       expect(pipelines).toHaveLength(1);
-      // ModeAのインスタンスが作成されることを確認
+      // ModeAAのインスタンスが作成されることを確認
+      expect(pipelines[0]).toBeInstanceOf(ModeAA);
       expect(pipelines[0]).toHaveProperty('pass');
       expect(pipelines[0]).toHaveProperty('getOutputTexture');
       // オプションが正しく渡されることを確認
@@ -435,6 +512,21 @@ describe('videoUpscaling', () => {
         nativeDimensions: { width: 480, height: 360 },
         targetDimensions: { width: 960, height: 720 },
       });
+    });
+
+    it('高解像度または大きい出力では従来のModeAパイプラインを使う', async () => {
+      createNiconicoPlayerDOM({
+        mainVideoWidth: 1920,
+        mainVideoHeight: 1080,
+      });
+
+      await apply(true);
+
+      const renderCall = (render as Mock).mock.calls[0][0];
+      const pipelines = renderCall.pipelineBuilder({}, {});
+
+      expect(pipelines).toHaveLength(1);
+      expect(pipelines[0]).toBeInstanceOf(ModeA);
     });
   });
 });

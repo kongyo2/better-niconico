@@ -15,7 +15,7 @@
  * - Fullscreen mode automatically disables upscaling to prevent issues
  */
 
-import { render, ModeA } from 'anime4k-webgpu';
+import { render, ModeA, ModeAA, type Anime4KPipeline } from 'anime4k-webgpu';
 import { Result, ok, err } from 'neverthrow';
 import type { WebGPUError, VideoError } from '../../types/errors';
 import {
@@ -31,11 +31,36 @@ import {
 // 処理済みマーカー属性
 const UPSCALING_MARKER = 'data-bn-upscaling';
 const UPSCALING_ACTIVE = 'active';
+const UPSCALING_PENDING = 'pending';
 const UPSCALING_INACTIVE = 'inactive';
+const UPSCALING_TOKEN = 'data-bn-upscaling-token';
 
 // Canvas要素のID
 const CANVAS_ID = 'bn-upscaled-canvas';
 const CANVAS_MARKER = 'data-bn-canvas';
+const CANVAS_TOKEN = 'data-bn-canvas-token';
+
+type Dimensions = {
+  width: number;
+  height: number;
+};
+
+type InlineVideoStyle = {
+  display: string;
+  visibility: string;
+};
+
+const DEFAULT_FALLBACK_UPSCALE = 2;
+const LOW_RESOLUTION_HEIGHT = 480;
+const MEDIUM_RESOLUTION_HEIGHT = 720;
+const LOW_RESOLUTION_MAX_UPSCALE = 4;
+const MEDIUM_RESOLUTION_MAX_UPSCALE = 2;
+const HIGH_RESOLUTION_MAX_UPSCALE = 1;
+const MAX_DEVICE_PIXEL_RATIO = 2;
+const MAX_TARGET_PIXELS = 3840 * 2160;
+const HIGH_QUALITY_PRESET_MAX_PIXELS = 1920 * 1080;
+const RETRY_DELAY_MS = 250;
+const RESIZE_RETRY_DELAY_MS = 100;
 
 // WebGPU対応状態のキャッシュ（初回チェック後は再利用）
 let webGPUSupportCache: boolean | null = null;
@@ -50,20 +75,40 @@ let currentVideoSrc: string | null = null;
 // 現在の動画要素への参照（動画変更を検出するため）
 let currentVideoElement: HTMLVideoElement | null = null;
 
+// 現在の描画解像度（表示サイズ変更を検出するため）
+let currentTargetDimensions: Dimensions | null = null;
+
 // 現在の設定状態（全画面モード対応のため）
 let currentEnabled: boolean = false;
 
 // 動画監視用のMutationObserver
 let videoObserver: MutationObserver | null = null;
 
+// プレイヤー差し替え監視用のMutationObserver
+let pageObserver: MutationObserver | null = null;
+
+// ResizeObserver（プレイヤーサイズ変更時の再初期化用）
+let resizeObserver: ResizeObserver | null = null;
+
+let observedPlayerArea: Element | null = null;
+let resizeListenerSetup = false;
+let retryTimer: number | null = null;
+let activationToken = 0;
+
 // 全画面モードイベントリスナーのセットアップ済みフラグ
 let fullscreenListenerSetup: boolean = false;
+
+const hiddenVideoStyles = new WeakMap<HTMLVideoElement, InlineVideoStyle>();
 
 /**
  * 動画視聴ページかどうかを判定
  */
 function isWatchPage(): boolean {
   return window.location.pathname.startsWith('/watch/');
+}
+
+function getPlayerArea(): Element | null {
+  return document.querySelector('.grid-area_\\[player\\]');
 }
 
 /**
@@ -77,7 +122,7 @@ function isFullscreenMode(): boolean {
 
   // フォールバック: DOMベースの検出
   // 全画面モード時、プレイヤーエリアに100dvw x 100dvhの要素が存在する
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  const playerArea = getPlayerArea();
   if (playerArea) {
     const fullscreenElement = playerArea.querySelector('.w_\\[100dvw\\].h_\\[100dvh\\]');
     if (fullscreenElement) {
@@ -145,6 +190,27 @@ function isValidContentVideo(video: HTMLVideoElement): boolean {
   return video.src !== '' && video.videoWidth > 0 && video.videoHeight > 0 && !isAdVideo(video);
 }
 
+function getVideoScore(video: HTMLVideoElement): number {
+  const rect = video.getBoundingClientRect();
+  const visibleArea = rect.width * rect.height;
+  let score = video.readyState * 10;
+
+  if (video.getAttribute('data-name') === 'video-content') {
+    score += 1000;
+  }
+
+  if (!video.paused) {
+    score += 50;
+  }
+
+  if (visibleArea > 0) {
+    score += 25 + Math.min(visibleArea / 10000, 50);
+  }
+
+  score += Math.min((video.videoWidth * video.videoHeight) / 100000, 50);
+  return score;
+}
+
 /**
  * メインコンテンツの動画要素を取得
  * - 複数の video 要素から、実際のコンテンツ動画を特定
@@ -154,29 +220,104 @@ function isValidContentVideo(video: HTMLVideoElement): boolean {
  */
 function getVideoElement(): HTMLVideoElement | null {
   // プレイヤーエリア内のすべてのvideo要素を取得
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  const playerArea = getPlayerArea();
   if (!playerArea) {
     return null;
   }
 
   const videos = Array.from(playerArea.querySelectorAll('video')) as HTMLVideoElement[];
+  const candidates = videos.filter((video) => isValidContentVideo(video));
 
-  // 有効なコンテンツ動画を探す（広告とプレースホルダーを除外）
-  // より確実に特定するため、readyStateもチェック
-  let bestVideo: HTMLVideoElement | null = null;
-  let bestReadyState = -1;
-
-  for (const video of videos) {
-    if (isValidContentVideo(video)) {
-      // readyStateが高い動画を優先（よりロード済みの動画）
-      if (video.readyState > bestReadyState) {
-        bestVideo = video;
-        bestReadyState = video.readyState;
-      }
-    }
+  if (candidates.length === 0) {
+    return null;
   }
 
-  return bestVideo;
+  candidates.sort((a, b) => getVideoScore(b) - getVideoScore(a));
+  return candidates[0];
+}
+
+function getMaxUpscaleFactor(video: HTMLVideoElement): number {
+  if (video.videoHeight <= LOW_RESOLUTION_HEIGHT) {
+    return LOW_RESOLUTION_MAX_UPSCALE;
+  }
+
+  if (video.videoHeight <= MEDIUM_RESOLUTION_HEIGHT) {
+    return MEDIUM_RESOLUTION_MAX_UPSCALE;
+  }
+
+  return HIGH_RESOLUTION_MAX_UPSCALE;
+}
+
+function getDisplayDimensions(video: HTMLVideoElement): Dimensions {
+  const rect = video.getBoundingClientRect();
+  const computedStyle = window.getComputedStyle(video);
+  const computedWidth = Number.parseFloat(computedStyle.width);
+  const computedHeight = Number.parseFloat(computedStyle.height);
+  const fallbackScale = Math.min(DEFAULT_FALLBACK_UPSCALE, getMaxUpscaleFactor(video));
+
+  return {
+    width:
+      rect.width ||
+      video.clientWidth ||
+      (Number.isFinite(computedWidth) ? computedWidth : 0) ||
+      video.videoWidth * fallbackScale,
+    height:
+      rect.height ||
+      video.clientHeight ||
+      (Number.isFinite(computedHeight) ? computedHeight : 0) ||
+      video.videoHeight * fallbackScale,
+  };
+}
+
+function getDevicePixelRatio(): number {
+  const ratio = window.devicePixelRatio || 1;
+  return Math.min(Math.max(ratio, 1), MAX_DEVICE_PIXEL_RATIO);
+}
+
+function clampTargetPixels(dimensions: Dimensions): Dimensions {
+  const pixelCount = dimensions.width * dimensions.height;
+  if (pixelCount <= MAX_TARGET_PIXELS) {
+    return dimensions;
+  }
+
+  const scale = Math.sqrt(MAX_TARGET_PIXELS / pixelCount);
+  return {
+    width: Math.max(1, Math.floor(dimensions.width * scale)),
+    height: Math.max(1, Math.floor(dimensions.height * scale)),
+  };
+}
+
+function getTargetDimensions(video: HTMLVideoElement): Dimensions {
+  const displayDimensions = getDisplayDimensions(video);
+  const devicePixelRatio = getDevicePixelRatio();
+  const displayScale = Math.max(
+    (displayDimensions.width * devicePixelRatio) / video.videoWidth,
+    (displayDimensions.height * devicePixelRatio) / video.videoHeight,
+  );
+  const targetScale = Math.min(displayScale, getMaxUpscaleFactor(video));
+
+  return clampTargetPixels({
+    width: Math.max(1, Math.ceil(video.videoWidth * targetScale)),
+    height: Math.max(1, Math.ceil(video.videoHeight * targetScale)),
+  });
+}
+
+function dimensionsEqual(left: Dimensions | null, right: Dimensions | null): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.width === right.width && left.height === right.height;
+}
+
+function shouldUseHighQualityPreset(
+  video: HTMLVideoElement,
+  targetDimensions: Dimensions,
+): boolean {
+  return (
+    video.videoHeight <= MEDIUM_RESOLUTION_HEIGHT &&
+    targetDimensions.width * targetDimensions.height <= HIGH_QUALITY_PRESET_MAX_PIXELS
+  );
 }
 
 /**
@@ -184,9 +325,14 @@ function getVideoElement(): HTMLVideoElement | null {
  * - srcが変更された場合
  * - 動画要素自体が変更された場合
  */
-function hasVideoChanged(video: HTMLVideoElement | null): boolean {
+function hasVideoChanged(
+  video: HTMLVideoElement | null,
+  targetDimensions: Dimensions | null,
+): boolean {
   if (!video) {
-    return currentVideoElement !== null || currentVideoSrc !== null;
+    return (
+      currentVideoElement !== null || currentVideoSrc !== null || currentTargetDimensions !== null
+    );
   }
 
   // 動画要素が変更された場合
@@ -199,14 +345,56 @@ function hasVideoChanged(video: HTMLVideoElement | null): boolean {
     return true;
   }
 
+  if (!dimensionsEqual(currentTargetDimensions, targetDimensions)) {
+    return true;
+  }
+
   return false;
+}
+
+function syncCanvasStyle(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  targetDimensions: Dimensions,
+): void {
+  const computedStyle = window.getComputedStyle(video);
+
+  canvas.width = targetDimensions.width;
+  canvas.height = targetDimensions.height;
+
+  // Canvasの表示スタイルをvideoと完全に一致させる
+  // position: absolute を維持し、videoと同じ配置とサイズにする
+  canvas.style.cssText = `
+    position: ${computedStyle.position};
+    top: ${computedStyle.top};
+    left: ${computedStyle.left};
+    right: ${computedStyle.right};
+    bottom: ${computedStyle.bottom};
+    width: ${computedStyle.width};
+    height: ${computedStyle.height};
+    object-fit: ${computedStyle.objectFit};
+    transform: ${computedStyle.transform};
+    transform-origin: ${computedStyle.transformOrigin};
+    border-radius: ${computedStyle.borderRadius};
+    clip-path: ${computedStyle.clipPath};
+    display: block;
+    visibility: visible;
+    pointer-events: none;
+    z-index: ${computedStyle.zIndex};
+  `;
+
+  // videoのクラスをコピー（レイアウトを維持）
+  canvas.className = video.className;
 }
 
 /**
  * Canvas要素を作成してvideo要素と全く同じ位置・スタイルで配置
  * Result型を返す
  */
-function createUpscaledCanvas(video: HTMLVideoElement): Result<HTMLCanvasElement, VideoError> {
+function createUpscaledCanvas(
+  video: HTMLVideoElement,
+  targetDimensions: Dimensions,
+): Result<HTMLCanvasElement, VideoError> {
   // videoの親要素チェック
   if (!video.parentElement) {
     const error = videoParentMissingError('Video element has no parent');
@@ -226,7 +414,11 @@ function createUpscaledCanvas(video: HTMLVideoElement): Result<HTMLCanvasElement
   }
 
   // 既存のcanvasがあれば再利用
-  let canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;
+  let canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement | null;
+  if (canvas && canvas.parentElement !== video.parentElement) {
+    canvas.remove();
+    canvas = null;
+  }
 
   if (!canvas) {
     canvas = document.createElement('canvas');
@@ -237,37 +429,34 @@ function createUpscaledCanvas(video: HTMLVideoElement): Result<HTMLCanvasElement
     video.parentElement.insertBefore(canvas, video.nextSibling);
   }
 
-  // videoの現在の計算済みスタイルを取得
-  const computedStyle = window.getComputedStyle(video);
-
-  // アップスケーリング倍率（2倍）
-  const targetWidth = video.videoWidth * 2;
-  const targetHeight = video.videoHeight * 2;
-
-  // Canvas内部の解像度を設定
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
-
-  // Canvasの表示スタイルをvideoと完全に一致させる
-  // position: absolute を維持し、videoと同じ配置とサイズにする
-  canvas.style.cssText = `
-    position: ${computedStyle.position};
-    top: ${computedStyle.top};
-    left: ${computedStyle.left};
-    right: ${computedStyle.right};
-    bottom: ${computedStyle.bottom};
-    width: ${computedStyle.width};
-    height: ${computedStyle.height};
-    object-fit: ${computedStyle.objectFit};
-    transform: ${computedStyle.transform};
-    display: block;
-    z-index: ${computedStyle.zIndex};
-  `;
-
-  // videoのクラスをコピー（レイアウトを維持）
-  canvas.className = video.className;
+  syncCanvasStyle(canvas, video, targetDimensions);
 
   return ok(canvas);
+}
+
+function hideOriginalVideo(video: HTMLVideoElement): void {
+  if (!hiddenVideoStyles.has(video)) {
+    hiddenVideoStyles.set(video, {
+      display: video.style.display,
+      visibility: video.style.visibility,
+    });
+  }
+
+  // display:none にするとレイアウト情報が失われ、リサイズ時の再初期化が不安定になる。
+  video.style.visibility = 'hidden';
+}
+
+function restoreOriginalVideo(video: HTMLVideoElement): void {
+  const previousStyle = hiddenVideoStyles.get(video);
+  if (previousStyle) {
+    video.style.display = previousStyle.display;
+    video.style.visibility = previousStyle.visibility;
+    hiddenVideoStyles.delete(video);
+    return;
+  }
+
+  video.style.display = '';
+  video.style.visibility = '';
 }
 
 /**
@@ -337,11 +526,43 @@ async function waitForVideoReady(
   });
 }
 
+function clearScheduledEnable(): void {
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
+
+function scheduleEnableUpscaling(delay = RETRY_DELAY_MS): void {
+  if (!currentEnabled) {
+    return;
+  }
+
+  clearScheduledEnable();
+  retryTimer = window.setTimeout(() => {
+    retryTimer = null;
+    void enableUpscaling();
+  }, delay);
+}
+
+function isActivationCurrent(token: number, video: HTMLVideoElement): boolean {
+  return (
+    currentEnabled &&
+    activationToken === token &&
+    isWatchPage() &&
+    !isFullscreenMode() &&
+    video.isConnected
+  );
+}
+
 /**
  * アップスケーリングを有効化（Result型を使用）
  */
 async function enableUpscaling(): Promise<void> {
   if (!isWatchPage()) {
+    if (currentVideoElement) {
+      cleanupUpscaling(currentVideoElement);
+    }
     return;
   }
 
@@ -358,12 +579,32 @@ async function enableUpscaling(): Promise<void> {
   const video = getVideoElement();
   if (!video) {
     // 動画要素が見つからない場合は静かに終了
-    // MutationObserverで再試行される
+    // MutationObserverとタイマーで再試行される
+    scheduleEnableUpscaling(RETRY_DELAY_MS);
+    return;
+  }
+
+  const targetDimensions = getTargetDimensions(video);
+  const existingCanvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement | null;
+
+  // すでに有効化されていて、動画と描画解像度が同じ場合はスタイルだけ同期する
+  if (
+    video.getAttribute(UPSCALING_MARKER) === UPSCALING_ACTIVE &&
+    currentVideoElement === video &&
+    currentVideoSrc === video.src &&
+    dimensionsEqual(currentTargetDimensions, targetDimensions) &&
+    existingCanvas
+  ) {
+    syncCanvasStyle(existingCanvas, video, targetDimensions);
+    return;
+  }
+
+  if (video.getAttribute(UPSCALING_MARKER) === UPSCALING_PENDING) {
     return;
   }
 
   // 動画が変更された場合は、既存のアップスケーリングをクリーンアップ
-  if (hasVideoChanged(video)) {
+  if (hasVideoChanged(video, targetDimensions)) {
     console.log('[Better Niconico] 動画が変更されました。既存のアップスケーリングを停止します');
     if (currentVideoElement) {
       cleanupUpscaling(currentVideoElement);
@@ -371,6 +612,7 @@ async function enableUpscaling(): Promise<void> {
     // 状態をリセット
     currentVideoElement = null;
     currentVideoSrc = null;
+    currentTargetDimensions = null;
   }
 
   // すでに有効化されている場合は何もしない（冪等性）
@@ -379,6 +621,10 @@ async function enableUpscaling(): Promise<void> {
     return;
   }
 
+  const token = ++activationToken;
+  video.setAttribute(UPSCALING_MARKER, UPSCALING_PENDING);
+  video.setAttribute(UPSCALING_TOKEN, String(token));
+
   // WebGPU対応チェック（キャッシュされる）
   const gpuSupportedResult = await isWebGPUSupported();
   if (gpuSupportedResult.isErr()) {
@@ -386,6 +632,12 @@ async function enableUpscaling(): Promise<void> {
       '[Better Niconico] Video upscaling requires WebGPU support:',
       gpuSupportedResult.error,
     );
+    cleanupUpscaling(video, token);
+    return;
+  }
+
+  if (!isActivationCurrent(token, video)) {
+    cleanupUpscaling(video, token);
     return;
   }
 
@@ -393,21 +645,33 @@ async function enableUpscaling(): Promise<void> {
   const videoReadyResult = await waitForVideoReady(video);
   if (videoReadyResult.isErr()) {
     console.warn('[Better Niconico] Video not ready:', videoReadyResult.error);
+    cleanupUpscaling(video, token);
     return;
   }
 
+  if (!isActivationCurrent(token, video)) {
+    cleanupUpscaling(video, token);
+    return;
+  }
+
+  const freshTargetDimensions = getTargetDimensions(video);
+
   // Canvas作成
-  const canvasResult = createUpscaledCanvas(video);
+  const canvasResult = createUpscaledCanvas(video, freshTargetDimensions);
   if (canvasResult.isErr()) {
     console.error('[Better Niconico] Failed to create canvas:', canvasResult.error);
+    cleanupUpscaling(video, token);
     return;
   }
 
   const canvas = canvasResult.value;
+  canvas.setAttribute(CANVAS_TOKEN, String(token));
+  const useHighQualityPreset = shouldUseHighQualityPreset(video, freshTargetDimensions);
 
   console.log('[Better Niconico] Starting video upscaling with Anime4K-WebGPU', {
     nativeResolution: `${video.videoWidth}x${video.videoHeight}`,
     targetResolution: `${canvas.width}x${canvas.height}`,
+    preset: useHighQualityPreset ? 'ModeAA' : 'ModeA',
     videoSrc: video.src.substring(0, 50) + (video.src.length > 50 ? '...' : ''),
   });
 
@@ -420,34 +684,51 @@ async function enableUpscaling(): Promise<void> {
       video,
       canvas,
       pipelineBuilder: (device, inputTexture) => {
-        return [
-          new ModeA({
-            device,
-            inputTexture,
-            nativeDimensions: {
-              width: video.videoWidth,
-              height: video.videoHeight,
-            },
-            targetDimensions: {
-              width: canvas.width,
-              height: canvas.height,
-            },
-          }),
-        ];
+        const nativeDimensions = {
+          width: video.videoWidth,
+          height: video.videoHeight,
+        };
+        const targetDimensions = {
+          width: canvas.width,
+          height: canvas.height,
+        };
+        const preset: Anime4KPipeline = useHighQualityPreset
+          ? new ModeAA({
+              device,
+              inputTexture,
+              nativeDimensions,
+              targetDimensions,
+            })
+          : new ModeA({
+              device,
+              inputTexture,
+              nativeDimensions,
+              targetDimensions,
+            });
+
+        return [preset] as [Anime4KPipeline];
       },
     });
 
+    if (!isActivationCurrent(token, video)) {
+      cleanupUpscaling(video, token);
+      return;
+    }
+
     // video要素を非表示にしてcanvasを表示
     // render()関数が開始した後に行う
-    video.style.display = 'none';
+    hideOriginalVideo(video);
     canvas.style.display = 'block';
 
     // マーカーを設定
     video.setAttribute(UPSCALING_MARKER, UPSCALING_ACTIVE);
+    video.setAttribute(UPSCALING_TOKEN, String(token));
 
     // 現在の動画情報を記録
     currentVideoElement = video;
     currentVideoSrc = video.src;
+    currentTargetDimensions = freshTargetDimensions;
+    setupResizeObserver();
 
     console.log('[Better Niconico] Video upscaling enabled successfully');
   } catch (error) {
@@ -461,51 +742,65 @@ async function enableUpscaling(): Promise<void> {
     console.error('[Better Niconico]', renderError.message, error);
 
     // エラー時のクリーンアップ
-    cleanupUpscaling(video);
+    cleanupUpscaling(video, token);
     // 状態をリセット
     currentVideoElement = null;
     currentVideoSrc = null;
+    currentTargetDimensions = null;
   }
 }
 
 /**
  * アップスケーリングのクリーンアップ
  */
-function cleanupUpscaling(video: HTMLVideoElement | null): void {
+function cleanupUpscaling(video: HTMLVideoElement | null, token?: number): void {
+  const tokenString = token ? String(token) : null;
+
   // canvas要素を削除
   // これにより requestVideoFrameCallback のループが自動的に停止される
   const canvas = document.getElementById(CANVAS_ID);
-  if (canvas) {
+  if (canvas && (!tokenString || canvas.getAttribute(CANVAS_TOKEN) === tokenString)) {
     canvas.remove();
   }
 
   // video要素を再表示
-  if (video) {
-    video.style.display = '';
+  if (video && (!tokenString || video.getAttribute(UPSCALING_TOKEN) === tokenString)) {
+    restoreOriginalVideo(video);
     video.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE);
+    video.removeAttribute(UPSCALING_TOKEN);
   }
 
   // すべてのvideoのマーカーをクリア（念のため）
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  const playerArea = getPlayerArea();
   if (playerArea) {
     const videos = playerArea.querySelectorAll('video');
     videos.forEach((v) => {
-      (v as HTMLVideoElement).style.display = '';
-      v.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE);
+      const videoElement = v as HTMLVideoElement;
+      if (!tokenString || videoElement.getAttribute(UPSCALING_TOKEN) === tokenString) {
+        restoreOriginalVideo(videoElement);
+        videoElement.setAttribute(UPSCALING_MARKER, UPSCALING_INACTIVE);
+        videoElement.removeAttribute(UPSCALING_TOKEN);
+      }
     });
   }
 
   // 状態をリセット
-  currentVideoElement = null;
-  currentVideoSrc = null;
+  if (!token || activationToken === token) {
+    currentVideoElement = null;
+    currentVideoSrc = null;
+    currentTargetDimensions = null;
+  }
 }
 
 /**
  * アップスケーリングを無効化
  */
 function disableUpscaling(): void {
+  activationToken += 1;
+  clearScheduledEnable();
   const video = getVideoElement();
-  cleanupUpscaling(video);
+  cleanupUpscaling(video || currentVideoElement);
+  stopResizeObserver();
   console.log('[Better Niconico] Video upscaling disabled');
 }
 
@@ -519,24 +814,25 @@ function setupFullscreenListener(): void {
   }
 
   document.addEventListener('fullscreenchange', () => {
+    if (!currentEnabled) {
+      return;
+    }
+
     if (document.fullscreenElement) {
       // 全画面表示に入った - アップスケーリングを無効化
       console.log(
         '[Better Niconico] 全画面表示に入りました。動画アップスケーリングを無効化します。',
       );
+      activationToken += 1;
+      clearScheduledEnable();
       if (currentVideoElement) {
         cleanupUpscaling(currentVideoElement);
       }
     } else {
       // 全画面表示から抜けた - 設定がONなら自動的にアップスケーリングを再適用
       console.log('[Better Niconico] 全画面表示から抜けました。');
-      if (currentEnabled) {
-        // DOM更新を待つために少し遅延させる
-        setTimeout(() => {
-          console.log('[Better Niconico] 動画アップスケーリングを再適用します。');
-          void enableUpscaling();
-        }, 100);
-      }
+      // DOM更新を待つために少し遅延させる
+      scheduleEnableUpscaling(100);
     }
   });
 
@@ -549,18 +845,37 @@ function setupFullscreenListener(): void {
  * src変更や動画の切り替えを検出する
  */
 function setupVideoObserver(): void {
-  if (!isWatchPage() || videoObserver) {
+  if (!isWatchPage()) {
     return;
   }
 
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  const playerArea = getPlayerArea();
   if (!playerArea) {
     return;
   }
 
+  if (videoObserver && observedPlayerArea === playerArea) {
+    return;
+  }
+
+  stopVideoObserver();
+  observedPlayerArea = playerArea;
+
   videoObserver = new MutationObserver((mutations) => {
     // 動画要素の変更を検出
     for (const mutation of mutations) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'class' && currentEnabled) {
+        if (isFullscreenMode()) {
+          activationToken += 1;
+          clearScheduledEnable();
+          if (currentVideoElement) {
+            cleanupUpscaling(currentVideoElement);
+          }
+        } else {
+          scheduleEnableUpscaling(RESIZE_RETRY_DELAY_MS);
+        }
+      }
+
       if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
         // src属性が変更された
         const video = mutation.target as HTMLVideoElement;
@@ -570,12 +885,11 @@ function setupVideoObserver(): void {
           );
           // 既存のアップスケーリングをクリーンアップ
           if (currentVideoElement) {
+            activationToken += 1;
             cleanupUpscaling(currentVideoElement);
           }
           // 少し遅延させてから再適用（DOM更新を待つ）
-          setTimeout(() => {
-            void enableUpscaling();
-          }, 200);
+          scheduleEnableUpscaling(200);
         }
       }
 
@@ -590,9 +904,7 @@ function setupVideoObserver(): void {
                   '[Better Niconico] 新しい動画要素が検出されました。アップスケーリングを再適用します。',
                 );
                 // 少し遅延させてから再適用（DOM更新を待つ）
-                setTimeout(() => {
-                  void enableUpscaling();
-                }, 200);
+                scheduleEnableUpscaling(200);
               }
               break;
             }
@@ -606,7 +918,7 @@ function setupVideoObserver(): void {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['src'],
+    attributeFilter: ['src', 'class'],
   });
 
   console.log('[Better Niconico] 動画要素監視をセットアップしました');
@@ -620,6 +932,121 @@ function stopVideoObserver(): void {
     videoObserver.disconnect();
     videoObserver = null;
   }
+  observedPlayerArea = null;
+}
+
+function nodeContainsPlayerOrVideo(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return false;
+  }
+
+  const element = node as Element;
+  return (
+    element.matches('.grid-area_\\[player\\], video') ||
+    !!element.querySelector('.grid-area_\\[player\\], video')
+  );
+}
+
+function setupPageObserver(): void {
+  if (pageObserver || !document.body) {
+    return;
+  }
+
+  pageObserver = new MutationObserver((mutations) => {
+    if (!currentEnabled) {
+      return;
+    }
+
+    let shouldRescanPlayer =
+      observedPlayerArea !== null && !document.body.contains(observedPlayerArea);
+
+    for (const mutation of mutations) {
+      if (mutation.type !== 'childList') {
+        continue;
+      }
+
+      const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
+      if (changedNodes.some((node) => nodeContainsPlayerOrVideo(node))) {
+        shouldRescanPlayer = true;
+        break;
+      }
+    }
+
+    if (!shouldRescanPlayer) {
+      return;
+    }
+
+    setupVideoObserver();
+    setupResizeObserver();
+    scheduleEnableUpscaling(RETRY_DELAY_MS);
+  });
+
+  pageObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function stopPageObserver(): void {
+  if (pageObserver) {
+    pageObserver.disconnect();
+    pageObserver = null;
+  }
+}
+
+function handleWindowResize(): void {
+  scheduleEnableUpscaling(RESIZE_RETRY_DELAY_MS);
+}
+
+function setupResizeListener(): void {
+  if (resizeListenerSetup) {
+    return;
+  }
+
+  window.addEventListener('resize', handleWindowResize);
+  resizeListenerSetup = true;
+}
+
+function stopResizeListener(): void {
+  if (!resizeListenerSetup) {
+    return;
+  }
+
+  window.removeEventListener('resize', handleWindowResize);
+  resizeListenerSetup = false;
+}
+
+function setupResizeObserver(): void {
+  if (typeof ResizeObserver === 'undefined') {
+    return;
+  }
+
+  const playerArea = getPlayerArea();
+  if (!playerArea) {
+    return;
+  }
+
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
+
+  resizeObserver = new ResizeObserver(() => {
+    scheduleEnableUpscaling(RESIZE_RETRY_DELAY_MS);
+  });
+
+  resizeObserver.observe(playerArea);
+
+  const video = getVideoElement();
+  if (video?.parentElement) {
+    resizeObserver.observe(video.parentElement);
+  }
+}
+
+function stopResizeObserver(): void {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
 }
 
 /**
@@ -632,12 +1059,19 @@ export async function apply(enabled: boolean): Promise<void> {
   if (enabled) {
     // 全画面表示イベントリスナーをセットアップ（初回のみ）
     setupFullscreenListener();
+    // プレイヤー自体の差し替えを監視
+    setupPageObserver();
     // 動画要素監視をセットアップ（初回のみ）
     setupVideoObserver();
+    // プレイヤーサイズ変更を監視
+    setupResizeListener();
+    setupResizeObserver();
     await enableUpscaling();
   } else {
     disableUpscaling();
     // 動画監視を停止
     stopVideoObserver();
+    stopPageObserver();
+    stopResizeListener();
   }
 }
