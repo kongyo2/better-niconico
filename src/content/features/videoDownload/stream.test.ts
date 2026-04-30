@@ -30,6 +30,69 @@ describe('videoDownload/stream', () => {
       );
     });
 
+    it('should prefer the newest master URL from performance API', () => {
+      const oldEntry = {
+        name: 'https://delivery.domand.nicovideo.jp/hlsbid/old/playlists/variants/old.m3u8',
+        entryType: 'resource',
+        startTime: 100,
+        duration: 0,
+        toJSON: () => ({}),
+      };
+      const currentEntry = {
+        name: 'https://delivery.domand.nicovideo.jp/hlsbid/current/playlists/variants/current.m3u8',
+        entryType: 'resource',
+        startTime: 200,
+        duration: 0,
+        toJSON: () => ({}),
+      };
+      vi.spyOn(performance, 'getEntriesByType').mockReturnValue([oldEntry, currentEntry]);
+
+      const result = getMasterUrl();
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(
+        'https://delivery.domand.nicovideo.jp/hlsbid/current/playlists/variants/current.m3u8',
+      );
+    });
+
+    it('should ignore performance entries before minStartTime', () => {
+      const oldEntry = {
+        name: 'https://delivery.domand.nicovideo.jp/hlsbid/old/playlists/variants/old.m3u8',
+        entryType: 'resource',
+        startTime: 100,
+        duration: 0,
+        toJSON: () => ({}),
+      };
+      const currentEntry = {
+        name: 'https://delivery.domand.nicovideo.jp/hlsbid/current/playlists/variants/current.m3u8',
+        entryType: 'resource',
+        startTime: 300,
+        duration: 0,
+        toJSON: () => ({}),
+      };
+      vi.spyOn(performance, 'getEntriesByType').mockReturnValue([oldEntry, currentEntry]);
+
+      const result = getMasterUrl({ minStartTime: 200 });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(
+        'https://delivery.domand.nicovideo.jp/hlsbid/current/playlists/variants/current.m3u8',
+      );
+    });
+
+    it('should not return stale performance entries before minStartTime', () => {
+      const oldEntry = {
+        name: 'https://delivery.domand.nicovideo.jp/hlsbid/old/playlists/variants/old.m3u8',
+        entryType: 'resource',
+        startTime: 100,
+        duration: 0,
+        toJSON: () => ({}),
+      };
+      vi.spyOn(performance, 'getEntriesByType').mockReturnValue([oldEntry]);
+
+      const result = getMasterUrl({ minStartTime: 200 });
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().type).toBe('MASTER_URL_NOT_FOUND');
+    });
+
     it('should fallback to any m3u8 URL if variant check fails', () => {
       const mockEntry = {
         name: 'https://example.com/video.m3u8',
@@ -70,6 +133,19 @@ describe('videoDownload/stream', () => {
       const result = getMasterUrl();
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap()).toBe('https://delivery.domand.nicovideo.jp/video.m3u8');
+    });
+
+    it('should prefer the latest system message in DOM fallback', () => {
+      document.body.innerHTML = `
+        <div class="grid-area_[player]">
+          <div class="c_monotone L80">動画の初期化処理が完了しました (https://delivery.domand.nicovideo.jp/old.m3u8)</div>
+          <div class="c_monotone L80">動画の初期化処理が完了しました (https://delivery.domand.nicovideo.jp/current.m3u8)</div>
+        </div>
+      `;
+
+      const result = getMasterUrl();
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe('https://delivery.domand.nicovideo.jp/current.m3u8');
     });
 
     it('should find URL in player area candidates', () => {

@@ -5,6 +5,48 @@ import { saveAsFile } from './saver';
 import { muxWithPlaylist } from './muxer';
 
 let isDownloading = false;
+let resourceTimingBufferConfigured = false;
+let activeWatchPath = '';
+let activeWatchStartedAt = 0;
+
+const RESOURCE_TIMING_BUFFER_SIZE = 5000;
+const WATCH_ROUTE_CHANGE_LOOKBACK_MS = 3000;
+
+interface WatchContext {
+  videoId: string;
+  playlistStartedAfter: number;
+}
+
+function configureResourceTimingBuffer(): void {
+  if (resourceTimingBufferConfigured) {
+    return;
+  }
+
+  performance.setResourceTimingBufferSize?.(RESOURCE_TIMING_BUFFER_SIZE);
+  resourceTimingBufferConfigured = true;
+}
+
+function getVideoIdFromPath(pathname: string): string {
+  return decodeURIComponent(pathname.split('/').filter(Boolean).pop() || 'video');
+}
+
+function getWatchContext(): WatchContext | null {
+  const { pathname } = window.location;
+  if (!pathname.startsWith('/watch/')) {
+    return null;
+  }
+
+  if (pathname !== activeWatchPath) {
+    activeWatchStartedAt =
+      activeWatchPath === '' ? 0 : Math.max(0, performance.now() - WATCH_ROUTE_CHANGE_LOOKBACK_MS);
+    activeWatchPath = pathname;
+  }
+
+  return {
+    videoId: getVideoIdFromPath(pathname),
+    playlistStartedAfter: activeWatchStartedAt,
+  };
+}
 
 async function handleDownload() {
   if (isDownloading) {
@@ -16,8 +58,14 @@ async function handleDownload() {
   console.log('[BetterNiconico] Download started.');
 
   try {
+    configureResourceTimingBuffer();
+    const watchContext = getWatchContext();
+    const videoId = watchContext?.videoId ?? 'video';
+
     // 1. Get Master URL
-    const masterUrlResult = getMasterUrl();
+    const masterUrlResult = getMasterUrl({
+      minStartTime: watchContext?.playlistStartedAfter ?? 0,
+    });
     if (masterUrlResult.isErr()) {
       throw masterUrlResult.error;
     }
@@ -50,7 +98,6 @@ async function handleDownload() {
     console.log('[BetterNiconico] Audio segments:', audioResult.value.segments.length);
 
     // 4. Mux using M3U8 playlist approach (like nico_downloader)
-    const videoId = window.location.pathname.split('/').pop() || 'video';
     const muxResult = await muxWithPlaylist(
       videoResult.value.playlist,
       videoResult.value.segments,
@@ -84,8 +131,11 @@ async function handleDownload() {
 }
 
 export function apply(enabled: boolean): void {
+  configureResourceTimingBuffer();
+  const watchContext = getWatchContext();
+
   if (enabled) {
-    if (window.location.pathname.startsWith('/watch/')) {
+    if (watchContext) {
       const button = createDownloadButton(handleDownload);
       insertDownloadButton(button);
     }

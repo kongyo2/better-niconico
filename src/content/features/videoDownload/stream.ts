@@ -1,20 +1,54 @@
 import { ok, err } from 'neverthrow';
 import { StreamInfo, VideoAudioStreams, DownloadResult } from './types';
 
+interface MasterUrlOptions {
+  minStartTime?: number;
+}
+
+function isMasterPlaylistUrl(url: string): boolean {
+  return url.includes('.m3u8') && url.includes('playlists/variants/');
+}
+
+function isMediaPlaylistUrl(url: string): boolean {
+  return url.includes('playlists/media/');
+}
+
+function getRecentResourceEntries(minStartTime = 0): PerformanceEntry[] {
+  return performance
+    .getEntriesByType('resource')
+    .filter((entry) => entry.startTime >= minStartTime)
+    .sort((a, b) => b.startTime - a.startTime);
+}
+
+function extractMasterUrlFromText(text: string): string | null {
+  const parts = text.split('(');
+  if (parts.length < 2) {
+    return null;
+  }
+
+  const url = parts[1].replace(/\)$/, '').trim();
+  if (
+    url.startsWith('https://') &&
+    (url.includes('.m3u8') || url.includes('delivery.domand.nicovideo.jp'))
+  ) {
+    return url;
+  }
+
+  return null;
+}
+
 /**
  * Scans the DOM for the Master M3U8 URL from system messages.
  * Mimics nico_downloader's MasterURLGet logic but searches by text content
  * to be robust against class name changes.
  */
-export function getMasterUrl(): DownloadResult<string> {
+export function getMasterUrl(options: MasterUrlOptions = {}): DownloadResult<string> {
   // 1. Try to get from Performance API (Most reliable for modern Niconico/Domand)
-  const resources = performance.getEntriesByType('resource');
+  const resources = getRecentResourceEntries(options.minStartTime);
   // Look for master playlist.
   // Domand URL patterns often include 'playlists/variants/' for master.
   // Exclude 'playlists/media/' which are individual streams.
-  const masterEntry = resources.find(
-    (r) => r.name.includes('.m3u8') && r.name.includes('playlists/variants/'),
-  );
+  const masterEntry = resources.find((entry) => isMasterPlaylistUrl(entry.name));
 
   if (masterEntry) {
     return ok(masterEntry.name);
@@ -22,7 +56,7 @@ export function getMasterUrl(): DownloadResult<string> {
 
   // Fallback: Check for other m3u8 if strict variant check fails (older videos?)
   const anyM3u8 = resources.find(
-    (r) => r.name.includes('.m3u8') && !r.name.includes('playlists/media/'), // Exclude media playlists
+    (entry) => entry.name.includes('.m3u8') && !isMediaPlaylistUrl(entry.name),
   );
 
   if (anyM3u8) {
@@ -35,21 +69,14 @@ export function getMasterUrl(): DownloadResult<string> {
   const targetText = '動画の初期化処理が完了しました';
   const regex = /(動画の初期化処理が完了しました).*/;
 
-  for (const element of Array.from(systemMessages)) {
+  for (const element of Array.from(systemMessages).reverse()) {
     const text = (element as HTMLElement).innerText;
     if (text && text.includes(targetText)) {
       const match = text.match(regex);
       if (match) {
-        const parts = text.split('(');
-        if (parts.length >= 2) {
-          let url = parts[1];
-          url = url.replace(/\)$/, '');
-          if (
-            url.startsWith('https://') &&
-            (url.includes('.m3u8') || url.includes('delivery.domand.nicovideo.jp'))
-          ) {
-            return ok(url);
-          }
+        const url = extractMasterUrlFromText(text);
+        if (url) {
+          return ok(url);
         }
       }
     }
@@ -67,7 +94,7 @@ export function getMasterUrl(): DownloadResult<string> {
   // Strategy: Find all elements that might contain the message.
   const candidates = playerArea.querySelectorAll('div, span, li, p');
 
-  for (const element of Array.from(candidates)) {
+  for (const element of Array.from(candidates).reverse()) {
     // Check if directly contains text (optimization)
     if (element.textContent && element.textContent.includes(targetText)) {
       // Check innerText to match nico_downloader's logic
@@ -77,18 +104,9 @@ export function getMasterUrl(): DownloadResult<string> {
         // Extract URL: nico_downloader does: string.replace...
         // "動画の初期化処理が完了しました (https://...)" -> "https://..."
         // We expect the format: "動画の初期化処理が完了しました (URL)"
-        const parts = text.split('(');
-        if (parts.length >= 2) {
-          let url = parts[1];
-          // Remove trailing ')'
-          url = url.replace(/\)$/, '');
-          // Simple validation
-          if (
-            url.startsWith('https://') &&
-            (url.includes('.m3u8') || url.includes('delivery.domand.nicovideo.jp'))
-          ) {
-            return ok(url);
-          }
+        const url = extractMasterUrlFromText(text);
+        if (url) {
+          return ok(url);
         }
       }
     }
