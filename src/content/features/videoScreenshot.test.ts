@@ -119,8 +119,14 @@ function createNiconicoPlayerDOM(
     Object.defineProperty(mainVideo, 'src', { value: mainVideoSrc, configurable: true });
     Object.defineProperty(mainVideo, 'videoWidth', { value: mainVideoWidth, configurable: true });
     Object.defineProperty(mainVideo, 'videoHeight', { value: mainVideoHeight, configurable: true });
-    Object.defineProperty(mainVideo, 'readyState', { value: mainVideoReadyState, configurable: true });
-    Object.defineProperty(mainVideo, 'currentTime', { value: mainVideoCurrentTime, configurable: true });
+    Object.defineProperty(mainVideo, 'readyState', {
+      value: mainVideoReadyState,
+      configurable: true,
+    });
+    Object.defineProperty(mainVideo, 'currentTime', {
+      value: mainVideoCurrentTime,
+      configurable: true,
+    });
     Object.defineProperty(mainVideo, 'HAVE_METADATA', { value: 1, configurable: true });
   }
 
@@ -217,7 +223,9 @@ describe('videoScreenshot', () => {
 
       const button = document.getElementById(SCREENSHOT_BUTTON_ID);
       expect(button).toBeNull();
-      expect(console.warn).toHaveBeenCalledWith('[Better Niconico] 全画面表示ボタンが見つかりません');
+      expect(console.warn).toHaveBeenCalledWith(
+        '[Better Niconico] 全画面表示ボタンが見つかりません',
+      );
     });
 
     it('ボタンが全画面ボタンの前に挿入される', () => {
@@ -333,7 +341,9 @@ describe('videoScreenshot', () => {
       apply(true);
       apply(false);
 
-      expect(console.log).toHaveBeenCalledWith('[Better Niconico] スクリーンショットボタンを削除しました');
+      expect(console.log).toHaveBeenCalledWith(
+        '[Better Niconico] スクリーンショットボタンを削除しました',
+      );
     });
 
     it('ボタンが存在しない状態でdisableしても安全', () => {
@@ -455,7 +465,9 @@ describe('videoScreenshot', () => {
 
       apply(true);
 
-      const supporterContainer = document.querySelector('[data-name="supporter-content"]') as HTMLElement;
+      const supporterContainer = document.querySelector(
+        '[data-name="supporter-content"]',
+      ) as HTMLElement;
       expect(getComputedStyle(supporterContainer).opacity).toBe('0');
     });
 
@@ -464,7 +476,9 @@ describe('videoScreenshot', () => {
 
       apply(true);
 
-      const supporterContainer = document.querySelector('[data-name="supporter-content"]') as HTMLElement;
+      const supporterContainer = document.querySelector(
+        '[data-name="supporter-content"]',
+      ) as HTMLElement;
       expect(supporterContainer.style.opacity).toBe('1');
     });
   });
@@ -500,7 +514,9 @@ describe('videoScreenshot', () => {
       // 非同期処理を待機
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(console.log).toHaveBeenCalledWith('[Better Niconico] スクリーンショットをキャプチャします...');
+      expect(console.log).toHaveBeenCalledWith(
+        '[Better Niconico] スクリーンショットをキャプチャします...',
+      );
     });
 
     it('クリックイベントがstopPropagationされる', () => {
@@ -537,7 +553,9 @@ describe('videoScreenshot', () => {
         drawImage: vi.fn(),
       };
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = vi.fn(
+        () => mockContext,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
         callback(mockBlob);
       });
@@ -578,7 +596,9 @@ describe('videoScreenshot', () => {
         drawImage: vi.fn(),
       };
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = vi.fn(
+        () => mockContext,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
         callback(mockBlob);
       });
@@ -630,7 +650,12 @@ describe('videoScreenshot', () => {
           canvasWidth = this.width;
           canvasHeight = this.height;
         }
-        return originalGetContext.call(this, contextId, options as object);
+        const getContext = originalGetContext as unknown as (
+          this: HTMLCanvasElement,
+          contextId: string,
+          options?: unknown,
+        ) => RenderingContext | null;
+        return getContext.call(this, contextId, options);
       } as typeof HTMLCanvasElement.prototype.getContext;
 
       const mockBlob = new Blob(['test'], { type: 'image/png' });
@@ -703,7 +728,9 @@ describe('videoScreenshot', () => {
         drawImage: vi.fn(),
       };
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = vi.fn(
+        () => mockContext,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
       // toBlob が null を返すように設定
       HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
@@ -742,18 +769,20 @@ describe('videoScreenshot', () => {
         drawImage: vi.fn(),
       };
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = vi.fn(
+        () => mockContext,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
         callback(mockBlob);
       });
       URL.createObjectURL = vi.fn(() => mockUrl);
       URL.revokeObjectURL = vi.fn();
 
-      let downloadLink: HTMLAnchorElement | null = null;
+      const downloadLinks: HTMLAnchorElement[] = [];
       const originalAppendChild = document.body.appendChild.bind(document.body);
       document.body.appendChild = vi.fn((node: Node) => {
         if (node instanceof HTMLAnchorElement) {
-          downloadLink = node;
+          downloadLinks.push(node);
         }
         return originalAppendChild(node);
       }) as typeof document.body.appendChild;
@@ -765,9 +794,10 @@ describe('videoScreenshot', () => {
 
       await vi.advanceTimersByTimeAsync(10);
 
-      expect(downloadLink).not.toBeNull();
-      expect(downloadLink?.href).toBe(mockUrl);
-      expect(downloadLink?.download).toMatch(/^niconico_sm9_\d{2}-\d{2}-\d{2}\.png$/);
+      expect(downloadLinks).toHaveLength(1);
+      const downloadLink = downloadLinks[0];
+      expect(downloadLink.href).toBe(mockUrl);
+      expect(downloadLink.download).toMatch(/^niconico_sm9_\d{2}-\d{2}-\d{2}\.png$/);
 
       // クリーンアップ
       HTMLCanvasElement.prototype.getContext = originalGetContext;
@@ -786,7 +816,9 @@ describe('videoScreenshot', () => {
         drawImage: vi.fn(),
       };
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = vi.fn(
+        () => mockContext,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
         callback(mockBlob);
       });
@@ -826,7 +858,9 @@ describe('videoScreenshot', () => {
         drawImage: vi.fn(),
       };
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = vi.fn(
+        () => mockContext,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
         callback(mockBlob);
       });
@@ -840,7 +874,9 @@ describe('videoScreenshot', () => {
 
       await vi.advanceTimersByTimeAsync(10);
 
-      expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/スクリーンショットを保存しました/));
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringMatching(/スクリーンショットを保存しました/),
+      );
 
       // クリーンアップ
       HTMLCanvasElement.prototype.getContext = originalGetContext;

@@ -35,7 +35,9 @@ export function loadSettings(): ResultAsync<
 
       chrome.storage.sync.get([STORAGE_KEY], (result) => {
         if (chrome.runtime.lastError) {
-          reject(storageGetFailedError(chrome.runtime.lastError.message));
+          reject(
+            storageGetFailedError(chrome.runtime.lastError.message ?? 'Unknown storage get error'),
+          );
           return;
         }
 
@@ -115,7 +117,9 @@ export function saveSettings(
       // Save validated settings
       chrome.storage.sync.set({ [STORAGE_KEY]: parseResult.data }, () => {
         if (chrome.runtime.lastError) {
-          reject(storageSetFailedError(chrome.runtime.lastError.message));
+          reject(
+            storageSetFailedError(chrome.runtime.lastError.message ?? 'Unknown storage set error'),
+          );
           return;
         }
         resolve();

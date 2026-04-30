@@ -14,10 +14,22 @@ function isMediaPlaylistUrl(url: string): boolean {
 }
 
 function getRecentResourceEntries(minStartTime = 0): PerformanceEntry[] {
-  return performance
-    .getEntriesByType('resource')
-    .filter((entry) => entry.startTime >= minStartTime)
-    .sort((a, b) => b.startTime - a.startTime);
+  const entries: PerformanceEntry[] = [];
+
+  for (const entry of performance.getEntriesByType('resource')) {
+    if (entry.startTime < minStartTime) {
+      continue;
+    }
+
+    const insertIndex = entries.findIndex((current) => current.startTime < entry.startTime);
+    if (insertIndex === -1) {
+      entries.push(entry);
+    } else {
+      entries.splice(insertIndex, 0, entry);
+    }
+  }
+
+  return entries;
 }
 
 function extractMasterUrlFromText(text: string): string | null {
@@ -69,7 +81,9 @@ export function getMasterUrl(options: MasterUrlOptions = {}): DownloadResult<str
   const targetText = '動画の初期化処理が完了しました';
   const regex = /(動画の初期化処理が完了しました).*/;
 
-  for (const element of Array.from(systemMessages).reverse()) {
+  const systemMessageElements = Array.from(systemMessages);
+  for (let i = systemMessageElements.length - 1; i >= 0; i--) {
+    const element = systemMessageElements[i];
     const text = (element as HTMLElement).innerText;
     if (text && text.includes(targetText)) {
       const match = text.match(regex);
@@ -94,7 +108,9 @@ export function getMasterUrl(options: MasterUrlOptions = {}): DownloadResult<str
   // Strategy: Find all elements that might contain the message.
   const candidates = playerArea.querySelectorAll('div, span, li, p');
 
-  for (const element of Array.from(candidates).reverse()) {
+  const candidateElements = Array.from(candidates);
+  for (let i = candidateElements.length - 1; i >= 0; i--) {
+    const element = candidateElements[i];
     // Check if directly contains text (optimization)
     if (element.textContent && element.textContent.includes(targetText)) {
       // Check innerText to match nico_downloader's logic

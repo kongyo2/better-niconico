@@ -27,7 +27,8 @@ function configureResourceTimingBuffer(): void {
 }
 
 function getVideoIdFromPath(pathname: string): string {
-  return decodeURIComponent(pathname.split('/').filter(Boolean).pop() || 'video');
+  const match = pathname.match(/\/([^/]+)\/?$/);
+  return decodeURIComponent(match?.[1] ?? 'video');
 }
 
 function getWatchContext(): WatchContext | null {

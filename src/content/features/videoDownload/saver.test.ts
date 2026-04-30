@@ -5,9 +5,9 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { saveAsFile } from './saver';
 
 describe('videoDownload/saver', () => {
-  let mockCreateObjectURL: ReturnType<typeof vi.fn>;
-  let mockRevokeObjectURL: ReturnType<typeof vi.fn>;
-  let mockClick: ReturnType<typeof vi.fn>;
+  let mockCreateObjectURL: ReturnType<typeof vi.fn<(obj: Blob | MediaSource) => string>>;
+  let mockRevokeObjectURL: ReturnType<typeof vi.fn<(url: string) => void>>;
+  let mockClick: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
     // Reset DOM

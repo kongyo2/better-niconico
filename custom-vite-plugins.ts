@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { resolve } from 'path';
-import type { PluginOption, NormalizedOutputOptions } from 'vite';
+import type { NormalizedOutputOptions } from 'rollup';
+import type { PluginOption } from 'vite';
 
 /**
  * Plugin to remove dev icons from production build

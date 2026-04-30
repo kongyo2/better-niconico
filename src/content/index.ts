@@ -80,7 +80,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 /**
  * メッセージリスナー（Result型を使用）
  */
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'getSettings') {
     void loadSettings().then((result) => {
       if (result.isOk()) {
