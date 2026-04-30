@@ -150,9 +150,8 @@ describe('storage utilities', () => {
     it('should return validation error for invalid settings', async () => {
       const invalidSettings = {
         ...DEFAULT_SETTINGS,
-        // @ts-expect-error - testing invalid type
         hidePremiumSection: 'not a boolean',
-      };
+      } as unknown as Parameters<typeof saveSettings>[0];
 
       const result = await saveSettings(invalidSettings);
       expect(result.isErr()).toBe(true);

@@ -406,7 +406,15 @@ function findDominantColor(colors: Array<{ rgb: RGB; score: number }>): RGB {
   }
 
   // 上位30%のスコアの色のみ使用
-  const sorted = [...colors].toSorted((a, b) => b.score - a.score);
+  const sorted: Array<{ rgb: RGB; score: number }> = [];
+  for (const color of colors) {
+    const insertIndex = sorted.findIndex((current) => current.score < color.score);
+    if (insertIndex === -1) {
+      sorted.push(color);
+    } else {
+      sorted.splice(insertIndex, 0, color);
+    }
+  }
   const topCount = Math.max(1, Math.floor(sorted.length * 0.3));
   const topColors = sorted.slice(0, topCount);
 

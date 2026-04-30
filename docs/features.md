@@ -164,6 +164,9 @@
 
 - 実装: `src/content/features/pictureInPicture.ts`
 - 対象判定: `/watch/*`
+- 動画検出:
+  - `.grid-area_\[player\]` 内の非広告動画のみ対象
+  - `data-name="video-content"`、再生中、表示面積、`readyState` などをスコア化して現在の動画を優先
 - 主要要素:
   - ボタン: `#bn-pip-button` (`data-bn-pip-button`)
   - 合成キャンバス: `#bn-pip-canvas` (`data-bn-pip-canvas`)
@@ -173,7 +176,7 @@
 - 合成内容:
   1. メイン映像（または `#bn-upscaled-canvas`）
   2. サポーターキャンバス（表示時のみ）
-  3. コメントキャンバス
+  3. コメントキャンバス（存在する場合）
 - ループ:
   - `requestVideoFrameCallback` 優先
   - 非対応時は `requestAnimationFrame`
@@ -184,7 +187,8 @@
 - 停止時:
   - すべて復元し、MediaStream track停止
 - 特記事項:
-  - コメントレイヤー破棄を検知したら再初期化
+  - コメントレイヤーや動画要素の差し替えを検知したら、PiPウィンドウを維持したまま現在のソースへ再接続
+  - コメントCanvasが一時的に無い場合でも動画のみで開始し、後続のDOM更新で再接続
 
 ## 3.10 スクリーンショット
 
@@ -322,4 +326,3 @@
   - `.BaseLayout-block`, `a[href*="/ranking?ref=video_sidemenu"]`, `.css-1i3qj3a`
 
 以上は、現行実装で参照しているDOMと一致しています。
-
