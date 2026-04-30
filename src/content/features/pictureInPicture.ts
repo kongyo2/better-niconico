@@ -9,21 +9,14 @@
  *
  * IMPLEMENTATION NOTES:
  * - Main video element: blob: URL, outside #nv_watch_VideoAdContainer
- * - Comment canvas: [data-name="comment"] canvas (1364x768)
- * - Supporter canvas: [data-name="supporter-content"] canvas (1280x720, now supported)
+ * - Comment canvas: [data-name="comment"] canvas
+ * - Supporter canvas: [data-name="supporter-content"] canvas (optional)
  * - Combines video, supporter view, and comments with aspect ratio preservation
- * - Uses requestVideoFrameCallback for perfect frame sync (Chrome 83+)
- * - Falls back to requestAnimationFrame if requestVideoFrameCallback is not available
- * - Uses canvas.captureStream(0) with manual frame capture for optimal sync
- * - Adds PiP button to player control bar (before fullscreen button)
- * - Button uses Niconico's native control bar styling for consistency
- * - Automatic reinitialization when comment layer is destroyed
- *
- * SYNC FIX (December 2025):
- * - Changed from requestAnimationFrame to requestVideoFrameCallback
- * - requestVideoFrameCallback syncs with actual video frame updates, eliminating sync drift
- * - captureStream(0) + requestFrame() gives precise frame control
- * - Removed setTimeout-based fallback for hidden tabs (video playback is usually paused anyway)
+ * - Uses requestVideoFrameCallback for frame sync when available
+ * - Falls back to requestAnimationFrame
+ * - Uses canvas.captureStream(0) with manual frame capture for tight sync
+ * - Adds PiP button to player control bar near the fullscreen button
+ * - Reconnects sources while PiP is open when Niconico replaces the player DOM
  */
 
 import { Result, ok, err } from 'neverthrow';
@@ -45,39 +38,62 @@ const PIP_BUTTON_ID = 'bn-pip-button';
 const PIP_CANVAS_ID = 'bn-pip-canvas';
 const PIP_VIDEO_ID = 'bn-pip-video';
 
+// Video Upscalingのキャンバス要素ID（videoUpscaling.tsと同期）
+const UPSCALED_CANVAS_ID = 'bn-upscaled-canvas';
+
+const RETRY_DELAY_MS = 250;
+const RECONNECT_DELAY_MS = 100;
+const PIP_TARGET_SELECTOR =
+  '.grid-area_\\[player\\], video, canvas, button, [data-name="comment"], [data-name="supporter-content"]';
+
+type Dimensions = {
+  width: number;
+  height: number;
+};
+
+type HiddenElementStyle = {
+  visibility: string;
+};
+
+type PiPSources = {
+  video: HTMLVideoElement;
+  videoSrc: string;
+  commentCanvas: HTMLCanvasElement | null;
+  supporterCanvas: HTMLCanvasElement | null;
+  upscaledCanvas: HTMLCanvasElement | null;
+};
+
 // グローバル状態
-let isRunningInPIP: boolean = false;
+let currentEnabled = false;
+let isRunningInPIP = false;
+let isStartingPIP = false;
+let isStoppingPIP = false;
 let videoFrameCallbackId: number | null = null;
-let animationFrameId: number | null = null; // フォールバック用
+let animationFrameId: number | null = null;
 let pipButton: HTMLButtonElement | null = null;
 let pipCanvas: HTMLCanvasElement | null = null;
 let pipCanvasContext: CanvasRenderingContext2D | null = null;
 let pipVideo: HTMLVideoElement | null = null;
 let pipStream: MediaStream | null = null;
 let mainVideo: HTMLVideoElement | null = null;
-let upscaledCanvas: HTMLCanvasElement | null = null; // アップスケールキャンバス（存在する場合）
+let currentVideoSrc: string | null = null;
+let currentCompositeDimensions: Dimensions | null = null;
+let upscaledCanvas: HTMLCanvasElement | null = null;
 let commentCanvas: HTMLCanvasElement | null = null;
 let supporterCanvas: HTMLCanvasElement | null = null;
+let hiddenVideoSurface: HTMLElement | null = null;
+let hiddenCommentCanvas: HTMLCanvasElement | null = null;
+let sourceReconnectTimer: number | null = null;
+let featureObserver: MutationObserver | null = null;
+let navigationIntervalId: number | null = null;
+let lastPageUrl = '';
+let pipSessionToken = 0;
 
-// Video Upscalingのキャンバス要素ID（videoUpscaling.tsと同期）
-const UPSCALED_CANVAS_ID = 'bn-upscaled-canvas';
+const hiddenElementStyles = new WeakMap<HTMLElement, HiddenElementStyle>();
 
 // requestVideoFrameCallback サポートチェック
 function supportsRequestVideoFrameCallback(): boolean {
   return 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-}
-
-/**
- * アップスケールされたキャンバスが存在するかチェック
- * Video Upscaling機能が有効な場合、高画質キャンバスが存在する
- */
-function getUpscaledCanvas(): HTMLCanvasElement | null {
-  const canvas = document.getElementById(UPSCALED_CANVAS_ID) as HTMLCanvasElement | null;
-  // キャンバスが存在し、表示されている場合のみ有効
-  if (canvas && canvas.style.display !== 'none' && canvas.width > 0 && canvas.height > 0) {
-    return canvas;
-  }
-  return null;
 }
 
 /**
@@ -87,20 +103,27 @@ function isWatchPage(): boolean {
   return window.location.pathname.startsWith('/watch/');
 }
 
+function getPlayerArea(): Element | null {
+  return document.querySelector('.grid-area_\\[player\\]');
+}
+
+function getVideoSource(video: HTMLVideoElement): string {
+  return video.currentSrc || video.src || video.getAttribute('src') || '';
+}
+
 /**
  * アスペクト比を保持しながらリサイズした寸法を計算
- * @param srcWidth - ソースの幅
- * @param srcHeight - ソースの高さ
- * @param dstWidth - 目標の幅
- * @param dstHeight - 目標の高さ
- * @returns リサイズ後の幅と高さ
  */
 function calcSize(
   srcWidth: number,
   srcHeight: number,
   dstWidth: number,
   dstHeight: number,
-): { width: number; height: number } {
+): Dimensions {
+  if (srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) {
+    return { width: 0, height: 0 };
+  }
+
   const wr = dstWidth / srcWidth;
   const hr = dstHeight / srcHeight;
   const rate = Math.min(wr, hr);
@@ -108,6 +131,14 @@ function calcSize(
     width: Math.floor(srcWidth * rate),
     height: Math.floor(srcHeight * rate),
   };
+}
+
+function dimensionsEqual(left: Dimensions | null, right: Dimensions | null): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.width === right.width && left.height === right.height;
 }
 
 /**
@@ -122,7 +153,38 @@ function isAdVideo(video: HTMLVideoElement): boolean {
  * 有効なコンテンツ動画かどうかを判定
  */
 function isValidContentVideo(video: HTMLVideoElement): boolean {
-  return video.src !== '' && video.videoWidth > 0 && video.videoHeight > 0 && !isAdVideo(video);
+  return (
+    video.isConnected &&
+    getVideoSource(video) !== '' &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0 &&
+    !isAdVideo(video)
+  );
+}
+
+function getVideoScore(video: HTMLVideoElement): number {
+  const rect = video.getBoundingClientRect();
+  const visibleArea = rect.width * rect.height;
+  let score = video.readyState * 10;
+
+  if (video.getAttribute('data-name') === 'video-content') {
+    score += 1000;
+  }
+
+  if (!video.paused) {
+    score += 70;
+  }
+
+  if (getVideoSource(video).startsWith('blob:')) {
+    score += 20;
+  }
+
+  if (visibleArea > 0) {
+    score += 25 + Math.min(visibleArea / 10000, 50);
+  }
+
+  score += Math.min((video.videoWidth * video.videoHeight) / 100000, 50);
+  return score;
 }
 
 /**
@@ -130,31 +192,21 @@ function isValidContentVideo(video: HTMLVideoElement): boolean {
  * Result型を返す
  */
 function getMainVideo(): Result<HTMLVideoElement, VideoError | PageError> {
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  const playerArea = getPlayerArea();
   if (!playerArea) {
     return err(domElementNotFoundError('Player area not found', '.grid-area_[player]'));
   }
 
   const videos = Array.from(playerArea.querySelectorAll('video')) as HTMLVideoElement[];
+  const candidates = videos.filter((video) => isValidContentVideo(video));
 
-  // 有効なコンテンツ動画を探す
-  let bestVideo: HTMLVideoElement | null = null;
-  let bestReadyState = -1;
-
-  for (const video of videos) {
-    if (isValidContentVideo(video)) {
-      if (video.readyState > bestReadyState) {
-        bestVideo = video;
-        bestReadyState = video.readyState;
-      }
-    }
-  }
-
-  if (!bestVideo) {
+  if (candidates.length === 0) {
     return err(videoElementNotFoundError('Valid content video not found'));
   }
 
-  // 動画の準備状態をチェック
+  candidates.sort((a, b) => getVideoScore(b) - getVideoScore(a));
+  const bestVideo = candidates[0];
+
   if (bestVideo.videoWidth <= 0 || bestVideo.videoHeight <= 0) {
     return err(
       videoDimensionsInvalidError(
@@ -168,55 +220,145 @@ function getMainVideo(): Result<HTMLVideoElement, VideoError | PageError> {
   return ok(bestVideo);
 }
 
+function getCanvasInPlayer(selector: string): HTMLCanvasElement | null {
+  const playerArea = getPlayerArea();
+  return playerArea?.querySelector<HTMLCanvasElement>(selector) ?? null;
+}
+
+function isDrawableCanvas(canvas: HTMLCanvasElement | null): canvas is HTMLCanvasElement {
+  return !!canvas && canvas.isConnected && canvas.width > 0 && canvas.height > 0;
+}
+
 /**
  * コメントキャンバス要素を取得
- * Result型を返す
+ * コメントレイヤーはDOM更新中に一時的に消えるため、見つからない場合はnullにする
  */
-function getCommentCanvas(): Result<HTMLCanvasElement, PageError> {
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
-  if (!playerArea) {
-    return err(domElementNotFoundError('Player area not found', '.grid-area_[player]'));
-  }
-
-  // [data-name="comment"] 配下のcanvas要素を探す
-  const commentContainer = playerArea.querySelector('[data-name="comment"]');
-  if (!commentContainer) {
-    return err(domElementNotFoundError('Comment container not found', '[data-name="comment"]'));
-  }
-
-  const canvas = commentContainer.querySelector('canvas') as HTMLCanvasElement;
-  if (!canvas) {
-    return err(domElementNotFoundError('Comment canvas not found', '[data-name="comment"] canvas'));
-  }
-
-  return ok(canvas);
+function getCommentCanvas(): HTMLCanvasElement | null {
+  const canvas = getCanvasInPlayer('[data-name="comment"] canvas');
+  return isDrawableCanvas(canvas) ? canvas : null;
 }
 
 /**
  * サポーターキャンバス要素を取得（オプショナル）
- * サポーター表示が存在しない場合はnullを返す
- * Result型を返す
  */
-function getSupporterCanvas(): Result<HTMLCanvasElement | null, PageError> {
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
-  if (!playerArea) {
-    return err(domElementNotFoundError('Player area not found', '.grid-area_[player]'));
+function getSupporterCanvas(): HTMLCanvasElement | null {
+  const canvas = getCanvasInPlayer('[data-name="supporter-content"] canvas');
+  return isDrawableCanvas(canvas) ? canvas : null;
+}
+
+/**
+ * アップスケールされたキャンバスが存在するかチェック
+ * Video Upscaling機能が有効な場合、高画質キャンバスが存在する
+ */
+function getUpscaledCanvas(): HTMLCanvasElement | null {
+  const canvas = document.getElementById(UPSCALED_CANVAS_ID) as HTMLCanvasElement | null;
+  if (!isDrawableCanvas(canvas) || canvas.style.display === 'none') {
+    return null;
   }
 
-  // [data-name="supporter-content"] 配下のcanvas要素を探す
-  const supporterContainer = playerArea.querySelector('[data-name="supporter-content"]');
+  const playerArea = getPlayerArea();
+  if (playerArea && !playerArea.contains(canvas)) {
+    return null;
+  }
+
+  return canvas;
+}
+
+function resolvePiPSources(): Result<PiPSources, VideoError | PageError> {
+  const videoResult = getMainVideo();
+  if (videoResult.isErr()) {
+    return err(videoResult.error);
+  }
+
+  const video = videoResult.value;
+  return ok({
+    video,
+    videoSrc: getVideoSource(video),
+    commentCanvas: getCommentCanvas(),
+    supporterCanvas: getSupporterCanvas(),
+    upscaledCanvas: getUpscaledCanvas(),
+  });
+}
+
+function getCompositeDimensions(sources: PiPSources): Dimensions {
+  if (sources.upscaledCanvas) {
+    return {
+      width: Math.max(1, sources.upscaledCanvas.width),
+      height: Math.max(1, sources.upscaledCanvas.height),
+    };
+  }
+
+  return {
+    width: Math.max(1, sources.video.videoWidth),
+    height: Math.max(1, sources.video.videoHeight),
+  };
+}
+
+function isSupporterVisible(canvas: HTMLCanvasElement): boolean {
+  const supporterContainer = canvas.closest('[data-name="supporter-content"]');
   if (!supporterContainer) {
-    // サポーター表示は任意なのでnullを返す
-    return ok(null);
+    return true;
   }
 
-  const canvas = supporterContainer.querySelector('canvas') as HTMLCanvasElement;
-  if (!canvas) {
-    // サポーター表示コンテナは存在するがキャンバスがない場合もnullを返す
-    return ok(null);
+  const style = getComputedStyle(supporterContainer);
+  return style.opacity !== '0' && style.visibility !== 'hidden' && style.display !== 'none';
+}
+
+function hideElement(element: HTMLElement): void {
+  if (!hiddenElementStyles.has(element)) {
+    hiddenElementStyles.set(element, {
+      visibility: element.style.visibility,
+    });
   }
 
-  return ok(canvas);
+  element.style.visibility = 'hidden';
+}
+
+function restoreElement(element: HTMLElement): void {
+  const previousStyle = hiddenElementStyles.get(element);
+  if (previousStyle) {
+    element.style.visibility = previousStyle.visibility;
+    hiddenElementStyles.delete(element);
+    return;
+  }
+
+  element.style.visibility = '';
+}
+
+function syncHiddenSourceElements(): void {
+  if (!mainVideo) {
+    return;
+  }
+
+  const videoSurface = upscaledCanvas ?? mainVideo;
+  if (hiddenVideoSurface && hiddenVideoSurface !== videoSurface) {
+    restoreElement(hiddenVideoSurface);
+  }
+
+  hideElement(videoSurface);
+  hiddenVideoSurface = videoSurface;
+
+  if (hiddenCommentCanvas && hiddenCommentCanvas !== commentCanvas) {
+    restoreElement(hiddenCommentCanvas);
+    hiddenCommentCanvas = null;
+  }
+
+  if (commentCanvas) {
+    hideElement(commentCanvas);
+    hiddenCommentCanvas = commentCanvas;
+  }
+}
+
+function restoreHiddenSourceElements(): void {
+  if (hiddenVideoSurface) {
+    restoreElement(hiddenVideoSurface);
+    hiddenVideoSurface = null;
+  }
+
+  if (hiddenCommentCanvas) {
+    restoreElement(hiddenCommentCanvas);
+    hiddenCommentCanvas = null;
+  }
 }
 
 /**
@@ -233,18 +375,15 @@ function createPiPButton(): HTMLButtonElement {
 
   // ニコニコ動画のコントロールバーボタンと同じクラス名を使用
   button.className = 'Pressable cursor_pointer';
-  // ボタンの色を白に設定（他のボタンに合わせる）
   button.style.color = '#FFFFFF';
 
-  // PiP SVGアイコン（サイズを調整）
   button.innerHTML = `
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <rect x="3" y="5" width="22" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
       <rect x="14" y="14" width="9" height="7" rx="1" fill="currentColor"/>
     </svg>
   `;
 
-  // クリックイベント
   button.addEventListener('click', (e) => {
     e.stopPropagation();
     togglePiP();
@@ -253,51 +392,74 @@ function createPiPButton(): HTMLButtonElement {
   return button;
 }
 
+function findFullscreenButton(playerArea: Element): HTMLButtonElement | null {
+  const buttons = Array.from(playerArea.querySelectorAll('button')) as HTMLButtonElement[];
+  return (
+    buttons.find((button) => button.getAttribute('aria-label') === '全画面表示する') ??
+    buttons.find((button) => button.getAttribute('aria-label')?.includes('全画面') ?? false) ??
+    null
+  );
+}
+
 /**
  * PiPボタンをDOMに追加
  * プレイヤーコントロールバーの全画面表示ボタンの前に挿入
  */
-function addPiPButton(): void {
-  // 既に存在する場合はスキップ
-  if (pipButton && document.contains(pipButton)) {
-    return;
+function addPiPButton(): boolean {
+  if (!isWatchPage()) {
+    removePiPButton();
+    return false;
   }
 
-  const playerArea = document.querySelector('.grid-area_\\[player\\]');
+  const playerArea = getPlayerArea();
   if (!playerArea) {
-    return;
+    return false;
   }
 
-  // 全画面表示ボタンを探す
-  const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
-    (btn) => btn.getAttribute('aria-label') === '全画面表示する',
-  );
+  const existingButton = playerArea.querySelector<HTMLButtonElement>(`#${PIP_BUTTON_ID}`);
+  if (existingButton) {
+    pipButton = existingButton;
+    cleanupDuplicateButtons(existingButton);
+    return true;
+  }
 
+  const fullscreenButton = findFullscreenButton(playerArea);
   if (!fullscreenButton) {
     console.warn('[Better Niconico] 全画面表示ボタンが見つかりません');
-    return;
+    return false;
   }
 
-  // 全画面表示ボタンの親要素（コントロールバーのボタングループ）を取得
   const controlBarButtonGroup = fullscreenButton.parentElement;
   if (!controlBarButtonGroup) {
     console.warn('[Better Niconico] コントロールバーのボタングループが見つかりません');
-    return;
+    return false;
   }
 
-  // PiPボタンを作成
+  cleanupDuplicateButtons();
   pipButton = createPiPButton();
-
-  // 全画面表示ボタンの前に挿入
   controlBarButtonGroup.insertBefore(pipButton, fullscreenButton);
 
   console.log('[Better Niconico] PiPボタンをコントロールバーに追加しました');
+  return true;
+}
+
+function cleanupDuplicateButtons(keepButton: HTMLButtonElement | null = null): void {
+  const buttons = document.querySelectorAll<HTMLButtonElement>(
+    `#${PIP_BUTTON_ID}, [${PIP_BUTTON_MARKER}]`,
+  );
+
+  buttons.forEach((button) => {
+    if (button !== keepButton) {
+      button.remove();
+    }
+  });
 }
 
 /**
  * PiPボタンを削除
  */
 function removePiPButton(): void {
+  cleanupDuplicateButtons();
   if (pipButton) {
     pipButton.remove();
     pipButton = null;
@@ -309,13 +471,13 @@ function removePiPButton(): void {
  * 合成用のcanvasとcontextを作成
  */
 function createCompositeCanvas(
-  video: HTMLVideoElement,
+  dimensions: Dimensions,
 ): Result<{ canvas: HTMLCanvasElement; context: CanvasRenderingContext2D }, VideoError> {
   const canvas = document.createElement('canvas');
   canvas.id = PIP_CANVAS_ID;
   canvas.setAttribute(PIP_CANVAS_MARKER, 'true');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = dimensions.width;
+  canvas.height = dimensions.height;
 
   const context = canvas.getContext('2d');
   if (!context) {
@@ -323,6 +485,20 @@ function createCompositeCanvas(
   }
 
   return ok({ canvas, context });
+}
+
+function resizeCompositeCanvas(dimensions: Dimensions): void {
+  if (!pipCanvas) {
+    return;
+  }
+
+  if (pipCanvas.width !== dimensions.width) {
+    pipCanvas.width = dimensions.width;
+  }
+
+  if (pipCanvas.height !== dimensions.height) {
+    pipCanvas.height = dimensions.height;
+  }
 }
 
 /**
@@ -334,6 +510,7 @@ function createPiPVideo(stream: MediaStream): HTMLVideoElement {
   video.setAttribute(PIP_VIDEO_MARKER, 'true');
   video.autoplay = true;
   video.muted = true;
+  video.playsInline = true;
   video.srcObject = stream;
   video.controls = true;
 
@@ -348,7 +525,6 @@ function createPiPVideo(stream: MediaStream): HTMLVideoElement {
     height: 1px;
   `;
 
-  // PiPから抜けた時のクリーンアップ
   video.addEventListener('leavepictureinpicture', () => {
     console.log('[Better Niconico] PiPを終了しました');
     stopPiP();
@@ -357,94 +533,109 @@ function createPiPVideo(stream: MediaStream): HTMLVideoElement {
   return video;
 }
 
+function drawContained(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): void {
+  if (!pipCanvasContext || sourceWidth <= 0 || sourceHeight <= 0) {
+    return;
+  }
+
+  const size = calcSize(sourceWidth, sourceHeight, targetWidth, targetHeight);
+  if (size.width <= 0 || size.height <= 0) {
+    return;
+  }
+
+  try {
+    pipCanvasContext.drawImage(
+      source,
+      0,
+      0,
+      sourceWidth,
+      sourceHeight,
+      Math.floor((targetWidth - size.width) / 2),
+      Math.floor((targetHeight - size.height) / 2),
+      size.width,
+      size.height,
+    );
+  } catch {
+    // DOM差し替え直後など、一時的に描画できないソースは次フレームで再試行する。
+  }
+}
+
 /**
  * フレームを合成してキャンバスに描画
  * アップスケーリングが有効な場合は高画質キャンバスを使用
  */
 function renderCompositeFrame(): void {
-  if (!mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+  if (!mainVideo || !pipCanvas || !pipCanvasContext) {
     return;
   }
 
-  // 黒背景を塗りつぶし（レターボックス用）
   pipCanvasContext.fillStyle = '#000';
   pipCanvasContext.fillRect(0, 0, pipCanvas.width, pipCanvas.height);
 
-  // アップスケールキャンバスが存在する場合はそれを使用（高画質）
-  // 存在しない場合は元の動画を使用
-  const videoSource: CanvasImageSource | null = upscaledCanvas || mainVideo;
-  const sourceWidth = upscaledCanvas ? upscaledCanvas.width : mainVideo.videoWidth;
-  const sourceHeight = upscaledCanvas ? upscaledCanvas.height : mainVideo.videoHeight;
+  const videoSource = isDrawableCanvas(upscaledCanvas) ? upscaledCanvas : mainVideo;
+  const sourceWidth =
+    videoSource instanceof HTMLCanvasElement ? videoSource.width : mainVideo.videoWidth;
+  const sourceHeight =
+    videoSource instanceof HTMLCanvasElement ? videoSource.height : mainVideo.videoHeight;
 
-  // メイン映像をアスペクト比を保持して描画
-  if (sourceWidth > 0 && sourceHeight > 0 && videoSource) {
-    const videoSize = calcSize(sourceWidth, sourceHeight, pipCanvas.width, pipCanvas.height);
-    pipCanvasContext.drawImage(
-      videoSource,
-      0,
-      0,
-      sourceWidth,
-      sourceHeight,
-      (pipCanvas.width - videoSize.width) / 2,
-      (pipCanvas.height - videoSize.height) / 2,
-      videoSize.width,
-      videoSize.height,
+  drawContained(videoSource, sourceWidth, sourceHeight, pipCanvas.width, pipCanvas.height);
+
+  if (supporterCanvas && isDrawableCanvas(supporterCanvas) && isSupporterVisible(supporterCanvas)) {
+    drawContained(
+      supporterCanvas,
+      supporterCanvas.width,
+      supporterCanvas.height,
+      pipCanvas.width,
+      pipCanvas.height,
     );
   }
 
-  // サポーター表示をアスペクト比を保持して描画
-  if (supporterCanvas) {
-    const playerArea = document.querySelector('.grid-area_\\[player\\]');
-    const supporterContainer = playerArea?.querySelector('[data-name="supporter-content"]');
-
-    // opacity が 0 でない場合のみ描画（非表示時はスキップ）
-    if (supporterContainer && getComputedStyle(supporterContainer).opacity !== '0') {
-      const supporterSize = calcSize(
-        supporterCanvas.width,
-        supporterCanvas.height,
-        pipCanvas.width,
-        pipCanvas.height,
-      );
-      pipCanvasContext.drawImage(
-        supporterCanvas,
-        0,
-        0,
-        supporterCanvas.width,
-        supporterCanvas.height,
-        (pipCanvas.width - supporterSize.width) / 2,
-        (pipCanvas.height - supporterSize.height) / 2,
-        supporterSize.width,
-        supporterSize.height,
-      );
-    }
+  if (commentCanvas && isDrawableCanvas(commentCanvas)) {
+    drawContained(
+      commentCanvas,
+      commentCanvas.width,
+      commentCanvas.height,
+      pipCanvas.width,
+      pipCanvas.height,
+    );
   }
-
-  // コメントキャンバスをアスペクト比を保持して描画
-  const commentSize = calcSize(
-    commentCanvas.width,
-    commentCanvas.height,
-    pipCanvas.width,
-    pipCanvas.height,
-  );
-  pipCanvasContext.drawImage(
-    commentCanvas,
-    0,
-    0,
-    commentCanvas.width,
-    commentCanvas.height,
-    (pipCanvas.width - commentSize.width) / 2,
-    (pipCanvas.height - commentSize.height) / 2,
-    commentSize.width,
-    commentSize.height,
-  );
 
   // captureStream(0) の場合、手動でフレームをキャプチャ
   if (pipStream) {
-    const videoTrack = pipStream.getVideoTracks()[0];
-    if (videoTrack && 'requestFrame' in videoTrack) {
-      (videoTrack as MediaStreamVideoTrack & { requestFrame: () => void }).requestFrame();
-    }
+    const videoTrack = pipStream.getVideoTracks()[0] as
+      | (MediaStreamTrack & { requestFrame?: () => void })
+      | undefined;
+    videoTrack?.requestFrame?.();
   }
+}
+
+function shouldReconnectSources(): boolean {
+  if (!mainVideo || !mainVideo.isConnected || !isValidContentVideo(mainVideo)) {
+    return true;
+  }
+
+  const sourceResult = resolvePiPSources();
+  if (sourceResult.isErr()) {
+    return true;
+  }
+
+  const sources = sourceResult.value;
+  const dimensions = getCompositeDimensions(sources);
+
+  return (
+    sources.video !== mainVideo ||
+    sources.videoSrc !== currentVideoSrc ||
+    sources.commentCanvas !== commentCanvas ||
+    sources.supporterCanvas !== supporterCanvas ||
+    sources.upscaledCanvas !== upscaledCanvas ||
+    !dimensionsEqual(dimensions, currentCompositeDimensions)
+  );
 }
 
 /**
@@ -452,21 +643,17 @@ function renderCompositeFrame(): void {
  * 動画の実際のフレーム更新に同期して描画する
  */
 function compositeLoopWithVideoFrameCallback(): void {
-  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+  if (!isRunningInPIP || !mainVideo || !pipCanvas || !pipCanvasContext) {
     return;
   }
 
-  // コメントレイヤーの破棄検知
-  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
-    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
-    void reinitializePiP();
+  if (shouldReconnectSources()) {
+    scheduleSourceReconnect();
     return;
   }
 
-  // フレームを描画
   renderCompositeFrame();
 
-  // 次のフレームを予約（動画フレームに同期）
   videoFrameCallbackId = mainVideo.requestVideoFrameCallback(() => {
     compositeLoopWithVideoFrameCallback();
   });
@@ -476,21 +663,16 @@ function compositeLoopWithVideoFrameCallback(): void {
  * requestAnimationFrame を使用した合成ループ（フォールバック）
  */
 function compositeLoopWithAnimationFrame(): void {
-  if (!isRunningInPIP || !mainVideo || !commentCanvas || !pipCanvas || !pipCanvasContext) {
+  if (!isRunningInPIP || !mainVideo || !pipCanvas || !pipCanvasContext) {
     return;
   }
 
-  // コメントレイヤーの破棄検知
-  if (!commentCanvas.parentElement || commentCanvas.width === 0 || commentCanvas.height === 0) {
-    console.log('[Better Niconico] コメントレイヤーの破棄を検知しました。PiPを再初期化します');
-    void reinitializePiP();
+  if (shouldReconnectSources()) {
+    scheduleSourceReconnect();
     return;
   }
 
-  // フレームを描画
   renderCompositeFrame();
-
-  // 次のフレームを予約
   animationFrameId = requestAnimationFrame(compositeLoopWithAnimationFrame);
 }
 
@@ -498,6 +680,8 @@ function compositeLoopWithAnimationFrame(): void {
  * 合成ループを開始
  */
 function startCompositeLoop(): void {
+  stopCompositeLoop();
+
   if (supportsRequestVideoFrameCallback() && mainVideo) {
     console.log('[Better Niconico] requestVideoFrameCallback を使用（フレーム同期モード）');
     compositeLoopWithVideoFrameCallback();
@@ -511,116 +695,152 @@ function startCompositeLoop(): void {
  * 合成ループを停止
  */
 function stopCompositeLoop(): void {
-  // requestVideoFrameCallback をキャンセル
   if (videoFrameCallbackId !== null && mainVideo) {
     mainVideo.cancelVideoFrameCallback(videoFrameCallbackId);
     videoFrameCallbackId = null;
   }
 
-  // requestAnimationFrame をキャンセル
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
 }
 
+function clearSourceReconnectTimer(): void {
+  if (sourceReconnectTimer !== null) {
+    clearTimeout(sourceReconnectTimer);
+    sourceReconnectTimer = null;
+  }
+}
+
+function scheduleSourceReconnect(delay = RECONNECT_DELAY_MS): void {
+  if (!isRunningInPIP) {
+    return;
+  }
+
+  clearSourceReconnectTimer();
+  sourceReconnectTimer = window.setTimeout(() => {
+    sourceReconnectTimer = null;
+    reconnectPiPSources();
+  }, delay);
+}
+
+function applySourcesToState(sources: PiPSources): void {
+  const dimensions = getCompositeDimensions(sources);
+  resizeCompositeCanvas(dimensions);
+
+  mainVideo = sources.video;
+  currentVideoSrc = sources.videoSrc;
+  commentCanvas = sources.commentCanvas;
+  supporterCanvas = sources.supporterCanvas;
+  upscaledCanvas = sources.upscaledCanvas;
+  currentCompositeDimensions = dimensions;
+}
+
+function reconnectPiPSources(): void {
+  if (!isRunningInPIP || !pipCanvas || !pipCanvasContext) {
+    return;
+  }
+
+  if (!isWatchPage()) {
+    stopPiP();
+    removePiPButton();
+    return;
+  }
+
+  const sourceResult = resolvePiPSources();
+  if (sourceResult.isErr()) {
+    console.warn('[Better Niconico] PiPソースの再接続を待機します:', sourceResult.error);
+    scheduleSourceReconnect(RETRY_DELAY_MS);
+    return;
+  }
+
+  stopCompositeLoop();
+  applySourcesToState(sourceResult.value);
+  syncHiddenSourceElements();
+  renderCompositeFrame();
+  startCompositeLoop();
+
+  console.log('[Better Niconico] PiPソースを現在のプレイヤーに再接続しました');
+}
+
+function isSessionCurrent(token: number): boolean {
+  return currentEnabled && pipSessionToken === token && isWatchPage();
+}
+
 /**
  * PiPを開始
  */
 async function startPiP(): Promise<void> {
-  if (isRunningInPIP) {
+  if (isRunningInPIP || isStartingPIP) {
     console.log('[Better Niconico] PiPは既に実行中です');
     return;
   }
 
+  if (!document.pictureInPictureEnabled) {
+    console.warn('[Better Niconico] このブラウザではPicture-in-Pictureが使用できません');
+    return;
+  }
+
   console.log('[Better Niconico] PiPを開始します...');
+  isStartingPIP = true;
+  const token = ++pipSessionToken;
 
-  // メインビデオを取得
-  const videoResult = getMainVideo();
-  if (videoResult.isErr()) {
-    console.error('[Better Niconico] メインビデオが見つかりません:', videoResult.error);
+  const sourceResult = resolvePiPSources();
+  if (sourceResult.isErr()) {
+    console.error('[Better Niconico] PiPソースが見つかりません:', sourceResult.error);
+    isStartingPIP = false;
     return;
   }
-  mainVideo = videoResult.value;
 
-  // アップスケールキャンバスを検出（Video Upscaling機能との連携）
-  upscaledCanvas = getUpscaledCanvas();
-  if (upscaledCanvas) {
-    console.log('[Better Niconico] アップスケールキャンバスを検出しました（高画質モード）');
-  }
-
-  // コメントキャンバスを取得
-  const canvasResult = getCommentCanvas();
-  if (canvasResult.isErr()) {
-    console.error('[Better Niconico] コメントキャンバスが見つかりません:', canvasResult.error);
-    return;
-  }
-  commentCanvas = canvasResult.value;
-
-  // サポーターキャンバスを取得（オプショナル）
-  const supporterResult = getSupporterCanvas();
-  if (supporterResult.isErr()) {
-    console.error('[Better Niconico] サポーターキャンバスの取得に失敗:', supporterResult.error);
-    return;
-  }
-  supporterCanvas = supporterResult.value;
-  if (supporterCanvas) {
-    console.log('[Better Niconico] サポーター表示を検出しました');
-  }
-
-  // 合成用キャンバスを作成
-  // アップスケールキャンバスが存在する場合はそのサイズを使用（高解像度）
-  const compositeResult = createCompositeCanvas(mainVideo);
+  const sources = sourceResult.value;
+  const dimensions = getCompositeDimensions(sources);
+  const compositeResult = createCompositeCanvas(dimensions);
   if (compositeResult.isErr()) {
     console.error('[Better Niconico] 合成キャンバスの作成に失敗:', compositeResult.error);
+    isStartingPIP = false;
     return;
   }
+
   pipCanvas = compositeResult.value.canvas;
   pipCanvasContext = compositeResult.value.context;
+  applySourcesToState(sources);
 
-  // アップスケールキャンバスが存在する場合、PiPキャンバスのサイズを調整
   if (upscaledCanvas) {
-    pipCanvas.width = upscaledCanvas.width;
-    pipCanvas.height = upscaledCanvas.height;
     console.log(
       `[Better Niconico] PiPキャンバスサイズを高画質に調整: ${pipCanvas.width}x${pipCanvas.height}`,
     );
   }
 
-  // フラグを設定
-  isRunningInPIP = true;
-
-  // 合成ループを開始
-  startCompositeLoop();
-
-  // MediaStreamを作成（0fps = 手動フレーム制御で完璧な同期を実現）
-  pipStream = pipCanvas.captureStream(0);
-
-  // PiP用video要素を作成
-  pipVideo = createPiPVideo(pipStream);
-  document.body.appendChild(pipVideo);
-
   try {
-    // ビデオを再生
-    await pipVideo.play();
+    isRunningInPIP = true;
 
-    // アップスケーリング有効時はアップスケールキャンバスを非表示にする
-    // アップスケーリング無効時は元のビデオを非表示にする
-    if (upscaledCanvas) {
-      upscaledCanvas.style.visibility = 'hidden';
-    } else {
-      mainVideo.style.visibility = 'hidden';
+    pipStream = pipCanvas.captureStream(0);
+    pipVideo = createPiPVideo(pipStream);
+    document.body.appendChild(pipVideo);
+
+    renderCompositeFrame();
+    startCompositeLoop();
+
+    await pipVideo.play();
+    if (!isSessionCurrent(token)) {
+      stopPiP();
+      return;
     }
 
-    commentCanvas.style.visibility = 'hidden';
-
-    // PiPを要求
     await pipVideo.requestPictureInPicture();
+    if (!isSessionCurrent(token)) {
+      stopPiP();
+      return;
+    }
 
+    syncHiddenSourceElements();
     console.log('[Better Niconico] PiPを開始しました');
   } catch (error) {
     console.error('[Better Niconico] PiPの開始に失敗:', error);
     stopPiP();
+  } finally {
+    isStartingPIP = false;
   }
 }
 
@@ -628,89 +848,55 @@ async function startPiP(): Promise<void> {
  * PiPを停止
  */
 function stopPiP(): void {
-  if (!isRunningInPIP) {
+  if (
+    isStoppingPIP ||
+    (!isRunningInPIP && !isStartingPIP && !pipVideo && !pipStream && !pipCanvas)
+  ) {
     return;
   }
 
+  isStoppingPIP = true;
+  isStartingPIP = false;
+  isRunningInPIP = false;
+  pipSessionToken += 1;
+
   console.log('[Better Niconico] PiPを停止します...');
 
-  // 合成ループを停止
+  clearSourceReconnectTimer();
   stopCompositeLoop();
+  restoreHiddenSourceElements();
 
-  // PiP video要素を削除
-  if (pipVideo) {
-    pipVideo.pause();
-    if (document.contains(pipVideo)) {
-      pipVideo.remove();
+  const videoElement = pipVideo;
+  if (videoElement) {
+    if (document.pictureInPictureElement === videoElement) {
+      void document.exitPictureInPicture().catch((error) => {
+        console.warn('[Better Niconico] PiP終了処理に失敗:', error);
+      });
+    }
+
+    videoElement.pause();
+    if (document.contains(videoElement)) {
+      videoElement.remove();
     }
     pipVideo = null;
   }
 
-  // MediaStreamを停止
   if (pipStream) {
     pipStream.getTracks().forEach((track) => track.stop());
     pipStream = null;
   }
 
-  // 合成キャンバスを削除
   pipCanvas = null;
   pipCanvasContext = null;
-
-  // アップスケールキャンバスを再表示（アップスケーリングが有効だった場合）
-  if (upscaledCanvas) {
-    upscaledCanvas.style.visibility = '';
-    // 元動画はアップスケーリングによってdisplay:noneになっているので、そのまま維持
-  } else if (mainVideo) {
-    // アップスケーリングが無効な場合は元動画を再表示
-    mainVideo.style.visibility = '';
-  }
-
-  // コメントを再表示
-  if (commentCanvas) {
-    commentCanvas.style.visibility = '';
-  }
-
-  // 参照をクリア
   mainVideo = null;
+  currentVideoSrc = null;
+  currentCompositeDimensions = null;
   upscaledCanvas = null;
   commentCanvas = null;
   supporterCanvas = null;
 
-  // フラグをクリア
-  isRunningInPIP = false;
-
+  isStoppingPIP = false;
   console.log('[Better Niconico] PiPを停止しました');
-}
-
-/**
- * PiPを再初期化
- * コメントレイヤーが破棄された場合などに使用
- */
-async function reinitializePiP(): Promise<void> {
-  console.log('[Better Niconico] PiPを再初期化します...');
-
-  // 現在のPiPを停止（ただしPiPウィンドウは維持したい）
-  const wasPiPActive = isRunningInPIP;
-
-  // 合成ループを停止（mainVideoへの参照が残っている間に呼ぶ）
-  stopCompositeLoop();
-
-  // 参照をクリア（PiPビデオは維持）
-  mainVideo = null;
-  upscaledCanvas = null;
-  commentCanvas = null;
-  supporterCanvas = null;
-
-  // フラグをクリア
-  isRunningInPIP = false;
-
-  // 少し待ってから再初期化
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  // PiPが有効だった場合は再開始
-  if (wasPiPActive) {
-    void startPiP();
-  }
 }
 
 /**
@@ -718,15 +904,124 @@ async function reinitializePiP(): Promise<void> {
  */
 function togglePiP(): void {
   if (isRunningInPIP) {
-    // PiPから抜ける
     if (document.pictureInPictureElement) {
       void document.exitPictureInPicture();
     } else {
       stopPiP();
     }
   } else {
-    // PiPを開始
     void startPiP();
+  }
+}
+
+function nodeContainsPipTarget(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return false;
+  }
+
+  const element = node as Element;
+  return element.matches(PIP_TARGET_SELECTOR) || !!element.querySelector(PIP_TARGET_SELECTOR);
+}
+
+function handleFeatureMutations(mutations: MutationRecord[]): void {
+  if (!currentEnabled) {
+    return;
+  }
+
+  if (!isWatchPage()) {
+    stopPiP();
+    removePiPButton();
+    return;
+  }
+
+  let shouldUpdateButton = false;
+  let shouldReconnect = false;
+
+  for (const mutation of mutations) {
+    if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+      if (mutation.target instanceof HTMLVideoElement) {
+        shouldReconnect = true;
+      }
+      continue;
+    }
+
+    if (mutation.type !== 'childList') {
+      continue;
+    }
+
+    const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
+    if (changedNodes.some((node) => nodeContainsPipTarget(node))) {
+      shouldUpdateButton = true;
+      shouldReconnect = true;
+    }
+  }
+
+  if (shouldUpdateButton) {
+    addPiPButton();
+  }
+
+  if (shouldReconnect) {
+    scheduleSourceReconnect();
+  }
+}
+
+function setupFeatureObserver(): void {
+  if (featureObserver || !document.body) {
+    return;
+  }
+
+  featureObserver = new MutationObserver(handleFeatureMutations);
+  featureObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['src'],
+  });
+}
+
+function stopFeatureObserver(): void {
+  if (featureObserver) {
+    featureObserver.disconnect();
+    featureObserver = null;
+  }
+}
+
+function handleNavigationChange(): void {
+  if (lastPageUrl === window.location.href) {
+    return;
+  }
+
+  lastPageUrl = window.location.href;
+  if (!currentEnabled) {
+    return;
+  }
+
+  if (!isWatchPage()) {
+    stopPiP();
+    removePiPButton();
+    return;
+  }
+
+  addPiPButton();
+  scheduleSourceReconnect(RETRY_DELAY_MS);
+}
+
+function setupNavigationWatcher(): void {
+  if (navigationIntervalId !== null) {
+    return;
+  }
+
+  lastPageUrl = window.location.href;
+  window.addEventListener('popstate', handleNavigationChange);
+  navigationIntervalId = window.setInterval(handleNavigationChange, 500);
+}
+
+function stopNavigationWatcher(): void {
+  window.removeEventListener('popstate', handleNavigationChange);
+
+  if (navigationIntervalId !== null) {
+    clearInterval(navigationIntervalId);
+    navigationIntervalId = null;
   }
 }
 
@@ -734,11 +1029,15 @@ function togglePiP(): void {
  * 機能を有効化
  */
 function enableFeature(): void {
+  currentEnabled = true;
+  setupFeatureObserver();
+  setupNavigationWatcher();
+
   if (!isWatchPage()) {
+    removePiPButton();
     return;
   }
 
-  // PiPボタンを追加
   addPiPButton();
 }
 
@@ -746,13 +1045,12 @@ function enableFeature(): void {
  * 機能を無効化
  */
 function disableFeature(): void {
-  // PiPが実行中なら停止
-  if (isRunningInPIP) {
-    stopPiP();
-  }
-
-  // PiPボタンを削除
+  currentEnabled = false;
+  stopPiP();
+  clearSourceReconnectTimer();
   removePiPButton();
+  stopFeatureObserver();
+  stopNavigationWatcher();
 }
 
 /**
