@@ -169,6 +169,43 @@ segment2.ts
       expect(result.isOk()).toBe(true);
     });
 
+    it('should resolve parent and root relative resource URLs', async () => {
+      const playlist = `#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-MAP:URI="../init.mp4"
+#EXTINF:10.0,
+/segments/segment1.ts
+#EXT-X-ENDLIST`;
+
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('playlist')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(playlist),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await downloadSegmentsForMux(
+        'https://example.com/path/media/playlist.m3u8',
+        'video',
+        () => {},
+      );
+
+      expect(result.isOk()).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith('https://example.com/path/init.mp4', {
+        credentials: 'include',
+      });
+      expect(fetchMock).toHaveBeenCalledWith('https://example.com/segments/segment1.ts', {
+        credentials: 'include',
+      });
+    });
+
     it('should return error when playlist fetch fails', async () => {
       vi.stubGlobal(
         'fetch',

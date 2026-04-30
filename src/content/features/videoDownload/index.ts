@@ -1,5 +1,5 @@
 import { createDownloadButton, insertDownloadButton, removeDownloadButton } from './ui';
-import { getMasterUrl, getVariantStreams } from './stream';
+import { getMasterUrl, getMasterUrlFromWatchApi, getVariantStreams } from './stream';
 import { downloadSegmentsForMux } from './fetcher';
 import { saveAsFile } from './saver';
 import { muxWithPlaylist } from './muxer';
@@ -64,9 +64,16 @@ async function handleDownload() {
     const videoId = watchContext?.videoId ?? 'video';
 
     // 1. Get Master URL
-    const masterUrlResult = getMasterUrl({
-      minStartTime: watchContext?.playlistStartedAfter ?? 0,
-    });
+    let masterUrlResult = await getMasterUrlFromWatchApi(videoId);
+    if (masterUrlResult.isErr()) {
+      console.warn(
+        '[BetterNiconico] Failed to get fresh master URL. Falling back to performance logs:',
+        masterUrlResult.error,
+      );
+      masterUrlResult = getMasterUrl({
+        minStartTime: watchContext?.playlistStartedAfter ?? 0,
+      });
+    }
     if (masterUrlResult.isErr()) {
       throw masterUrlResult.error;
     }

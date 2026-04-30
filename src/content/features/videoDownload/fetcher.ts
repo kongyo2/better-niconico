@@ -35,6 +35,14 @@ function extractFilename(url: string): string {
   }
 }
 
+function resolvePlaylistResourceUrl(url: string, baseUrl: string): string {
+  try {
+    return new URL(url, baseUrl).href;
+  } catch {
+    return url;
+  }
+}
+
 /**
  * Replace URLs in M3U8 content with local filenames (like nico_downloader's ReplaceURLToM3u8s)
  */
@@ -54,7 +62,7 @@ function replaceUrlsInPlaylist(
       const uriMatch = trimmed.match(/URI="([^"]+)"/);
       if (uriMatch) {
         const uri = uriMatch[1];
-        const fullUrl = uri.startsWith('http') ? uri : baseUrl + uri;
+        const fullUrl = resolvePlaylistResourceUrl(uri, baseUrl);
         const filename = extractFilename(fullUrl);
         segmentUrls.push({ url: fullUrl, filename });
         // Replace URI with local filename
@@ -70,7 +78,7 @@ function replaceUrlsInPlaylist(
       const uriMatch = trimmed.match(/URI="([^"]+)"/);
       if (uriMatch) {
         const uri = uriMatch[1];
-        const fullUrl = uri.startsWith('http') ? uri : baseUrl + uri;
+        const fullUrl = resolvePlaylistResourceUrl(uri, baseUrl);
         const filename = extractFilename(fullUrl);
         segmentUrls.push({ url: fullUrl, filename });
         modifiedLines.push(trimmed.replace(/URI="[^"]+"/, `URI="${filename}"`));
@@ -82,7 +90,7 @@ function replaceUrlsInPlaylist(
 
     // Regular segment (non-# lines)
     if (trimmed && !trimmed.startsWith('#')) {
-      const fullUrl = trimmed.startsWith('http') ? trimmed : baseUrl + trimmed;
+      const fullUrl = resolvePlaylistResourceUrl(trimmed, baseUrl);
       const filename = extractFilename(fullUrl);
       segmentUrls.push({ url: fullUrl, filename });
       modifiedLines.push(filename);
@@ -110,11 +118,11 @@ export async function downloadSegmentsForMux(
 ): Promise<DownloadResult<PlaylistData>> {
   try {
     // 1. Fetch Playlist
-    const playlistResp = await fetch(playlistUrl);
+    const playlistResp = await fetch(playlistUrl, { credentials: 'include' });
     if (!playlistResp.ok) {
       return err({
         type: 'FETCH_ERROR',
-        message: `Failed to fetch media playlist`,
+        message: `Failed to fetch media playlist: ${playlistResp.status} ${playlistResp.statusText}`,
         cause: playlistResp,
       });
     }
