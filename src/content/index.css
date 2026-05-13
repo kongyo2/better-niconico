@@ -12,12 +12,13 @@ body.bn-square-icons {
   --bn-icon-border-radius: 4px;
 }
 
-/* ヘッダーのプロフィールアイコン（niconico-classicと同じセレクタ） */
-body.bn-square-icons .nico-CommonHeaderRoot .common-header-1hpqfmt,
-body.bn-square-icons .nico-CommonHeaderRoot .common-header-ws8uen,
-body.bn-square-icons .nico-CommonHeaderRoot .common-header-1h5huqo,
-body.bn-square-icons .nico-CommonHeaderRoot .common-header-n6q0ln,
-body.bn-square-icons .nico-CommonHeaderRoot .common-header-1cb8wce {
+/* ヘッダーのプロフィールアイコン
+ * Emotion生成のハッシュクラス（common-header-XXXX）はビルド毎に変わり脆いため、
+ * 構造（img/picture）と既知のクラスパターンで広く拾う。 */
+body.bn-square-icons .nico-CommonHeaderRoot img,
+body.bn-square-icons .nico-CommonHeaderRoot picture,
+body.bn-square-icons .nico-CommonHeaderRoot [class*='common-header-'] img,
+body.bn-square-icons .nico-CommonHeaderRoot .common-header-1h5huqo {
   border-radius: var(--bn-icon-border-radius) !important;
 }
 

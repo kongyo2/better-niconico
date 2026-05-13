@@ -334,8 +334,7 @@ export async function getVariantStreams(
     }
 
     // Select best video (highest bandwidth)
-    videos.sort((a, b) => b.bandwidth - a.bandwidth);
-    const bestVideo = videos[0];
+    const bestVideo = videos.toSorted((a, b) => b.bandwidth - a.bandwidth)[0];
 
     // Select Audio
     // If no explicit audio media tag, sometimes it's muxed?

@@ -25,9 +25,9 @@ const NICODIC_ICON_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/20
  * ニコニコ大百科の記事が存在するかを確認
  * Background Script経由でfetchを行う（CORSの制限を回避）
  * @param encodedTagName - URLエンコードされたタグ名
- * @returns 記事が存在すればtrue
+ * @returns 記事が存在すればtrue、存在しなければfalse、通信エラー時はnull
  */
-async function checkArticleExists(encodedTagName: string): Promise<boolean> {
+async function checkArticleExists(encodedTagName: string): Promise<boolean | null> {
   // キャッシュを確認
   if (articleExistsCache.has(encodedTagName)) {
     return articleExistsCache.get(encodedTagName)!;
@@ -44,9 +44,9 @@ async function checkArticleExists(encodedTagName: string): Promise<boolean> {
     articleExistsCache.set(encodedTagName, exists);
     return exists;
   } catch {
-    // エラー時は記事なしとみなす
-    articleExistsCache.set(encodedTagName, false);
-    return false;
+    // 通信エラーをキャッシュすると次回以降もリンク表示されないため、
+    // null を返して呼び出し側で「未確定」として扱えるようにする。
+    return null;
   }
 }
 
@@ -136,11 +136,19 @@ async function addNicopediaLinks(): Promise<void> {
 
     const encodedTagName = match[1];
 
-    // 処理済みマーカーを付与（重複処理を防ぐ）
+    // 先にマーカーを付与（同一タグへの並行処理によるリンク二重追加を防ぐ）
     tag.setAttribute(MARKER, 'true');
 
     // 記事の存在確認
     const exists = await checkArticleExists(encodedTagName);
+
+    // 通信エラー（null）の場合はマーカーを除去 → 次回呼び出しで再試行可能
+    if (exists === null) {
+      tag.removeAttribute(MARKER);
+      return;
+    }
+
+    // 記事が存在しない場合はリンクを追加しない（マーカーは残し、再リクエストを抑制）
     if (!exists) {
       return;
     }
@@ -176,7 +184,7 @@ export function apply(enabled: boolean): void {
   }
 
   if (enabled) {
-    addNicopediaLinks();
+    void addNicopediaLinks();
   } else {
     removeNicopediaLinks();
   }

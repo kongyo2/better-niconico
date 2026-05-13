@@ -232,8 +232,7 @@ function getVideoElement(): HTMLVideoElement | null {
     return null;
   }
 
-  candidates.sort((a, b) => getVideoScore(b) - getVideoScore(a));
-  return candidates[0];
+  return candidates.toSorted((a, b) => getVideoScore(b) - getVideoScore(a))[0];
 }
 
 function getMaxUpscaleFactor(video: HTMLVideoElement): number {

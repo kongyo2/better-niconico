@@ -59,6 +59,8 @@ let ambientInner: HTMLDivElement | null = null;
 let ambientCorners: HTMLDivElement | null = null;
 let fullscreenListenerSetup: boolean = false;
 let navigationListenerSetup: boolean = false;
+let navigationIntervalId: ReturnType<typeof setInterval> | null = null;
+let popstateHandler: (() => void) | null = null;
 let lastPageUrl: string = ''; // ページURL追跡（SPA対応）
 
 // 前回の色（色変化が小さい場合の更新スキップ用）
@@ -817,14 +819,15 @@ function setupNavigationListener(): void {
   }
 
   // popstate イベント（戻る/進むボタン）
-  window.addEventListener('popstate', () => {
+  popstateHandler = () => {
     console.log('[Better Niconico] ナビゲーション検出（popstate）');
     handlePageNavigation();
-  });
+  };
+  window.addEventListener('popstate', popstateHandler);
 
   // URLの変更を定期的にチェック（History API使用時の対応）
   // ニコニコはHistory APIでページ遷移する
-  setInterval(() => {
+  navigationIntervalId = setInterval(() => {
     const currentUrl = window.location.href;
     if (lastPageUrl && lastPageUrl !== currentUrl) {
       console.log('[Better Niconico] URL変更検出:', lastPageUrl, '->', currentUrl);
@@ -836,6 +839,24 @@ function setupNavigationListener(): void {
   navigationListenerSetup = true;
   lastPageUrl = window.location.href;
   console.log('[Better Niconico] ナビゲーションリスナーをセットアップしました');
+}
+
+function teardownNavigationListener(): void {
+  if (!navigationListenerSetup) {
+    return;
+  }
+
+  if (popstateHandler) {
+    window.removeEventListener('popstate', popstateHandler);
+    popstateHandler = null;
+  }
+
+  if (navigationIntervalId !== null) {
+    clearInterval(navigationIntervalId);
+    navigationIntervalId = null;
+  }
+
+  navigationListenerSetup = false;
 }
 
 /**
@@ -1040,6 +1061,9 @@ function disableFeature(): void {
 
   // 強制クリーンアップを実行
   forceCleanup();
+
+  // ナビゲーションリスナーを停止（setIntervalのリークを防ぐ）
+  teardownNavigationListener();
 
   // isEnabledをリセット
   isEnabled = false;

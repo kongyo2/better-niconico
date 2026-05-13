@@ -249,10 +249,11 @@ function addScreenshotButton(): void {
     return;
   }
 
-  // 全画面表示ボタンを探す
-  const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find(
-    (btn) => btn.getAttribute('aria-label') === '全画面表示する',
-  );
+  // 全画面表示ボタンを探す（旧aria-label「全画面表示」もフォールバックで受ける）
+  const fullscreenButton = Array.from(playerArea.querySelectorAll('button')).find((btn) => {
+    const label = btn.getAttribute('aria-label');
+    return label === '全画面表示する' || label === '全画面表示' || label?.includes('全画面');
+  });
 
   if (!fullscreenButton) {
     console.warn('[Better Niconico] 全画面表示ボタンが見つかりません');

@@ -204,8 +204,7 @@ function getMainVideo(): Result<HTMLVideoElement, VideoError | PageError> {
     return err(videoElementNotFoundError('Valid content video not found'));
   }
 
-  candidates.sort((a, b) => getVideoScore(b) - getVideoScore(a));
-  const bestVideo = candidates[0];
+  const bestVideo = candidates.toSorted((a, b) => getVideoScore(b) - getVideoScore(a))[0];
 
   if (bestVideo.videoWidth <= 0 || bestVideo.videoHeight <= 0) {
     return err(
