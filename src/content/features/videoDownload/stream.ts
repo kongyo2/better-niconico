@@ -121,12 +121,12 @@ function createDomandOutputs(videos: DomandVideo[], audios: DomandAudio[]): stri
     .filter((video): video is DomandVideo & { id: string } =>
       Boolean(video.id && video.isAvailable),
     )
-    .sort((a, b) => (b.qualityLevel ?? 0) - (a.qualityLevel ?? 0));
+    .toSorted((a, b) => (b.qualityLevel ?? 0) - (a.qualityLevel ?? 0));
   const availableAudios = audios
     .filter((audio): audio is DomandAudio & { id: string } =>
       Boolean(audio.id && audio.isAvailable),
     )
-    .sort((a, b) => (b.qualityLevel ?? 0) - (a.qualityLevel ?? 0));
+    .toSorted((a, b) => (b.qualityLevel ?? 0) - (a.qualityLevel ?? 0));
 
   const outputs: string[][] = [];
   for (const video of availableVideos) {

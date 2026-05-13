@@ -16,8 +16,8 @@ describe('videoDownload/saver', () => {
     // Mock URL methods
     mockCreateObjectURL = vi.fn().mockReturnValue('blob:test-url');
     mockRevokeObjectURL = vi.fn();
-    global.URL.createObjectURL = mockCreateObjectURL;
-    global.URL.revokeObjectURL = mockRevokeObjectURL;
+    globalThis.URL.createObjectURL = mockCreateObjectURL;
+    globalThis.URL.revokeObjectURL = mockRevokeObjectURL;
 
     // Mock click
     mockClick = vi.fn();
