@@ -276,6 +276,19 @@ body.bn-hide-shorts-button .simplebar-content a[href^='/shorts'] {
   display: none !important;
 }
 
+/* TV放送中のアニメセクションを非表示（video_top）
+ * .OnTvAnimeVideosContainer を含む .BaseLayout-block ごと隠すことで、直前の区切り線
+ * （.Separator）も一緒に消し、下線が残らないようにする。
+ * :has() で親ブロックを特定する。class（OnTvAnimeVideosContainer）と「もっと見る」リンクの
+ * href（ch.nicovideo.jp/portal/anime）の2系統で多重特定し、片方のDOM仕様変更には耐えるように
+ * している（実機 video_top で、いずれのセレクタも対象1ブロックのみに一致することを確認済み）。
+ * 子孫結合子（' '）を用いることで、将来ニコニコ側がコンテナをラッパーで包んでも追従する。 */
+body.bn-hide-onair-anime .BaseLayout-block:has(.OnTvAnimeVideosContainer),
+body.bn-hide-onair-anime
+  .BaseLayout-block:has(.ColumnTitle-link[href*='ch.nicovideo.jp/portal/anime']) {
+  display: none !important;
+}
+
 /* 通報フォーム定型文入力補助 */
 .bn-allegation-assist-container {
   margin-bottom: 16px;
