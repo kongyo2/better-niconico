@@ -11,6 +11,7 @@ import * as hideOnAirAnime from './features/hideOnAirAnime';
 import * as restoreClassicVideoLayout from './features/restoreClassicVideoLayout';
 import * as videoUpscaling from './features/videoUpscaling';
 import * as addNicoRankButton from './features/addNicoRankButton';
+import * as addNicoRanWebButton from './features/addNicoRanWebButton';
 import * as squareProfileIcons from './features/squareProfileIcons';
 import * as hideSupporterButton from './features/hideSupporterButton';
 import * as hideNicoAds from './features/hideNicoAds';
@@ -37,6 +38,7 @@ async function applySettings(): Promise<void> {
     restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
     videoUpscaling.apply(settings.enableVideoUpscaling);
     addNicoRankButton.apply(settings.showNicoRankButton);
+    addNicoRanWebButton.apply(settings.showNicoRanWebButton);
     squareProfileIcons.apply(settings.squareProfileIcons);
     hideSupporterButton.apply(settings.hideSupporterButton);
     hideNicoAds.apply(settings.hideNicoAds);
@@ -58,6 +60,7 @@ async function applySettings(): Promise<void> {
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
   videoUpscaling.apply(settings.enableVideoUpscaling);
   addNicoRankButton.apply(settings.showNicoRankButton);
+  addNicoRanWebButton.apply(settings.showNicoRanWebButton);
   squareProfileIcons.apply(settings.squareProfileIcons);
   hideSupporterButton.apply(settings.hideSupporterButton);
   hideNicoAds.apply(settings.hideNicoAds);

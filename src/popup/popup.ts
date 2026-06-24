@@ -130,6 +130,13 @@ const SETTINGS_CONFIG: SettingConfig[] = [
     icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   },
   {
+    id: 'showNicoRanWebButton',
+    label: 'ニコランWEBボタン',
+    description: 'サイドバーにニコランWEB（過去ランキング・動画履歴検索）へのリンクを追加',
+    category: 'ui',
+    icon: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z',
+  },
+  {
     id: 'hideSupporterButton',
     label: 'サポーターボタン非表示',
     description: 'サポートボタンと勧誘表示を隠します',

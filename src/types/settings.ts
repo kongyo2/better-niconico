@@ -67,6 +67,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   enableVideoUpscaling: z.boolean().default(false),
   // サイドバーにnico-rank.comへのボタンを追加
   showNicoRankButton: z.boolean().default(true),
+  // サイドバーにnicoranweb.comへのボタンを追加
+  showNicoRanWebButton: z.boolean().default(false),
   // プロフィールアイコンを丸型から四角型に変更
   squareProfileIcons: z.boolean().default(false),
   // サポーターボタンを非表示
@@ -107,6 +109,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   restoreClassicVideoLayout: false,
   enableVideoUpscaling: false,
   showNicoRankButton: true,
+  showNicoRanWebButton: false,
   squareProfileIcons: false,
   hideSupporterButton: false,
   hideNicoAds: false,
