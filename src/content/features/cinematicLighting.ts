@@ -3,24 +3,28 @@
  * 動画の色をプレイヤー周囲にグロー表示して没入感を高める
  * watch ページでのみ動作します
  *
- * IMPLEMENTATION NOTES:
- * - Main video element: blob: URL, outside #nv_watch_VideoAdContainer
- * - Extracts vibrant colors from video frames using saturation-weighted sampling
- * - Creates multi-layer ambient glow effect around and behind the player
- * - Uses requestVideoFrameCallback for frame-synced updates (Chrome 83+)
- * - Falls back to requestAnimationFrame if not supported
- * - Automatically disables in fullscreen mode
- * - Harmonizes with Niconico's existing dark mode
- * - Compatible with Classic Layout feature
+ * IMPLEMENTATION NOTES (実機調査 2026/06 に基づく):
+ * - メイン動画: blob: URL、`[data-name="video-content"]` で一意に特定可能
+ *   （プレイヤーエリア内に1個のみ。広告動画は #nv_watch_VideoAdContainer 内）
+ * - blob: 動画は same-origin のため canvas へ描画して getImageData 可能（CORS汚染なし）を実機確認
+ * - プレイヤーエリア(.grid-area_[player])・メイングリッド(SECTION) はともに position:static、
+ *   直接の絶対配置子要素は無く overflow:visible のため、position:relative の付与は
+ *   ニコニコ側レイアウトに影響しない（実機確認済み）
+ * - ニコニコは prefers-color-scheme に追従（ライト: body bg≈rgb(242,242,242) / ダーク: rgb(13,13,13)）
  *
- * 改善点 (2025/12):
- * - 多層グロー効果: 内側/外側の複数レイヤーで深みのある効果
- * - 彩度優先の色抽出: 暗い色より彩度の高い色を優先
- * - 広範囲グロー: プレイヤーエリアの外側にも光が広がる
- * - スムーズなトランジション: CSS変数とGPUアクセラレーション活用
- * - コーナーグロー: 四隅に追加のグロー効果
- * - SPAナビゲーション対応: 戻るボタンやページ遷移時の適切なクリーンアップ
- * - クラシックレイアウトとの互換性: グリッド構造変更時の適切な配置
+ * 改善点 (2026/06 堅牢化):
+ * - テーマ適応レンダリング: 背景輝度を測定し、ダーク=screen / ライト=normal blend を自動切替。
+ *   mix-blend-mode:screen はライト背景でグローがほぼ不可視になる問題を解消（デフォルトテーマで機能するように）。
+ *   prefers-color-scheme 変更リスナー + 定期再測定でライブ追従。
+ * - 動画検出の堅牢化: [data-name="video-content"] を最優先し、無ければ readyState でフォールバック。
+ * - 色抽出のスロットリング: 毎フレーム(最大60fps)ではなく約12fpsに制限し、CPU/GPU負荷を削減。
+ * - フルスクリーン時は更新ループ自体を停止し、解除時に再開（無駄なフレーム処理を排除）。
+ * - クリーンアップ堅牢化: 付与した inline style(position) と body class を確実に復元。
+ *   isEnabled 状態で非watchページへ遷移した場合も即クリーンアップ。
+ *
+ * 既存仕様の維持:
+ * - 多層グロー効果（内側/外側/コーナー）、彩度優先の色抽出
+ * - SPAナビゲーション対応、クラシックレイアウトとの互換性
  */
 
 // マーカー属性
@@ -33,17 +37,38 @@ const AMBIENT_OUTER_ID = 'bn-ambient-outer';
 const AMBIENT_INNER_ID = 'bn-ambient-inner';
 const AMBIENT_CORNERS_ID = 'bn-ambient-corners';
 
+// ライトテーマ時に body へ付与するクラス（CSS側で blend mode を切り替える）
+const AMBIENT_LIGHT_BODY_CLASS = 'bn-ambient-light';
+
 // サンプリングキャンバスの解像度（パフォーマンスと品質のバランス）
 const SAMPLE_SIZE = 16;
 
-// グロー効果の設定
-const INNER_GLOW_BLUR = 60; // 内側グローのぼかし (px)
-const INNER_GLOW_SPREAD = 30; // 内側グローの広がり (px)
-const OUTER_GLOW_BLUR = 120; // 外側グローのぼかし (px)
-const OUTER_GLOW_SPREAD = 80; // 外側グローの広がり (px)
-const GLOW_OPACITY_INNER = 0.6; // 内側グローの不透明度
-const GLOW_OPACITY_OUTER = 0.35; // 外側グローの不透明度
-// コーナーグローのサイズはCSSで定義 (200px)
+// グロー効果の形状（ぼかし/広がり, px）
+const INNER_GLOW_BLUR = 60; // 内側グローのぼかし
+const INNER_GLOW_SPREAD = 30; // 内側グローの広がり
+const OUTER_GLOW_BLUR = 120; // 外側グローのぼかし
+const OUTER_GLOW_SPREAD = 80; // 外側グローの広がり
+
+// テーマ種別
+type AmbientTheme = 'light' | 'dark';
+
+// テーマ別のグロー不透明度（実機でライト/ダーク両方を視認確認した値）
+// - dark : mix-blend-mode:screen 前提。明るく加算される
+// - light: mix-blend-mode:normal 前提。色をそのまま重ねるため inner をやや抑え outer を強める
+interface GlowOpacity {
+  inner: number; // 内側グローの box-shadow 不透明度
+  outer: number; // 外側グローの box-shadow 不透明度
+  innerBg: number; // 内側中心グラデーションの不透明度
+  outerBg: number; // 外側背景グラデーションの不透明度
+  corner: number; // コーナーグローの不透明度
+}
+const GLOW_OPACITY: Record<AmbientTheme, GlowOpacity> = {
+  dark: { inner: 0.6, outer: 0.35, innerBg: 0.2, outerBg: 0.12, corner: 0.4 },
+  light: { inner: 0.5, outer: 0.4, innerBg: 0.18, outerBg: 0.1, corner: 0.4 },
+};
+
+// 色抽出のスロットリング間隔（約12fps）。アンビエント光は高フレームレート不要。
+const EXTRACT_INTERVAL_MS = 1000 / 12;
 
 // グローバル状態
 let isEnabled: boolean = false;
@@ -58,10 +83,21 @@ let ambientOuter: HTMLDivElement | null = null;
 let ambientInner: HTMLDivElement | null = null;
 let ambientCorners: HTMLDivElement | null = null;
 let fullscreenListenerSetup: boolean = false;
+let fullscreenHandler: (() => void) | null = null;
 let navigationListenerSetup: boolean = false;
 let navigationIntervalId: ReturnType<typeof setInterval> | null = null;
 let popstateHandler: (() => void) | null = null;
 let lastPageUrl: string = ''; // ページURL追跡（SPA対応）
+let lastExtractTime: number = 0; // 最後に色抽出した時刻（スロットリング用）
+
+// 現在のテーマと、テーマ変更監視用の状態
+let currentTheme: AmbientTheme = 'dark';
+let colorSchemeMql: MediaQueryList | null = null;
+let colorSchemeHandler: (() => void) | null = null;
+
+// position を付与したホスト要素（クリーンアップ時に復元するため参照を保持）
+let styledPlayerArea: HTMLElement | null = null;
+let styledMainGrid: HTMLElement | null = null;
 
 // 前回の色（色変化が小さい場合の更新スキップ用）
 let lastColors: VibrantColors | null = null;
@@ -110,6 +146,15 @@ interface HSL {
 }
 
 /**
+ * 高精度タイムスタンプ（スロットリング用）
+ */
+function now(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+/**
  * requestVideoFrameCallback サポートチェック
  */
 function supportsRequestVideoFrameCallback(): boolean {
@@ -142,6 +187,118 @@ function isFullscreenMode(): boolean {
 }
 
 /**
+ * CSS の色文字列を RGBA に変換（rgb()/rgba() のみ対応）
+ */
+function parseCssColor(input: string): { r: number; g: number; b: number; a: number } | null {
+  const match = input.match(/rgba?\(([^)]+)\)/i);
+  if (!match) {
+    return null;
+  }
+  const parts = match[1].split(',').map((s) => Number.parseFloat(s.trim()));
+  if (parts.length < 3 || parts.slice(0, 3).some((n) => Number.isNaN(n))) {
+    return null;
+  }
+  return {
+    r: parts[0],
+    g: parts[1],
+    b: parts[2],
+    a: parts.length >= 4 && !Number.isNaN(parts[3]) ? parts[3] : 1,
+  };
+}
+
+/**
+ * 背景の実測輝度からダークテーマかどうかを判定する。
+ * body → html の順に不透明な背景色を探し、相対輝度で判定する。
+ * 測定できない場合は null を返す（呼び出し側で prefers-color-scheme にフォールバック）。
+ */
+function measureBackdropIsDark(): boolean | null {
+  const targets: Array<HTMLElement | null> = [document.body, document.documentElement];
+  for (const el of targets) {
+    if (!el) {
+      continue;
+    }
+    const rgb = parseCssColor(getComputedStyle(el).backgroundColor);
+    // ほぼ透明な背景は判定材料にならないのでスキップ
+    if (rgb && rgb.a >= 0.5) {
+      const luminance = 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b;
+      return luminance < 128;
+    }
+  }
+  return null;
+}
+
+/**
+ * 現在のテーマ（light/dark）を判定する。
+ * 1) 背景色の実測（あらゆるテーマ機構に対応する最も堅牢な方法）
+ * 2) prefers-color-scheme（ニコニコはこれに追従）
+ * 判定不能時は 'light' を既定とする（normal blend はライト/ダーク双方で視認可能なため安全側）。
+ */
+function detectTheme(): AmbientTheme {
+  const measured = measureBackdropIsDark();
+  if (measured !== null) {
+    return measured ? 'dark' : 'light';
+  }
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return 'light';
+}
+
+/**
+ * テーマを適用する（body クラスの切り替え）。
+ * CSS 側で body.bn-ambient-light のときに blend mode を normal に切り替える。
+ */
+function applyTheme(theme: AmbientTheme): void {
+  currentTheme = theme;
+  if (document.body) {
+    document.body.classList.toggle(AMBIENT_LIGHT_BODY_CLASS, theme === 'light');
+  }
+}
+
+/**
+ * テーマが変化していれば再適用し、既存のグローを即座に再描画する。
+ */
+function refreshThemeIfChanged(): void {
+  const theme = detectTheme();
+  if (theme === currentTheme) {
+    return;
+  }
+  applyTheme(theme);
+  // 不透明度が変わるため、変化閾値で skip させず即再描画
+  if (lastColors) {
+    updateGlow(lastColors);
+  }
+}
+
+/**
+ * prefers-color-scheme の変更を監視するリスナーをセットアップ
+ */
+function setupThemeListener(): void {
+  if (colorSchemeMql || typeof window.matchMedia !== 'function') {
+    return;
+  }
+  colorSchemeMql = window.matchMedia('(prefers-color-scheme: dark)');
+  colorSchemeHandler = () => {
+    refreshThemeIfChanged();
+  };
+  if (typeof colorSchemeMql.addEventListener === 'function') {
+    colorSchemeMql.addEventListener('change', colorSchemeHandler);
+  }
+}
+
+function teardownThemeListener(): void {
+  if (
+    colorSchemeMql &&
+    colorSchemeHandler &&
+    typeof colorSchemeMql.removeEventListener === 'function'
+  ) {
+    colorSchemeMql.removeEventListener('change', colorSchemeHandler);
+  }
+  colorSchemeMql = null;
+  colorSchemeHandler = null;
+}
+
+/**
  * 広告動画かどうかを判定
  */
 function isAdVideo(video: HTMLVideoElement): boolean {
@@ -157,7 +314,9 @@ function isValidContentVideo(video: HTMLVideoElement): boolean {
 }
 
 /**
- * メインコンテンツの動画要素を取得
+ * メインコンテンツの動画要素を取得する。
+ * 実機調査の結果、メイン動画は [data-name="video-content"] で一意に特定できるため最優先する。
+ * 属性が無い/未ロードの場合は、有効なコンテンツ動画のうち readyState が最大のものにフォールバック。
  */
 function getVideoElement(): HTMLVideoElement | null {
   const playerArea = document.querySelector('.grid-area_\\[player\\]');
@@ -167,15 +326,21 @@ function getVideoElement(): HTMLVideoElement | null {
 
   const videos = Array.from(playerArea.querySelectorAll('video')) as HTMLVideoElement[];
 
+  // 最優先: data-name="video-content"（安定・一意）
+  const tagged = videos.find(
+    (video) => video.getAttribute('data-name') === 'video-content' && isValidContentVideo(video),
+  );
+  if (tagged) {
+    return tagged;
+  }
+
+  // フォールバック: 有効なコンテンツ動画のうち readyState 最大
   let bestVideo: HTMLVideoElement | null = null;
   let bestReadyState = -1;
-
   for (const video of videos) {
-    if (isValidContentVideo(video)) {
-      if (video.readyState > bestReadyState) {
-        bestVideo = video;
-        bestReadyState = video.readyState;
-      }
+    if (isValidContentVideo(video) && video.readyState > bestReadyState) {
+      bestVideo = video;
+      bestReadyState = video.readyState;
     }
   }
 
@@ -424,31 +589,13 @@ function findDominantColor(colors: Array<{ rgb: RGB; score: number }>): RGB {
 }
 
 /**
- * クラシックレイアウトが有効かどうかを判定
+ * アンビエント要素（DOM）をすべて削除する。
+ * style や body class の復元は restoreHostStyles() が担当する。
  */
-function isClassicLayoutEnabled(): boolean {
-  const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
-  if (!playerArea) {
-    return false;
-  }
-  return playerArea.getAttribute('data-bn-layout') === 'classic';
-}
-
-/**
- * 既存のアンビエント要素をすべて削除
- * DOM上に残っている要素を確実にクリーンアップ
- */
-function cleanupExistingElements(): void {
+function removeAmbientDom(): void {
   // IDベースで既存要素を探して削除
-  const existingOuter = document.getElementById(AMBIENT_OUTER_ID);
-  if (existingOuter) {
-    existingOuter.remove();
-  }
-
-  const existingContainer = document.getElementById(AMBIENT_CONTAINER_ID);
-  if (existingContainer) {
-    existingContainer.remove();
-  }
+  document.getElementById(AMBIENT_OUTER_ID)?.remove();
+  document.getElementById(AMBIENT_CONTAINER_ID)?.remove();
 
   // マーカー属性ベースでも検索（念のため）
   document.querySelectorAll(`[${AMBIENT_OUTER_MARKER}]`).forEach((el) => el.remove());
@@ -459,6 +606,32 @@ function cleanupExistingElements(): void {
   ambientContainer = null;
   ambientInner = null;
   ambientCorners = null;
+}
+
+/**
+ * 付与したホスト側のスタイル(position)と body クラスを復元する。
+ * ニコニコ側の DOM を機能無効化後に汚さないために必須。
+ */
+function restoreHostStyles(): void {
+  if (styledMainGrid) {
+    styledMainGrid.style.position = '';
+    styledMainGrid = null;
+  }
+  if (styledPlayerArea) {
+    styledPlayerArea.style.position = '';
+    styledPlayerArea = null;
+  }
+  if (document.body) {
+    document.body.classList.remove(AMBIENT_LIGHT_BODY_CLASS);
+  }
+}
+
+/**
+ * 既存のアンビエント要素とホストスタイルをすべてクリーンアップ
+ */
+function cleanupExistingElements(): void {
+  removeAmbientDom();
+  restoreHostStyles();
 }
 
 /**
@@ -477,14 +650,13 @@ function createAmbientElements(): void {
     return;
   }
 
-  // クラシックレイアウトの状態を確認
-  const classicLayout = isClassicLayoutEnabled();
-
-  // 既存要素が適切な場所にあるかチェック
-  const existingOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement;
-  const existingContainer = document.getElementById(AMBIENT_CONTAINER_ID) as HTMLDivElement;
+  // クラシック/通常いずれのレイアウトでも playerArea は mainGrid の子のまま、
+  // かつグロー要素は絶対配置（グリッドセル非占有）のため配置は共通。レイアウト分岐は不要。
 
   // 既存要素が正しい親に配置されているか確認
+  const existingOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement | null;
+  const existingContainer = document.getElementById(AMBIENT_CONTAINER_ID) as HTMLDivElement | null;
+
   if (existingOuter && existingOuter.parentElement !== mainGrid) {
     existingOuter.remove();
     ambientOuter = null;
@@ -497,31 +669,28 @@ function createAmbientElements(): void {
   }
 
   // 外側グロー用コンテナ（メイングリッドに配置）
-  ambientOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement;
+  ambientOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement | null;
   if (!ambientOuter) {
     ambientOuter = document.createElement('div');
     ambientOuter.id = AMBIENT_OUTER_ID;
     ambientOuter.setAttribute(AMBIENT_OUTER_MARKER, 'true');
     ambientOuter.className = 'bn-ambient-outer';
 
-    // メイングリッドにposition: relativeを設定
+    // メイングリッドに position: relative を設定（実機で static、影響なしを確認済み）
     mainGrid.style.position = 'relative';
+    styledMainGrid = mainGrid;
     mainGrid.insertBefore(ambientOuter, mainGrid.firstChild);
-  }
-
-  // クラシックレイアウト時は外側グローのグリッドエリアを調整
-  if (classicLayout) {
-    // クラシックレイアウトではグリッドが変更されているので、
-    // 外側グローをプレイヤーエリアの直下に配置（相対位置で）
-    ambientOuter.style.gridArea = '';
-    ambientOuter.style.position = 'absolute';
   } else {
-    ambientOuter.style.gridArea = '';
-    ambientOuter.style.position = 'absolute';
+    // 既存でも position を保証
+    mainGrid.style.position = 'relative';
+    styledMainGrid = mainGrid;
   }
+  // 外側グローは絶対配置（クラシック/通常いずれも同じ扱い）
+  ambientOuter.style.gridArea = '';
+  ambientOuter.style.position = 'absolute';
 
   // 内側グロー用コンテナ（プレイヤーエリアに配置）
-  ambientContainer = document.getElementById(AMBIENT_CONTAINER_ID) as HTMLDivElement;
+  ambientContainer = document.getElementById(AMBIENT_CONTAINER_ID) as HTMLDivElement | null;
   if (!ambientContainer) {
     ambientContainer = document.createElement('div');
     ambientContainer.id = AMBIENT_CONTAINER_ID;
@@ -530,11 +699,15 @@ function createAmbientElements(): void {
 
     // プレイヤーエリアに配置
     playerArea.style.position = 'relative';
+    styledPlayerArea = playerArea;
     playerArea.insertBefore(ambientContainer, playerArea.firstChild);
+  } else {
+    playerArea.style.position = 'relative';
+    styledPlayerArea = playerArea;
   }
 
   // 内側グロー要素
-  ambientInner = document.getElementById(AMBIENT_INNER_ID) as HTMLDivElement;
+  ambientInner = document.getElementById(AMBIENT_INNER_ID) as HTMLDivElement | null;
   if (!ambientInner && ambientContainer) {
     ambientInner = document.createElement('div');
     ambientInner.id = AMBIENT_INNER_ID;
@@ -543,7 +716,7 @@ function createAmbientElements(): void {
   }
 
   // コーナーグロー要素
-  ambientCorners = document.getElementById(AMBIENT_CORNERS_ID) as HTMLDivElement;
+  ambientCorners = document.getElementById(AMBIENT_CORNERS_ID) as HTMLDivElement | null;
   if (!ambientCorners && ambientContainer) {
     ambientCorners = document.createElement('div');
     ambientCorners.id = AMBIENT_CORNERS_ID;
@@ -562,45 +735,35 @@ function createAmbientElements(): void {
 }
 
 /**
- * グロー効果を更新
+ * グロー効果を更新（現在のテーマの不透明度を使用）
  */
 function updateGlow(colors: VibrantColors): void {
+  const op = GLOW_OPACITY[currentTheme];
+
   // 内側グロー（プレイヤー周囲）
   if (ambientInner) {
     const innerShadows = [
-      // 上方向
-      `0 -${INNER_GLOW_SPREAD}px ${INNER_GLOW_BLUR}px rgba(${colors.top}, ${GLOW_OPACITY_INNER})`,
-      // 下方向
-      `0 ${INNER_GLOW_SPREAD}px ${INNER_GLOW_BLUR}px rgba(${colors.bottom}, ${GLOW_OPACITY_INNER})`,
-      // 左方向
-      `-${INNER_GLOW_SPREAD}px 0 ${INNER_GLOW_BLUR}px rgba(${colors.left}, ${GLOW_OPACITY_INNER})`,
-      // 右方向
-      `${INNER_GLOW_SPREAD}px 0 ${INNER_GLOW_BLUR}px rgba(${colors.right}, ${GLOW_OPACITY_INNER})`,
+      `0 -${INNER_GLOW_SPREAD}px ${INNER_GLOW_BLUR}px rgba(${colors.top}, ${op.inner})`,
+      `0 ${INNER_GLOW_SPREAD}px ${INNER_GLOW_BLUR}px rgba(${colors.bottom}, ${op.inner})`,
+      `-${INNER_GLOW_SPREAD}px 0 ${INNER_GLOW_BLUR}px rgba(${colors.left}, ${op.inner})`,
+      `${INNER_GLOW_SPREAD}px 0 ${INNER_GLOW_BLUR}px rgba(${colors.right}, ${op.inner})`,
     ];
 
     ambientInner.style.boxShadow = innerShadows.join(', ');
-
-    // 中心部分に支配的な色のグラデーション
-    ambientInner.style.background = `radial-gradient(ellipse at center, rgba(${colors.dominant}, 0.2) 0%, transparent 70%)`;
+    ambientInner.style.background = `radial-gradient(ellipse at center, rgba(${colors.dominant}, ${op.innerBg}) 0%, transparent 70%)`;
   }
 
   // 外側グロー（広範囲）
   if (ambientOuter) {
     const outerShadows = [
-      // 上方向（より広い）
-      `0 -${OUTER_GLOW_SPREAD}px ${OUTER_GLOW_BLUR}px rgba(${colors.top}, ${GLOW_OPACITY_OUTER})`,
-      // 下方向（より広い）
-      `0 ${OUTER_GLOW_SPREAD}px ${OUTER_GLOW_BLUR}px rgba(${colors.bottom}, ${GLOW_OPACITY_OUTER})`,
-      // 左方向（より広い）
-      `-${OUTER_GLOW_SPREAD}px 0 ${OUTER_GLOW_BLUR}px rgba(${colors.left}, ${GLOW_OPACITY_OUTER})`,
-      // 右方向（より広い）
-      `${OUTER_GLOW_SPREAD}px 0 ${OUTER_GLOW_BLUR}px rgba(${colors.right}, ${GLOW_OPACITY_OUTER})`,
+      `0 -${OUTER_GLOW_SPREAD}px ${OUTER_GLOW_BLUR}px rgba(${colors.top}, ${op.outer})`,
+      `0 ${OUTER_GLOW_SPREAD}px ${OUTER_GLOW_BLUR}px rgba(${colors.bottom}, ${op.outer})`,
+      `-${OUTER_GLOW_SPREAD}px 0 ${OUTER_GLOW_BLUR}px rgba(${colors.left}, ${op.outer})`,
+      `${OUTER_GLOW_SPREAD}px 0 ${OUTER_GLOW_BLUR}px rgba(${colors.right}, ${op.outer})`,
     ];
 
     ambientOuter.style.boxShadow = outerShadows.join(', ');
-
-    // 背景に淡いグラデーション
-    ambientOuter.style.background = `radial-gradient(ellipse 80% 60% at 50% 30%, rgba(${colors.dominant}, 0.12) 0%, transparent 60%)`;
+    ambientOuter.style.background = `radial-gradient(ellipse 80% 60% at 50% 30%, rgba(${colors.dominant}, ${op.outerBg}) 0%, transparent 60%)`;
   }
 
   // コーナーグロー
@@ -626,15 +789,16 @@ function updateGlow(colors: VibrantColors): void {
           break;
       }
 
-      el.style.background = `radial-gradient(circle at center, rgba(${cornerColor}, 0.4) 0%, transparent 70%)`;
+      el.style.background = `radial-gradient(circle at center, rgba(${cornerColor}, ${op.corner}) 0%, transparent 70%)`;
     });
   }
 }
 
 /**
  * フレームを処理
+ * @param force - true の場合スロットリングと変化閾値を無視して即座に描画する
  */
-function processFrame(): void {
+function processFrame(force = false): void {
   if (!isEnabled) {
     return;
   }
@@ -678,14 +842,21 @@ function processFrame(): void {
     return;
   }
 
+  // スロットリング（約12fps）。force 時はバイパス。
+  const t = now();
+  if (!force && t - lastExtractTime < EXTRACT_INTERVAL_MS) {
+    return;
+  }
+  lastExtractTime = t;
+
   // 色を抽出
   const colors = extractVibrantColors(currentVideo);
   if (!colors) {
     return;
   }
 
-  // 色の変化が小さければ更新をスキップ
-  if (!hasSignificantColorChange(colors)) {
+  // 色の変化が小さければ更新をスキップ（force 時は常に更新）
+  if (!force && !hasSignificantColorChange(colors)) {
     return;
   }
 
@@ -725,9 +896,12 @@ function updateLoopWithAnimationFrame(): void {
 }
 
 /**
- * 更新ループを開始
+ * 更新ループを開始（二重起動を防止）
  */
 function startUpdateLoop(): void {
+  // 既存ループがあれば停止してから開始（二重ループ防止）
+  stopUpdateLoop();
+
   if (supportsRequestVideoFrameCallback() && currentVideo) {
     console.log('[Better Niconico] シネマティックライティング: requestVideoFrameCallback を使用');
     updateLoopWithVideoFrameCallback();
@@ -772,6 +946,8 @@ function hideGlow(): void {
       (corner as HTMLElement).style.background = 'transparent';
     });
   }
+  // 次回の描画を確実に行うため色キャッシュをリセット
+  lastColors = null;
 }
 
 /**
@@ -782,12 +958,13 @@ function setupFullscreenListener(): void {
     return;
   }
 
-  document.addEventListener('fullscreenchange', () => {
+  fullscreenHandler = () => {
     if (document.fullscreenElement) {
-      // 全画面表示に入った - グローを非表示
+      // 全画面表示に入った - 更新ループを停止しグローを非表示
       console.log(
         '[Better Niconico] 全画面表示に入りました。シネマティックライティングを一時停止します。',
       );
+      stopUpdateLoop();
       hideGlow();
     } else {
       // 全画面表示から抜けた - グローを再開
@@ -795,18 +972,39 @@ function setupFullscreenListener(): void {
         '[Better Niconico] 全画面表示から抜けました。シネマティックライティングを再開します。',
       );
       if (isEnabled && currentVideo) {
-        // 即座に1フレーム処理して表示を復元
+        // DOM更新を待ってから即座に1フレーム処理し、更新ループを再開
         setTimeout(() => {
-          processFrame();
+          if (!isEnabled || !currentVideo || isFullscreenMode()) {
+            return;
+          }
+          // 要素が失われていれば再作成
+          createAmbientElements();
+          refreshThemeIfChanged();
+          processFrame(true);
+          startUpdateLoop();
         }, 100);
       }
     }
-  });
+  };
+  document.addEventListener('fullscreenchange', fullscreenHandler);
 
   fullscreenListenerSetup = true;
   console.log(
     '[Better Niconico] 全画面表示イベントリスナーをセットアップしました（シネマティックライティング用）',
   );
+}
+
+/**
+ * 全画面表示イベントのリスナーを解除する。
+ * disableFeature() で呼び出し、機能無効化後に document へリスナーが残らないようにする。
+ * （forceCleanup() では呼ばない: SPA 再初期化時はリスナーを保持したいため）
+ */
+function teardownFullscreenListener(): void {
+  if (fullscreenHandler) {
+    document.removeEventListener('fullscreenchange', fullscreenHandler);
+    fullscreenHandler = null;
+  }
+  fullscreenListenerSetup = false;
 }
 
 /**
@@ -826,7 +1024,7 @@ function setupNavigationListener(): void {
   window.addEventListener('popstate', popstateHandler);
 
   // URLの変更を定期的にチェック（History API使用時の対応）
-  // ニコニコはHistory APIでページ遷移する
+  // ニコニコはHistory APIでページ遷移する。あわせてテーマ変化も低頻度で再測定する。
   navigationIntervalId = setInterval(() => {
     const currentUrl = window.location.href;
     if (lastPageUrl && lastPageUrl !== currentUrl) {
@@ -834,6 +1032,11 @@ function setupNavigationListener(): void {
       handlePageNavigation();
     }
     lastPageUrl = currentUrl;
+
+    // テーマ（システム/サイト設定）が変わっていれば追従
+    if (isEnabled && isWatchPage()) {
+      refreshThemeIfChanged();
+    }
   }, 500);
 
   navigationListenerSetup = true;
@@ -903,21 +1106,29 @@ function handlePageNavigation(): void {
 }
 
 /**
- * 強制クリーンアップ
- * ページ遷移時など、確実に全てをクリーンアップする必要がある場合に使用
+ * 再試行タイマーをクリア
  */
-function forceCleanup(): void {
-  // 再試行タイマーをクリア
+function clearRetryTimer(): void {
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId);
     retryTimeoutId = null;
   }
+}
+
+/**
+ * 強制クリーンアップ
+ * ページ遷移時など、確実に全てをクリーンアップする必要がある場合に使用
+ * （isEnabled は保持する）
+ */
+function forceCleanup(): void {
+  // 再試行タイマーをクリア
+  clearRetryTimer();
   retryCount = 0;
 
   // 更新ループを停止
   stopUpdateLoop();
 
-  // DOM要素を削除
+  // DOM要素を削除 + ホストスタイル/bodyクラスを復元
   cleanupExistingElements();
 
   // 状態をリセット（isEnabledは保持）
@@ -926,6 +1137,7 @@ function forceCleanup(): void {
   samplingCanvas = null;
   samplingContext = null;
   lastColors = null;
+  lastExtractTime = 0;
 }
 
 /**
@@ -981,37 +1193,38 @@ function tryEnableFeature(): void {
 
   // 成功
   retryCount = 0;
-  if (retryTimeoutId !== null) {
-    clearTimeout(retryTimeoutId);
-    retryTimeoutId = null;
-  }
+  clearRetryTimer();
 
-  // 全画面モードの場合は有効化しない（フラグは立てる）
-  if (isFullscreenMode()) {
+  const fullscreen = isFullscreenMode();
+  if (fullscreen) {
     console.log('[Better Niconico] 全画面表示中のため、シネマティックライティングを待機します');
-    currentVideo = video;
-    currentVideoSrc = video.src;
-    setupFullscreenListener();
-    setupNavigationListener();
-    return;
+  } else {
+    console.log('[Better Niconico] シネマティックライティングを有効化します');
   }
-
-  console.log('[Better Niconico] シネマティックライティングを有効化します');
 
   currentVideo = video;
   currentVideoSrc = video.src;
+  lastExtractTime = 0;
 
   // サンプリングキャンバスを作成
   createSamplingCanvas();
 
-  // アンビエント要素を作成
+  // アンビエント要素を作成（全画面でも作成しておき、解除時に即描画できるようにする）
   createAmbientElements();
 
-  // 全画面イベントリスナーをセットアップ
-  setupFullscreenListener();
+  // テーマを適用
+  applyTheme(detectTheme());
 
-  // ナビゲーションリスナーをセットアップ
+  // 各種リスナーをセットアップ
+  setupFullscreenListener();
   setupNavigationListener();
+  setupThemeListener();
+
+  // 全画面中はループを開始せず待機（解除時に再開される）
+  if (fullscreen) {
+    hideGlow();
+    return;
+  }
 
   // 更新ループを開始
   startUpdateLoop();
@@ -1024,6 +1237,10 @@ function tryEnableFeature(): void {
  */
 function enableFeature(): void {
   if (!isWatchPage()) {
+    // 視聴ページ外: 有効状態のまま遷移してきた場合は確実にクリーンアップ
+    if (isEnabled) {
+      forceCleanup();
+    }
     return;
   }
 
@@ -1052,7 +1269,7 @@ function enableFeature(): void {
  */
 function disableFeature(): void {
   if (!isEnabled) {
-    // 無効化されていても残っている要素があればクリーンアップ
+    // 無効化されていても残っている要素・スタイルがあればクリーンアップ
     cleanupExistingElements();
     return;
   }
@@ -1062,8 +1279,10 @@ function disableFeature(): void {
   // 強制クリーンアップを実行
   forceCleanup();
 
-  // ナビゲーションリスナーを停止（setIntervalのリークを防ぐ）
+  // リスナーを停止（setInterval / matchMedia / fullscreenchange のリークを防ぐ）
   teardownNavigationListener();
+  teardownThemeListener();
+  teardownFullscreenListener();
 
   // isEnabledをリセット
   isEnabled = false;
