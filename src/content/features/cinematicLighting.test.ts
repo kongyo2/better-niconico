@@ -44,6 +44,7 @@ function createNiconicoPlayerDOM(
     mainVideoHeight?: number;
     isFullscreen?: boolean;
     hasClassicLayout?: boolean;
+    mainVideoHasDataName?: boolean;
   } = {},
 ) {
   const {
@@ -54,16 +55,19 @@ function createNiconicoPlayerDOM(
     mainVideoHeight = 360,
     isFullscreen = false,
     hasClassicLayout = false,
+    // 実機ではメイン動画に data-name="video-content" が付与されている
+    mainVideoHasDataName = true,
   } = options;
 
   const fullscreenClass = isFullscreen ? 'w_[100dvw] h_[100dvh]' : '';
   const layoutAttr = hasClassicLayout ? 'data-bn-layout="classic"' : '';
+  const dataNameAttr = mainVideoHasDataName ? 'data-name="video-content"' : '';
 
   document.body.innerHTML = `
     <section class="d_grid grid-template-areas_[_'player_sidebar'_'bottom_sidebar'_'bottom_sidebar'_] grid-tc_[var(--watch-player-width)_var(--watch-sidebar-width)] grid-tr_[min-content_min-content_1fr]">
       <div class="grid-area_[player]" data-styling-name="fullscreen-target" ${layoutAttr}>
         <div class="pos_relative ${fullscreenClass}">
-          ${hasMainVideo ? '<video id="main-video"></video>' : ''}
+          ${hasMainVideo ? `<video id="main-video" ${dataNameAttr}></video>` : ''}
           ${
             hasAdVideos
               ? `
@@ -158,8 +162,10 @@ describe('cinematicLighting', () => {
   let originalSetInterval: typeof setInterval;
 
   beforeEach(async () => {
-    // DOMをリセット
+    // DOMをリセット（前テストのbody class/styleが残らないように明示的にクリア）
     document.body.innerHTML = '';
+    document.body.className = '';
+    document.body.removeAttribute('style');
 
     // console.logをモック
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -1024,6 +1030,143 @@ describe('cinematicLighting', () => {
       const ambientInner = document.getElementById(AMBIENT_INNER_ID);
       // 初期状態ではスタイルが設定されていない（フレーム処理後に設定される）
       expect(ambientInner).not.toBeNull();
+    });
+
+    it('有効化直後にグロー（box-shadow）が描画される', () => {
+      createNiconicoPlayerDOM();
+
+      apply(true);
+
+      // requestVideoFrameCallback起点のループが同期的に1フレーム処理し、updateGlowが走る
+      const ambientInner = document.getElementById(AMBIENT_INNER_ID) as HTMLElement;
+      expect(ambientInner.style.boxShadow).toContain('rgba');
+      expect(ambientInner.style.boxShadow).not.toBe('none');
+    });
+  });
+
+  describe('テーマ適応レンダリング', () => {
+    beforeEach(() => {
+      setupLocationMock('/watch/sm9');
+    });
+
+    it('明るい背景（ライトテーマ）ではbodyにbn-ambient-lightクラスが付与される', () => {
+      // 背景輝度の実測が最優先される（最も堅牢な検出経路）
+      document.body.style.backgroundColor = 'rgb(242, 242, 242)';
+      createNiconicoPlayerDOM();
+
+      apply(true);
+
+      expect(document.body.classList.contains('bn-ambient-light')).toBe(true);
+    });
+
+    it('暗い背景（ダークテーマ）ではbn-ambient-lightクラスが付与されない', () => {
+      document.body.style.backgroundColor = 'rgb(13, 13, 13)';
+      createNiconicoPlayerDOM();
+
+      apply(true);
+
+      expect(document.body.classList.contains('bn-ambient-light')).toBe(false);
+    });
+
+    it('背景未設定時はprefers-color-schemeにフォールバックする（dark）', () => {
+      vi.stubGlobal(
+        'matchMedia',
+        (query: string) =>
+          ({
+            matches: query.includes('dark'),
+            media: query,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            onchange: null,
+            dispatchEvent: vi.fn(),
+          }) as unknown as MediaQueryList,
+      );
+      createNiconicoPlayerDOM();
+
+      apply(true);
+
+      expect(document.body.classList.contains('bn-ambient-light')).toBe(false);
+    });
+
+    it('無効化するとbn-ambient-lightクラスが除去される', () => {
+      document.body.style.backgroundColor = 'rgb(242, 242, 242)';
+      createNiconicoPlayerDOM();
+
+      apply(true);
+      expect(document.body.classList.contains('bn-ambient-light')).toBe(true);
+
+      apply(false);
+      expect(document.body.classList.contains('bn-ambient-light')).toBe(false);
+    });
+  });
+
+  describe('動画検出（data-name優先・フォールバック）', () => {
+    beforeEach(() => {
+      setupLocationMock('/watch/sm9');
+    });
+
+    it('data-name="video-content"を持つメイン動画で有効化できる', () => {
+      createNiconicoPlayerDOM({ mainVideoHasDataName: true });
+
+      apply(true);
+
+      expect(document.getElementById(AMBIENT_CONTAINER_ID)).not.toBeNull();
+    });
+
+    it('data-nameが無くてもreadyStateフォールバックで有効化できる', () => {
+      createNiconicoPlayerDOM({ mainVideoHasDataName: false });
+
+      apply(true);
+
+      expect(document.getElementById(AMBIENT_CONTAINER_ID)).not.toBeNull();
+    });
+  });
+
+  describe('スタイル復元（クリーンアップ堅牢化）', () => {
+    beforeEach(() => {
+      setupLocationMock('/watch/sm9');
+    });
+
+    it('無効化時にプレイヤーエリアのposition inline styleが復元される', () => {
+      createNiconicoPlayerDOM();
+
+      apply(true);
+      const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
+      expect(playerArea.style.position).toBe('relative');
+
+      apply(false);
+      expect(playerArea.style.position).toBe('');
+    });
+
+    it('無効化時に親グリッドのposition inline styleが復元される', () => {
+      createNiconicoPlayerDOM();
+
+      apply(true);
+      const mainGrid = document.querySelector('.grid-area_\\[player\\]')
+        ?.parentElement as HTMLElement;
+      expect(mainGrid.style.position).toBe('relative');
+
+      apply(false);
+      expect(mainGrid.style.position).toBe('');
+    });
+  });
+
+  describe('非watchページ遷移時のクリーンアップ', () => {
+    it('有効状態で非watchページへ遷移しapply(true)されると要素が削除される', () => {
+      setupLocationMock('/watch/sm9');
+      createNiconicoPlayerDOM();
+
+      apply(true);
+      expect(document.getElementById(AMBIENT_CONTAINER_ID)).not.toBeNull();
+
+      // 非watchページに遷移（SPAではないが、URLだけ変わった状況を再現）
+      setupLocationMock('/video_top');
+      apply(true);
+
+      expect(document.getElementById(AMBIENT_CONTAINER_ID)).toBeNull();
+      expect(document.getElementById(AMBIENT_OUTER_ID)).toBeNull();
     });
   });
 });

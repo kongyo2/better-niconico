@@ -324,7 +324,10 @@ body.bn-hide-onair-anime
   line-height: 1.5;
 }
 
-/* シネマティックライティング（アンビエントモード） - 改善版 */
+/* シネマティックライティング（アンビエントモード） - 改善版
+ * blend mode は既定でダーク向けの screen。ライトテーマ（白系背景）では screen だと
+ * グローがほぼ不可視になるため、JS が body.bn-ambient-light を付与し normal blend に切り替える。
+ * （不透明度の調整は JS 側で box-shadow の rgba alpha を用いてテーマ別に行う） */
 
 /* 外側グロー用コンテナ（メイングリッドに配置、広範囲の光） */
 .bn-ambient-outer {
@@ -428,6 +431,24 @@ body.bn-hide-onair-anime
 .bn-ambient-corner-bottom-right {
   bottom: -60px;
   right: -60px;
+}
+
+/* ライトテーマ向け blend mode 切り替え
+ * 白系背景では screen 合成だと加算しても飽和して見えないため、色をそのまま重ねる normal にする。
+ * （実機 nicovideo.jp watch ページのライト/ダーク双方でグローの視認性を確認済み） */
+body.bn-ambient-light .bn-ambient-outer,
+body.bn-ambient-light .bn-ambient-inner,
+body.bn-ambient-light .bn-ambient-corner {
+  mix-blend-mode: normal;
+}
+
+/* モーション軽減設定の尊重: 色変化アニメーションを無効化（点滅・追従による負担を避ける） */
+@media (prefers-reduced-motion: reduce) {
+  .bn-ambient-outer,
+  .bn-ambient-inner,
+  .bn-ambient-corner {
+    transition: none;
+  }
 }
 
 /* 旧バージョンとの互換性（廃止予定） */
