@@ -394,7 +394,8 @@ describe('cinematicLighting', () => {
 
       apply(true);
 
-      const mainGrid = document.querySelector('.grid-area_\\[player\\]')?.parentElement as HTMLElement;
+      const mainGrid = document.querySelector('.grid-area_\\[player\\]')
+        ?.parentElement as HTMLElement;
       expect(mainGrid?.style.position).toBe('relative');
     });
   });
@@ -415,9 +416,7 @@ describe('cinematicLighting', () => {
       apply(true);
 
       // アンビエント要素は作成されるがグロー効果は表示されない
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('全画面表示中のため'),
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('全画面表示中のため'));
     });
 
     it('DOMベースで全画面を検出した場合はアンビエントを表示しない', () => {
@@ -425,9 +424,7 @@ describe('cinematicLighting', () => {
 
       apply(true);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('全画面表示中のため'),
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('全画面表示中のため'));
     });
   });
 
@@ -583,9 +580,7 @@ describe('cinematicLighting', () => {
       });
       document.dispatchEvent(new Event('fullscreenchange'));
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('全画面表示に入りました'),
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('全画面表示に入りました'));
     });
 
     it('全画面から抜けるとグローが再開する', async () => {

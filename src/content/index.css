@@ -264,6 +264,13 @@ body.bn-hide-supporter {
   }
 }
 
+/* ショートボタンを非表示（サイドメニューの /shorts へのリンク）
+ * Emotion生成のハッシュクラス（css-XXXX）はビルド毎に変わり脆いため、
+ * 安定したhref属性でターゲットする。 */
+body.bn-hide-shorts-button a[href^='/shorts'] {
+  display: none !important;
+}
+
 /* 通報フォーム定型文入力補助 */
 .bn-allegation-assist-container {
   margin-bottom: 16px;

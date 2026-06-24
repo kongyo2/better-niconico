@@ -73,6 +73,8 @@ export const BetterNiconicoSettingsSchema = z.object({
   hideSupporterButton: z.boolean().default(false),
   // ニコニ広告セクションを非表示
   hideNicoAds: z.boolean().default(false),
+  // サイドメニューのショートボタンを非表示
+  hideShortsButton: z.boolean().default(false),
   // Picture-in-Picture機能を有効化
   enablePictureInPicture: z.boolean().default(false),
   // 動画スクリーンショット機能を有効化
@@ -108,6 +110,7 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   squareProfileIcons: false,
   hideSupporterButton: false,
   hideNicoAds: false,
+  hideShortsButton: false,
   enablePictureInPicture: false,
   enableVideoScreenshot: false,
   enableAllegationAssist: false,

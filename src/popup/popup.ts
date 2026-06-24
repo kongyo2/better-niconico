@@ -109,6 +109,13 @@ const SETTINGS_CONFIG: SettingConfig[] = [
     icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
   },
   {
+    id: 'hideShortsButton',
+    label: 'ショートボタンを非表示',
+    description: 'サイドメニューの「ショート」ボタンを隠します',
+    category: 'ui',
+    icon: 'M8 3h8a1 1 0 011 1v16a1 1 0 01-1 1H8a1 1 0 01-1-1V4a1 1 0 011-1z M10.5 9.5l4 2.5-4 2.5v-5z',
+  },
+  {
     id: 'hideNicoAds',
     label: 'ニコニ広告セクションを非表示',
     description: '動画下の広告セクションを隠します',
