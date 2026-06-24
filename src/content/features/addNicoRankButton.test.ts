@@ -252,5 +252,122 @@ describe('addNicoRankButton', () => {
         expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
       });
     });
+
+    // ユーザー報告のバグ回帰: 展開しても文字が横に展開されない(縦のまま)問題。
+    // 旧実装(video_top)では内側divのクラスが折りたたみ=css-54sd46(縦),
+    // 展開=css-1xvl3dk(横)と切り替わる。<a>自身のクラスは変わらないため、
+    // 内側のクラス変化だけでも作り直してレイアウトに追従する必要がある。
+    it('should follow the INNER layout class change (collapsed→expanded), not just the <a> class', async () => {
+      document.body.innerHTML = emotionSidebar([RANKING]);
+      apply(true);
+      // 折りたたみ時の内側divクラス(縦レイアウト)を引き継いでいる
+      expect(getButton()?.querySelector('div')?.className).toBe('css-54sd46');
+
+      // 展開でニコニコが内側divのクラスだけ差し替える(<a>のクラスは不変)
+      const rankingInner = getRankingLink()?.querySelector('div') as HTMLElement;
+      rankingInner.className = 'css-1xvl3dk';
+
+      await vi.waitFor(() => {
+        // ボタンも作り直され、横レイアウトのクラスを引き継ぐ
+        expect(getButton()?.querySelector('div')?.className).toBe('css-1xvl3dk');
+        expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
+      });
+    });
+
+    // 無関係なメニュー項目のクラス変化(ホバー等)では作り直さない(ちらつき防止)
+    it('should NOT rebuild on unrelated class changes (preserves node identity)', async () => {
+      document.body.innerHTML = emotionSidebar([
+        { text: 'おすすめ動画', href: '/recommendations?ref=video_sidemenu' },
+        RANKING,
+      ]);
+      apply(true);
+      const buttonBefore = getButton();
+      expect(buttonBefore).not.toBeNull();
+
+      // ランキングではない項目のクラスだけ変える
+      const other = Array.from(document.querySelectorAll('a')).find((a) =>
+        (a.textContent || '').includes('おすすめ'),
+      ) as HTMLElement;
+      other.className = 'css-hover-xyz';
+
+      // オブザーバーが発火しても、ランキング項目の指紋は不変なので作り直されない
+      await new Promise((r) => setTimeout(r, 50));
+      expect(getButton()).toBe(buttonBefore); // 同一ノードのまま
+      expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
+    });
+  });
+
+  // 新実装(watch/tag)のオーバーレイドロワーは閉じると .simplebar-content ごと
+  // DOMから消え、開くと別ノードで作り直される。オブザーバーを新ノードへ
+  // 張り直せないと、再表示後に開閉レイアウトへ追従できなくなる。
+  describe('sidebar node recreation (overlay drawer reopen)', () => {
+    it('should re-add the button after the whole sidebar node is recreated', () => {
+      document.body.innerHTML = pandaSidebar([RANKING]);
+      apply(true);
+      expect(getButton()).not.toBeNull();
+
+      // 閉じる(ノードごと削除)
+      document.body.innerHTML = '';
+      apply(true); // グローバル監視からの再適用を模す(サイドバー無し→何もしない)
+      expect(getButton()).toBeNull();
+
+      // 開く(別ノードで再生成) → グローバル監視からの再適用
+      document.body.innerHTML = pandaSidebar([RANKING]);
+      apply(true);
+      expect(getButton()).not.toBeNull();
+      expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
+    });
+
+    it('should re-attach the observer so class changes on the NEW node are followed', async () => {
+      document.body.innerHTML = emotionSidebar([RANKING]);
+      apply(true);
+
+      // サイドバーノードを丸ごと作り直す(再生成を模す)
+      document.body.innerHTML = emotionSidebar([RANKING]);
+      apply(true); // 新ノードへ張り直し
+      expect(getButton()).not.toBeNull();
+
+      // 新ノードのランキングのクラスを変える → 追従できれば張り直し成功の証拠
+      (getRankingLink() as HTMLElement).className = 'css-new-state';
+      await vi.waitFor(() => {
+        expect(getButton()?.className).toBe('css-new-state');
+        expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
+      });
+    });
+  });
+
+  // ニコニコは .simplebar-content を複数箇所で使うため、最初の1つに決め打ちせず
+  // 「ランキングリンクを含むコンテナ」を選ぶ必要がある。
+  describe('multiple simplebar-content containers', () => {
+    it('should add the button to the container that actually has the ranking link', () => {
+      document.body.innerHTML =
+        '<div class="simplebar-content"><a href="/watch/sm1">無関係なスクロール領域</a></div>' +
+        pandaSidebar([RANKING]);
+      apply(true);
+
+      const button = getButton();
+      expect(button).not.toBeNull();
+      const containers = document.querySelectorAll('.simplebar-content');
+      expect(containers[0].contains(button)).toBe(false);
+      expect(containers[1].contains(button)).toBe(true);
+    });
+  });
+
+  describe('ranking link disambiguation', () => {
+    it('should prefer the exact "ランキング" link over a "もっと見る" ranking link', () => {
+      document.body.innerHTML = pandaSidebar([
+        { text: 'ランキング もっと見る', href: '/ranking?ref=more' },
+        RANKING,
+      ]);
+      apply(true);
+
+      const button = getButton();
+      expect(button).not.toBeNull();
+      // 完全一致の項目の直後に入る
+      const exact = Array.from(document.querySelectorAll('a')).find(
+        (a) => (a.textContent || '').trim() === 'ランキング',
+      );
+      expect(exact?.closest('li')?.nextElementSibling).toBe(button?.closest('li'));
+    });
   });
 });

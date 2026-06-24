@@ -24,37 +24,19 @@ import * as restoreNicopediaLink from './features/restoreNicopediaLink';
 import * as hideShortsButton from './features/hideShortsButton';
 
 /**
- * 設定を適用する（Result型を使用）
+ * 直近に読み込んだ設定のキャッシュ。
+ * DOM変更(MutationObserver)起点の再適用ごとに chrome.storage を読みに行くと
+ * 動画再生中のような頻繁なDOM変化で大量の非同期読込が走るため、設定はキャッシュし
+ * storage.onChanged / メッセージ受信時のみ読み直す。
  */
-async function applySettings(): Promise<void> {
-  const settingsResult = await loadSettings();
+let cachedSettings: BetterNiconicoSettings = DEFAULT_SETTINGS;
+/** 初回読み込みが完了したか(完了前はDOM起点の再適用をしない=デフォルトのちらつき防止) */
+let settingsLoaded = false;
 
-  if (settingsResult.isErr()) {
-    console.error('[Better Niconico] 設定の読み込みに失敗しました:', settingsResult.error);
-    // エラー時はデフォルト設定を使用
-    const settings = DEFAULT_SETTINGS;
-    hidePremiumSection.apply(settings.hidePremiumSection);
-    hideOnAirAnime.apply(settings.hideOnAirAnime);
-    restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
-    videoUpscaling.apply(settings.enableVideoUpscaling);
-    addNicoRankButton.apply(settings.showNicoRankButton);
-    addNicoRanWebButton.apply(settings.showNicoRanWebButton);
-    squareProfileIcons.apply(settings.squareProfileIcons);
-    hideSupporterButton.apply(settings.hideSupporterButton);
-    hideNicoAds.apply(settings.hideNicoAds);
-    pictureInPicture.apply(settings.enablePictureInPicture);
-    videoScreenshot.apply(settings.enableVideoScreenshot);
-    void allegationAssist.apply(settings.enableAllegationAssist);
-    cinematicLighting.apply(settings.enableCinematicLighting);
-    videoDownload.apply(settings.enableVideoDownload);
-    restoreNicopediaLink.apply(settings.restoreNicopediaLink);
-    hideShortsButton.apply(settings.hideShortsButton);
-    return;
-  }
-
-  const settings = settingsResult.value;
-
-  // 各機能を適用
+/**
+ * 指定された設定で各機能を適用する(同期・storageアクセスなし)
+ */
+function applyAll(settings: BetterNiconicoSettings): void {
   hidePremiumSection.apply(settings.hidePremiumSection);
   hideOnAirAnime.apply(settings.hideOnAirAnime);
   restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
@@ -74,12 +56,51 @@ async function applySettings(): Promise<void> {
 }
 
 /**
+ * 設定を chrome.storage から読み直してキャッシュし、適用する（Result型を使用）
+ */
+async function loadAndApply(): Promise<void> {
+  const settingsResult = await loadSettings();
+
+  if (settingsResult.isErr()) {
+    console.error('[Better Niconico] 設定の読み込みに失敗しました:', settingsResult.error);
+    cachedSettings = DEFAULT_SETTINGS; // エラー時はデフォルト設定を使用
+  } else {
+    cachedSettings = settingsResult.value;
+  }
+
+  settingsLoaded = true;
+  applyAll(cachedSettings);
+}
+
+/**
+ * DOM変更起点の再適用をフレーム単位に集約する。
+ * 連続するDOM変化(コメント流れ・動画切り替え等)で applyAll が連打されるのを防ぐ。
+ * キャッシュ済みの設定を使うため storage アクセスは発生しない。
+ */
+const scheduleFrame: (cb: () => void) => void =
+  typeof requestAnimationFrame === 'function'
+    ? (cb) => requestAnimationFrame(cb)
+    : (cb) => setTimeout(cb, 16);
+let reapplyScheduled = false;
+
+function scheduleReapply(): void {
+  if (!settingsLoaded || reapplyScheduled) {
+    return;
+  }
+  reapplyScheduled = true;
+  scheduleFrame(() => {
+    reapplyScheduled = false;
+    applyAll(cachedSettings);
+  });
+}
+
+/**
  * 設定変更を監視する
  */
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'sync' && changes.betterNiconicoSettings) {
     console.log('[Better Niconico] 設定が変更されました');
-    void applySettings();
+    void loadAndApply();
   }
 });
 
@@ -103,7 +124,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     const newSettings = request.data as BetterNiconicoSettings;
     void saveSettings(newSettings).then((result) => {
       if (result.isOk()) {
-        void applySettings();
+        void loadAndApply();
         sendResponse({ success: true });
       } else {
         console.error('[Better Niconico] 設定保存エラー:', result.error);
@@ -123,16 +144,16 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 async function initialize(): Promise<void> {
   console.log('[Better Niconico] 初期化開始');
 
-  // 初回適用
-  await applySettings();
+  // 初回適用(storageから読み込み)
+  await loadAndApply();
 
   // MutationObserverでDOM変更を監視
   // ニコニコ動画は動的にコンテンツを読み込むため
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       if (mutation.addedNodes.length > 0) {
-        // 新しいノードが追加されたら設定を再適用
-        void applySettings();
+        // 新しいノードが追加されたら(キャッシュ設定で)再適用。フレーム単位に集約。
+        scheduleReapply();
         break;
       }
     }

@@ -272,5 +272,29 @@ describe('addNicoRanWebButton', () => {
         expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
       });
     });
+
+    // 既存ニコランボタンと共存した状態で開閉(クラス変化)が起きても、
+    // 作り直し後に「ニコラン → ニコランWEB」の順序が維持されること
+    it('should keep order (after the nico-rank button) when rebuilt on a class change', async () => {
+      document.body.innerHTML = `<div class="simplebar-content"><div class="css-1i3qj3a">${emotionItem(
+        'ランキング',
+        '/ranking?ref=video_sidemenu',
+      )}${emotionNicoRankButton()}</div></div>`;
+      apply(true);
+      expect(getButton()).not.toBeNull();
+
+      // 展開で内側divのクラスが変わる状況をシミュレート
+      const rankingInner = getRankingLink()?.querySelector('div') as HTMLElement;
+      rankingInner.className = 'css-1xvl3dk';
+
+      await vi.waitFor(() => {
+        const webNow = getButton();
+        expect(webNow).not.toBeNull();
+        // 作り直されてもニコランの直後を維持
+        const nicoRank = document.querySelector(`[${NICO_RANK_MARKER}]`);
+        expect(nicoRank?.nextElementSibling).toBe(webNow);
+        expect(document.querySelectorAll(`[${BUTTON_MARKER}]`).length).toBe(1);
+      });
+    });
   });
 });
