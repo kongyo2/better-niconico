@@ -619,6 +619,52 @@ describe('cinematicLighting', () => {
 
       vi.useRealTimers();
     });
+
+    it('無効化するとfullscreenchangeリスナーが解除され反応しなくなる', () => {
+      createNiconicoPlayerDOM();
+
+      apply(true);
+      apply(false);
+
+      // 無効化までのログ呼び出しをクリア
+      consoleLogSpy.mockClear();
+
+      // 全画面に入るイベントを発火（リスナーが残っていれば反応してしまう）
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: document.body,
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('fullscreenchange'));
+
+      // リスナーが解除されているため、全画面関連の処理は実行されない
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('全画面表示に入りました'),
+      );
+    });
+
+    it('無効化→再有効化でfullscreenchangeリスナーが再登録される', () => {
+      createNiconicoPlayerDOM();
+
+      apply(true);
+      apply(false);
+      apply(true);
+
+      consoleLogSpy.mockClear();
+
+      // 全画面に入るイベントを発火
+      Object.defineProperty(document, 'fullscreenElement', {
+        value: document.body,
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('fullscreenchange'));
+
+      // 再登録されたリスナーが反応する
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('全画面表示に入りました'),
+      );
+    });
   });
 
   describe('実際のDOM構造からの調査結果に基づくテスト', () => {

@@ -83,6 +83,7 @@ let ambientOuter: HTMLDivElement | null = null;
 let ambientInner: HTMLDivElement | null = null;
 let ambientCorners: HTMLDivElement | null = null;
 let fullscreenListenerSetup: boolean = false;
+let fullscreenHandler: (() => void) | null = null;
 let navigationListenerSetup: boolean = false;
 let navigationIntervalId: ReturnType<typeof setInterval> | null = null;
 let popstateHandler: (() => void) | null = null;
@@ -588,17 +589,6 @@ function findDominantColor(colors: Array<{ rgb: RGB; score: number }>): RGB {
 }
 
 /**
- * クラシックレイアウトが有効かどうかを判定
- */
-function isClassicLayoutEnabled(): boolean {
-  const playerArea = document.querySelector('.grid-area_\\[player\\]') as HTMLElement;
-  if (!playerArea) {
-    return false;
-  }
-  return playerArea.getAttribute('data-bn-layout') === 'classic';
-}
-
-/**
  * アンビエント要素（DOM）をすべて削除する。
  * style や body class の復元は restoreHostStyles() が担当する。
  */
@@ -660,8 +650,8 @@ function createAmbientElements(): void {
     return;
   }
 
-  // クラシックレイアウトの状態を確認（将来のレイアウト分岐用に保持）
-  isClassicLayoutEnabled();
+  // クラシック/通常いずれのレイアウトでも playerArea は mainGrid の子のまま、
+  // かつグロー要素は絶対配置（グリッドセル非占有）のため配置は共通。レイアウト分岐は不要。
 
   // 既存要素が正しい親に配置されているか確認
   const existingOuter = document.getElementById(AMBIENT_OUTER_ID) as HTMLDivElement | null;
@@ -968,7 +958,7 @@ function setupFullscreenListener(): void {
     return;
   }
 
-  document.addEventListener('fullscreenchange', () => {
+  fullscreenHandler = () => {
     if (document.fullscreenElement) {
       // 全画面表示に入った - 更新ループを停止しグローを非表示
       console.log(
@@ -995,12 +985,26 @@ function setupFullscreenListener(): void {
         }, 100);
       }
     }
-  });
+  };
+  document.addEventListener('fullscreenchange', fullscreenHandler);
 
   fullscreenListenerSetup = true;
   console.log(
     '[Better Niconico] 全画面表示イベントリスナーをセットアップしました（シネマティックライティング用）',
   );
+}
+
+/**
+ * 全画面表示イベントのリスナーを解除する。
+ * disableFeature() で呼び出し、機能無効化後に document へリスナーが残らないようにする。
+ * （forceCleanup() では呼ばない: SPA 再初期化時はリスナーを保持したいため）
+ */
+function teardownFullscreenListener(): void {
+  if (fullscreenHandler) {
+    document.removeEventListener('fullscreenchange', fullscreenHandler);
+    fullscreenHandler = null;
+  }
+  fullscreenListenerSetup = false;
 }
 
 /**
@@ -1275,9 +1279,10 @@ function disableFeature(): void {
   // 強制クリーンアップを実行
   forceCleanup();
 
-  // リスナーを停止（setIntervalやmatchMediaのリークを防ぐ）
+  // リスナーを停止（setInterval / matchMedia / fullscreenchange のリークを防ぐ）
   teardownNavigationListener();
   teardownThemeListener();
+  teardownFullscreenListener();
 
   // isEnabledをリセット
   isEnabled = false;
