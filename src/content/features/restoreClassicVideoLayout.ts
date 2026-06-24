@@ -129,13 +129,23 @@ function getOrCreateTopContainer(gridParent: HTMLElement): HTMLElement {
   return container;
 }
 
-/** 親要素のクラスのうち、指定prefixを含むものをすべて除去 */
+/**
+ * 親要素のクラスのうち、指定prefixで「始まる」ものをすべて除去。
+ * Panda CSSのグリッドクラス（`grid-tr_[...]` 等）は実機上いずれもprefixが先頭にある（実機調査で確認済み）。
+ * `includes`（部分一致）ではなく`startsWith`（前方一致）にすることで、
+ * 万一prefixを途中に含む無関係クラス（例: `[&_.grid-tr_x]:...`）を巻き込まないようにする。
+ */
 function removeClassesByPrefix(el: HTMLElement, prefixes: readonly string[]): void {
   for (const cls of Array.from(el.classList)) {
-    if (prefixes.some((p) => cls.includes(p))) {
+    if (prefixes.some((p) => cls.startsWith(p))) {
       el.classList.remove(cls);
     }
   }
+}
+
+/** 親要素のクラスに、指定prefixで始まるものが1つでも存在するか */
+function hasClassWithPrefix(el: HTMLElement, prefix: string): boolean {
+  return Array.from(el.classList).some((cls) => cls.startsWith(prefix));
 }
 
 /** クラシックレイアウト用のグリッド・サイドバースタイルを冪等に適用 */
@@ -253,14 +263,14 @@ function restoreDefaultLayout(): void {
     legacyBottom.remove();
   }
 
-  // 削除したTailwindクラスを復元
-  if (!parent.className.includes('grid-tr_')) {
+  // 削除したTailwindクラスを復元（前方一致で既存判定し、重複追加を防ぐ）
+  if (!hasClassWithPrefix(parent, 'grid-tr_')) {
     parent.classList.add(DEFAULT_GRID_CLASSES.rows);
   }
-  if (!parent.className.includes('grid-template-areas_')) {
+  if (!hasClassWithPrefix(parent, 'grid-template-areas_')) {
     parent.classList.add(DEFAULT_GRID_CLASSES.areas);
   }
-  if (!parent.className.includes('grid-tc_')) {
+  if (!hasClassWithPrefix(parent, 'grid-tc_')) {
     parent.classList.add(DEFAULT_GRID_CLASSES.cols);
   }
 
