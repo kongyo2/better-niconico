@@ -109,6 +109,13 @@ const SETTINGS_CONFIG: SettingConfig[] = [
     icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
   },
   {
+    id: 'hideShortsButton',
+    label: 'ショートボタンを非表示',
+    description: 'サイドメニューの「ショート」ボタンを隠します',
+    category: 'ui',
+    icon: 'M8 3h8a1 1 0 011 1v16a1 1 0 01-1 1H8a1 1 0 01-1-1V4a1 1 0 011-1z M10.5 9.5l4 2.5-4 2.5v-5z',
+  },
+  {
     id: 'hideNicoAds',
     label: 'ニコニ広告セクションを非表示',
     description: '動画下の広告セクションを隠します',
@@ -121,6 +128,13 @@ const SETTINGS_CONFIG: SettingConfig[] = [
     description: 'サイドバーにランキングサイトへのリンクを追加',
     category: 'ui',
     icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  },
+  {
+    id: 'showNicoRanWebButton',
+    label: 'ニコランWEBボタン',
+    description: 'サイドバーにニコランWEB（過去ランキング・動画履歴検索）へのリンクを追加',
+    category: 'ui',
+    icon: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z',
   },
   {
     id: 'hideSupporterButton',

@@ -108,9 +108,7 @@ describe('squareProfileIcons', () => {
       expect(document.body.classList.contains(SQUARE_ICONS_CLASS)).toBe(true);
 
       // CSSセレクタがマッチする要素が存在することを確認
-      const headerIcon = document.querySelector(
-        '.nico-CommonHeaderRoot .common-header-1h5huqo',
-      );
+      const headerIcon = document.querySelector('.nico-CommonHeaderRoot .common-header-1h5huqo');
       expect(headerIcon).not.toBeNull();
     });
 
@@ -131,9 +129,7 @@ describe('squareProfileIcons', () => {
       expect(document.body.classList.contains(SQUARE_ICONS_CLASS)).toBe(true);
 
       // CSSセレクタがマッチする要素が存在することを確認
-      const userIcon = document.querySelector(
-        '.bdr_full[src*="nicoaccount/usericon"]',
-      );
+      const userIcon = document.querySelector('.bdr_full[src*="nicoaccount/usericon"]');
       expect(userIcon).not.toBeNull();
     });
 
@@ -154,9 +150,7 @@ describe('squareProfileIcons', () => {
       expect(document.body.classList.contains(SQUARE_ICONS_CLASS)).toBe(true);
 
       // CSSセレクタがマッチする要素が存在することを確認
-      const channelIcon = document.querySelector(
-        '.bdr_full[src*="comch/channel-icon"]',
-      );
+      const channelIcon = document.querySelector('.bdr_full[src*="comch/channel-icon"]');
       expect(channelIcon).not.toBeNull();
     });
 
@@ -188,9 +182,7 @@ describe('squareProfileIcons', () => {
       expect(document.body.classList.contains(SQUARE_ICONS_CLASS)).toBe(true);
 
       // 全てのユーザーアイコンがセレクタにマッチすることを確認
-      const userIcons = document.querySelectorAll(
-        '.bdr_full[src*="nicoaccount/usericon"]',
-      );
+      const userIcons = document.querySelectorAll('.bdr_full[src*="nicoaccount/usericon"]');
       expect(userIcons.length).toBe(2);
     });
 
@@ -212,9 +204,7 @@ describe('squareProfileIcons', () => {
       expect(document.body.classList.contains(SQUARE_ICONS_CLASS)).toBe(true);
 
       // ml_-x1_5クラスを持つアイコンもセレクタにマッチすることを確認
-      const tabIcon = document.querySelector(
-        '.bdr_full.ml_-x1_5[src*="nicoaccount/usericon"]',
-      );
+      const tabIcon = document.querySelector('.bdr_full.ml_-x1_5[src*="nicoaccount/usericon"]');
       expect(tabIcon).not.toBeNull();
     });
 
@@ -281,21 +271,15 @@ describe('squareProfileIcons', () => {
       expect(document.body.classList.contains(SQUARE_ICONS_CLASS)).toBe(true);
 
       // 全ての種類のアイコンがセレクタにマッチすることを確認
-      const headerIcon = document.querySelector(
-        '.nico-CommonHeaderRoot .common-header-1h5huqo',
-      );
+      const headerIcon = document.querySelector('.nico-CommonHeaderRoot .common-header-1h5huqo');
       const ownerIcon = document.querySelector(
         '.video-owner-section .bdr_full[src*="nicoaccount/usericon"]',
       );
       const recommendedIcons = document.querySelectorAll(
         '.recommended-section .bdr_full[src*="nicoaccount/usericon"]',
       );
-      const channelIcon = document.querySelector(
-        '.bdr_full[src*="comch/channel-icon"]',
-      );
-      const tabIcon = document.querySelector(
-        '.bdr_full.ml_-x1_5[src*="nicoaccount/usericon"]',
-      );
+      const channelIcon = document.querySelector('.bdr_full[src*="comch/channel-icon"]');
+      const tabIcon = document.querySelector('.bdr_full.ml_-x1_5[src*="nicoaccount/usericon"]');
 
       expect(headerIcon).not.toBeNull();
       expect(ownerIcon).not.toBeNull();

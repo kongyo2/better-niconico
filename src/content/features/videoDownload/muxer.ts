@@ -153,7 +153,13 @@ export function muxWithPlaylist(
     );
 
     // Write files to FS
-    const writeResult = writeFilesToFS(core, videoPlaylist, videoSegments, audioPlaylist, audioSegments);
+    const writeResult = writeFilesToFS(
+      core,
+      videoPlaylist,
+      videoSegments,
+      audioPlaylist,
+      audioSegments,
+    );
     if (writeResult.isErr()) {
       return err(writeResult.error);
     }

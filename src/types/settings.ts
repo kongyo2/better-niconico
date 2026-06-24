@@ -67,12 +67,16 @@ export const BetterNiconicoSettingsSchema = z.object({
   enableVideoUpscaling: z.boolean().default(false),
   // サイドバーにnico-rank.comへのボタンを追加
   showNicoRankButton: z.boolean().default(true),
+  // サイドバーにnicoranweb.comへのボタンを追加
+  showNicoRanWebButton: z.boolean().default(false),
   // プロフィールアイコンを丸型から四角型に変更
   squareProfileIcons: z.boolean().default(false),
   // サポーターボタンを非表示
   hideSupporterButton: z.boolean().default(false),
   // ニコニ広告セクションを非表示
   hideNicoAds: z.boolean().default(false),
+  // サイドメニューのショートボタンを非表示
+  hideShortsButton: z.boolean().default(false),
   // Picture-in-Picture機能を有効化
   enablePictureInPicture: z.boolean().default(false),
   // 動画スクリーンショット機能を有効化
@@ -105,9 +109,11 @@ export const DEFAULT_SETTINGS: BetterNiconicoSettings = {
   restoreClassicVideoLayout: false,
   enableVideoUpscaling: false,
   showNicoRankButton: true,
+  showNicoRanWebButton: false,
   squareProfileIcons: false,
   hideSupporterButton: false,
   hideNicoAds: false,
+  hideShortsButton: false,
   enablePictureInPicture: false,
   enableVideoScreenshot: false,
   enableAllegationAssist: false,

@@ -264,6 +264,18 @@ body.bn-hide-supporter {
   }
 }
 
+/* ショートボタンを非表示（サイドメニューの /shorts へのリンク）
+ * Emotion生成のハッシュクラス（css-XXXX）はビルド毎に変わり脆いため、
+ * 安定したhref属性でターゲットする。
+ * ただし対象はサイドメニュー(.simplebar-content)内に限定する。watchページの
+ * 関連動画には /shorts/ss... 形式のショート動画リンクが多数あり、スコープを
+ * 絞らないとそれらまで巻き込んで隠してしまうため。
+ * (実機確認: ショートボタンは video_top・watchドロワーとも .simplebar-content 内、
+ *  関連動画のショート動画リンクは .simplebar-content 外) */
+body.bn-hide-shorts-button .simplebar-content a[href^='/shorts'] {
+  display: none !important;
+}
+
 /* 通報フォーム定型文入力補助 */
 .bn-allegation-assist-container {
   margin-bottom: 16px;
