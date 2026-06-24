@@ -79,7 +79,9 @@ function pickRankingLink(scope: HTMLElement): HTMLAnchorElement | null {
   if (candidates.length === 0) {
     return null;
   }
-  return candidates.find((link) => (link.textContent || '').trim() === 'ランキング') || candidates[0];
+  return (
+    candidates.find((link) => (link.textContent || '').trim() === 'ランキング') || candidates[0]
+  );
 }
 
 /**
@@ -137,9 +139,14 @@ export function createSidebarRankButton(config: SidebarRankButtonConfig): Sideba
    * ランキングリンク(の項目単位)を複製してボタンを生成する。
    * 複製元の現在のクラス・内部構造(=展開/折りたたみのレイアウト)をそのまま引き継ぐ。
    */
-  function createButtonItem(rankingItem: HTMLElement): HTMLElement {
+  function createButtonItem(rankingItem: HTMLElement): HTMLElement | null {
     const clone = rankingItem.cloneNode(true) as HTMLElement;
-    const link = (clone.tagName === 'A' ? clone : clone.querySelector('a')) as HTMLAnchorElement;
+    const link = clone.tagName === 'A' ? clone : clone.querySelector('a');
+    // getMenuItem は「ランキングの<a>自身」か「<a>を内包する<li>」を返すため
+    // 通常 link は必ず取得できるが、想定外のDOM構造変化で <a> を欠く場合に備えて防御する。
+    if (!(link instanceof HTMLAnchorElement)) {
+      return null;
+    }
 
     link.href = url;
     link.setAttribute('target', '_blank');
@@ -220,6 +227,11 @@ export function createSidebarRankButton(config: SidebarRankButtonConfig): Sideba
     // 作り直し: 古いボタン(別コンテナの残骸含む)を消してから挿入し直す
     const hadButton = removeButton();
     const buttonItem = createButtonItem(rankingItem);
+    if (!buttonItem) {
+      // 想定外のDOM構造でボタンを生成できなかった。指紋をリセットし、次回の再適用で作り直す。
+      lastSignature = null;
+      return;
+    }
 
     // 挿入の基準: 先行ボタン(例: ニコラン)があればその直後、なければランキング直後
     let anchorItem = rankingItem;
@@ -248,6 +260,9 @@ export function createSidebarRankButton(config: SidebarRankButtonConfig): Sideba
   function ensureObserver(): void {
     const container = findRanking()?.container ?? null;
     if (!container) {
+      // サイドメニューが消えた(ドロワーを閉じた等)。古いコンテナノードに張ったままの
+      // オブザーバーを切断する(切り離されたノードを掴み続けるリークを防ぐ)。
+      stopObserver();
       return;
     }
     if (sidebarObserver && observedContainer === container) {
@@ -262,8 +277,9 @@ export function createSidebarRankButton(config: SidebarRankButtonConfig): Sideba
     sidebarObserver = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         // 自分のボタン由来のクラス変更は無視(無限ループ防止)
+        // attributeFilter: ['class'] のため target は常に Element(属性は Element のみが持つ)
         const target = mutation.target as HTMLElement;
-        if (target.closest?.(`[${marker}]`)) {
+        if (target.closest(`[${marker}]`)) {
           continue;
         }
         // ランキングリンク等の状態が変化 → 指紋を見て必要なら作り直す

@@ -34,32 +34,64 @@ let cachedSettings: BetterNiconicoSettings = DEFAULT_SETTINGS;
 let settingsLoaded = false;
 
 /**
- * 指定された設定で各機能を適用する(同期・storageアクセスなし)
+ * 各機能の適用処理(機能名, 適用関数)の一覧。順序は適用順を表す。
+ * applyAll はこの一覧を機能単位の try/catch で回す。
+ */
+const FEATURE_APPLIERS: ReadonlyArray<readonly [string, (s: BetterNiconicoSettings) => void]> = [
+  ['hidePremiumSection', (s) => hidePremiumSection.apply(s.hidePremiumSection)],
+  ['hideOnAirAnime', (s) => hideOnAirAnime.apply(s.hideOnAirAnime)],
+  [
+    'restoreClassicVideoLayout',
+    (s) => restoreClassicVideoLayout.apply(s.restoreClassicVideoLayout),
+  ],
+  ['videoUpscaling', (s) => videoUpscaling.apply(s.enableVideoUpscaling)],
+  ['addNicoRankButton', (s) => addNicoRankButton.apply(s.showNicoRankButton)],
+  ['addNicoRanWebButton', (s) => addNicoRanWebButton.apply(s.showNicoRanWebButton)],
+  ['squareProfileIcons', (s) => squareProfileIcons.apply(s.squareProfileIcons)],
+  ['hideSupporterButton', (s) => hideSupporterButton.apply(s.hideSupporterButton)],
+  ['hideNicoAds', (s) => hideNicoAds.apply(s.hideNicoAds)],
+  ['pictureInPicture', (s) => pictureInPicture.apply(s.enablePictureInPicture)],
+  ['videoScreenshot', (s) => videoScreenshot.apply(s.enableVideoScreenshot)],
+  ['allegationAssist', (s) => void allegationAssist.apply(s.enableAllegationAssist)],
+  ['cinematicLighting', (s) => cinematicLighting.apply(s.enableCinematicLighting)],
+  ['videoDownload', (s) => videoDownload.apply(s.enableVideoDownload)],
+  ['restoreNicopediaLink', (s) => restoreNicopediaLink.apply(s.restoreNicopediaLink)],
+  ['hideShortsButton', (s) => hideShortsButton.apply(s.hideShortsButton)],
+];
+
+/**
+ * 指定された設定で各機能を適用する(同期・storageアクセスなし)。
+ * ある機能が(ニコニコ側のDOMが想定外の状態などで)同期的に例外を投げても、
+ * 他の機能や再適用サイクル全体を巻き込まないよう、機能単位で try/catch する。
  */
 function applyAll(settings: BetterNiconicoSettings): void {
-  hidePremiumSection.apply(settings.hidePremiumSection);
-  hideOnAirAnime.apply(settings.hideOnAirAnime);
-  restoreClassicVideoLayout.apply(settings.restoreClassicVideoLayout);
-  videoUpscaling.apply(settings.enableVideoUpscaling);
-  addNicoRankButton.apply(settings.showNicoRankButton);
-  addNicoRanWebButton.apply(settings.showNicoRanWebButton);
-  squareProfileIcons.apply(settings.squareProfileIcons);
-  hideSupporterButton.apply(settings.hideSupporterButton);
-  hideNicoAds.apply(settings.hideNicoAds);
-  pictureInPicture.apply(settings.enablePictureInPicture);
-  videoScreenshot.apply(settings.enableVideoScreenshot);
-  void allegationAssist.apply(settings.enableAllegationAssist);
-  cinematicLighting.apply(settings.enableCinematicLighting);
-  videoDownload.apply(settings.enableVideoDownload);
-  restoreNicopediaLink.apply(settings.restoreNicopediaLink);
-  hideShortsButton.apply(settings.hideShortsButton);
+  for (const [name, applyFeature] of FEATURE_APPLIERS) {
+    try {
+      applyFeature(settings);
+    } catch (error) {
+      console.error(`[Better Niconico] 「${name}」の適用中にエラーが発生しました:`, error);
+    }
+  }
 }
+
+/**
+ * loadAndApply の世代カウンタ。設定の高速変更などで loadAndApply が並行すると、
+ * 先に開始した呼び出しの loadSettings が後発より遅く解決し、古い設定で
+ * キャッシュを上書きしてしまう競合が起こりうる。最新の世代だけを反映する。
+ */
+let loadGeneration = 0;
 
 /**
  * 設定を chrome.storage から読み直してキャッシュし、適用する（Result型を使用）
  */
 async function loadAndApply(): Promise<void> {
+  const generation = ++loadGeneration;
   const settingsResult = await loadSettings();
+
+  // 自分より後に開始した loadAndApply があれば、古い結果でキャッシュを上書きしない
+  if (generation !== loadGeneration) {
+    return;
+  }
 
   if (settingsResult.isErr()) {
     console.error('[Better Niconico] 設定の読み込みに失敗しました:', settingsResult.error);
