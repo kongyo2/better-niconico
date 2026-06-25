@@ -46,6 +46,11 @@ const RECONNECT_DELAY_MS = 100;
 const PIP_TARGET_SELECTOR =
   '.grid-area_\\[player\\], video, canvas, button, [data-name="comment"], [data-name="supporter-content"]';
 
+// オーバーレイ（コメント/サポーター）と動画のアスペクト比がこの値未満の差なら
+// 同一とみなし、動画解像度のまま合成する。コメントcanvasは 1366x768 のように
+// 16:9 と僅かに異なるため、許容差を設けて不要な 1px ピラーボックスを避ける。
+const ASPECT_EPSILON = 0.02;
+
 type Dimensions = {
   width: number;
   height: number;
@@ -88,6 +93,10 @@ let featureObserver: MutationObserver | null = null;
 let navigationIntervalId: number | null = null;
 let lastPageUrl = '';
 let pipSessionToken = 0;
+
+// 再生/一時停止同期の対象となっている元動画と、相互同期時の無限ループ防止フラグ
+let playbackSyncVideo: HTMLVideoElement | null = null;
+let isSyncingPlayback = false;
 
 const hiddenElementStyles = new WeakMap<HTMLElement, HiddenElementStyle>();
 
@@ -279,18 +288,49 @@ function resolvePiPSources(): Result<PiPSources, VideoError | PageError> {
   });
 }
 
-function getCompositeDimensions(sources: PiPSources): Dimensions {
-  if (sources.upscaledCanvas) {
-    return {
-      width: Math.max(1, sources.upscaledCanvas.width),
-      height: Math.max(1, sources.upscaledCanvas.height),
-    };
+/**
+ * オーバーレイ（コメント、無ければサポーター）の表示アスペクト比を返す。
+ * ニコニコのプレイヤーではコメントcanvasがプレイヤー全体（通常16:9）を覆い、
+ * 動画はその中に object-fit: contain で内接表示される。
+ */
+function getOverlayAspect(sources: PiPSources): number | null {
+  const overlay = sources.commentCanvas ?? sources.supporterCanvas;
+  if (!overlay || overlay.width <= 0 || overlay.height <= 0) {
+    return null;
   }
 
-  return {
-    width: Math.max(1, sources.video.videoWidth),
-    height: Math.max(1, sources.video.videoHeight),
-  };
+  return overlay.width / overlay.height;
+}
+
+/**
+ * 合成キャンバスの寸法を計算する。
+ * 動画（アップスケール時は高画質canvas）の解像度を保ちつつ、オーバーレイの
+ * アスペクト比に合わせてレターボックス/ピラーボックス分の余白を加える。
+ * これにより4:3動画などでもコメントを実ページと同じ位置・大きさで重ねられる。
+ */
+function getCompositeDimensions(sources: PiPSources): Dimensions {
+  const source = sources.upscaledCanvas;
+  const sourceWidth = Math.max(1, source ? source.width : sources.video.videoWidth);
+  const sourceHeight = Math.max(1, source ? source.height : sources.video.videoHeight);
+
+  const overlayAspect = getOverlayAspect(sources);
+  if (overlayAspect === null || !Number.isFinite(overlayAspect)) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+
+  const sourceAspect = sourceWidth / sourceHeight;
+  // アスペクト比がほぼ同じ（16:9 と 1366x768 の僅差など）なら動画解像度のまま。
+  if (Math.abs(overlayAspect - sourceAspect) < ASPECT_EPSILON) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+
+  if (overlayAspect > sourceAspect) {
+    // オーバーレイの方が横長 → 左右にピラーボックス
+    return { width: Math.max(1, Math.round(sourceHeight * overlayAspect)), height: sourceHeight };
+  }
+
+  // オーバーレイの方が縦長 → 上下にレターボックス
+  return { width: sourceWidth, height: Math.max(1, Math.round(sourceWidth / overlayAspect)) };
 }
 
 function isSupporterVisible(canvas: HTMLCanvasElement): boolean {
@@ -757,6 +797,7 @@ function reconnectPiPSources(): void {
   stopCompositeLoop();
   applySourcesToState(sourceResult.value);
   syncHiddenSourceElements();
+  attachMainPlaybackListeners(sourceResult.value.video);
   renderCompositeFrame();
   startCompositeLoop();
 
@@ -765,6 +806,102 @@ function reconnectPiPSources(): void {
 
 function isSessionCurrent(token: number): boolean {
   return currentEnabled && pipSessionToken === token && isWatchPage();
+}
+
+/**
+ * PiPウィンドウのネイティブ再生/一時停止ボタンは合成用のpipVideo（MediaStream）を
+ * 操作するだけで、実際の音声・再生を担う元動画には作用しない。そのままでは
+ * 「PiPで一時停止したのに音声が流れ続ける」といった乖離が起きるため、pipVideoと
+ * 元動画の再生状態を相互に同期する。冪等チェックとフラグで無限ループを防ぐ。
+ */
+function handlePipPlay(): void {
+  if (isSyncingPlayback || !mainVideo || !mainVideo.paused) {
+    return;
+  }
+
+  isSyncingPlayback = true;
+  void Promise.resolve(mainVideo.play())
+    .catch(() => {})
+    .finally(() => {
+      isSyncingPlayback = false;
+    });
+}
+
+function handlePipPause(): void {
+  if (isSyncingPlayback || !mainVideo || mainVideo.paused) {
+    return;
+  }
+
+  isSyncingPlayback = true;
+  mainVideo.pause();
+  isSyncingPlayback = false;
+}
+
+function handleMainPlay(): void {
+  if (isSyncingPlayback || !pipVideo || !pipVideo.paused) {
+    return;
+  }
+
+  isSyncingPlayback = true;
+  void Promise.resolve(pipVideo.play())
+    .catch(() => {})
+    .finally(() => {
+      isSyncingPlayback = false;
+    });
+}
+
+function handleMainPause(): void {
+  // 動画差し替えで切り離される直前の旧動画が発火するpauseは無視する
+  if (isSyncingPlayback || !pipVideo || pipVideo.paused || !mainVideo || !mainVideo.isConnected) {
+    return;
+  }
+
+  isSyncingPlayback = true;
+  pipVideo.pause();
+  isSyncingPlayback = false;
+}
+
+function attachMainPlaybackListeners(video: HTMLVideoElement): void {
+  if (playbackSyncVideo === video) {
+    return;
+  }
+
+  detachMainPlaybackListeners();
+  video.addEventListener('play', handleMainPlay);
+  video.addEventListener('pause', handleMainPause);
+  playbackSyncVideo = video;
+}
+
+function detachMainPlaybackListeners(): void {
+  if (playbackSyncVideo) {
+    playbackSyncVideo.removeEventListener('play', handleMainPlay);
+    playbackSyncVideo.removeEventListener('pause', handleMainPause);
+    playbackSyncVideo = null;
+  }
+}
+
+/**
+ * 再生同期を有効化する。PiP確立後に呼び出すことで、開始時のpipVideo.play()が
+ * 意図せず元動画を再生してしまうのを避ける。
+ */
+function enablePlaybackSync(): void {
+  if (pipVideo) {
+    pipVideo.addEventListener('play', handlePipPlay);
+    pipVideo.addEventListener('pause', handlePipPause);
+  }
+
+  if (mainVideo) {
+    attachMainPlaybackListeners(mainVideo);
+  }
+}
+
+function disablePlaybackSync(): void {
+  detachMainPlaybackListeners();
+  if (pipVideo) {
+    pipVideo.removeEventListener('play', handlePipPlay);
+    pipVideo.removeEventListener('pause', handlePipPause);
+  }
+  isSyncingPlayback = false;
 }
 
 /**
@@ -834,6 +971,7 @@ async function startPiP(): Promise<void> {
     }
 
     syncHiddenSourceElements();
+    enablePlaybackSync();
     console.log('[Better Niconico] PiPを開始しました');
   } catch (error) {
     console.error('[Better Niconico] PiPの開始に失敗:', error);
@@ -864,6 +1002,7 @@ function stopPiP(): void {
   clearSourceReconnectTimer();
   stopCompositeLoop();
   restoreHiddenSourceElements();
+  disablePlaybackSync();
 
   const videoElement = pipVideo;
   if (videoElement) {
