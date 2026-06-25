@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const PIP_BUTTON_ID = 'bn-pip-button';
+const PIP_VIDEO_ID = 'bn-pip-video';
 const UPSCALED_CANVAS_ID = 'bn-upscaled-canvas';
 
 type PlayerDom = {
@@ -433,6 +434,132 @@ describe('pictureInPicture', () => {
       expect(newVideo.style.visibility).toBe('hidden');
       expect(document.getElementById(PIP_BUTTON_ID)).not.toBeNull();
       expect(drawImageMock).toHaveBeenCalledWith(newVideo, 0, 0, 640, 360, 0, 0, 640, 360);
+    });
+  });
+
+  describe('再生/一時停止の同期', () => {
+    async function startPiPForSync(): Promise<{
+      mainVideo: HTMLVideoElement;
+      pipVideo: HTMLVideoElement;
+    }> {
+      setupLocationMock('/watch/sm9');
+      const { mainVideo } = createNiconicoPlayerDOM();
+      apply(true);
+      document.getElementById(PIP_BUTTON_ID)?.click();
+      await flushPromises();
+      const pipVideo = document.getElementById(PIP_VIDEO_ID) as HTMLVideoElement;
+      expect(mainVideo).not.toBeNull();
+      expect(pipVideo).not.toBeNull();
+      return { mainVideo: mainVideo as HTMLVideoElement, pipVideo };
+    }
+
+    it('PiPウィンドウで一時停止すると元動画も一時停止する', async () => {
+      const { mainVideo, pipVideo } = await startPiPForSync();
+      // 元動画は再生中（paused:false）。PiP側のpauseで元動画のpauseが呼ばれる。
+      const mainPause = vi.fn();
+      Object.defineProperty(mainVideo, 'pause', { value: mainPause, configurable: true });
+
+      pipVideo.dispatchEvent(new Event('pause'));
+
+      expect(mainPause).toHaveBeenCalledTimes(1);
+    });
+
+    it('PiPウィンドウで再生すると元動画も再生する', async () => {
+      const { mainVideo, pipVideo } = await startPiPForSync();
+      // 元動画を一時停止状態にしてからPiP側のplayで元動画のplayが呼ばれることを確認
+      Object.defineProperty(mainVideo, 'paused', { value: true, configurable: true });
+      const mainPlay = vi.fn(() => Promise.resolve());
+      Object.defineProperty(mainVideo, 'play', { value: mainPlay, configurable: true });
+
+      pipVideo.dispatchEvent(new Event('play'));
+
+      expect(mainPlay).toHaveBeenCalledTimes(1);
+    });
+
+    it('元動画を一時停止するとPiPウィンドウも一時停止する', async () => {
+      const { mainVideo, pipVideo } = await startPiPForSync();
+      Object.defineProperty(pipVideo, 'paused', { value: false, configurable: true });
+      const pipPause = vi.fn();
+      Object.defineProperty(pipVideo, 'pause', { value: pipPause, configurable: true });
+
+      mainVideo.dispatchEvent(new Event('pause'));
+
+      expect(pipPause).toHaveBeenCalledTimes(1);
+    });
+
+    it('差し替えで切り離された旧動画のpauseはPiPに伝播しない', async () => {
+      const { mainVideo, pipVideo } = await startPiPForSync();
+      Object.defineProperty(pipVideo, 'paused', { value: false, configurable: true });
+      const pipPause = vi.fn();
+      Object.defineProperty(pipVideo, 'pause', { value: pipPause, configurable: true });
+      // 旧動画がDOMから切り離された状態を模擬
+      mainVideo.remove();
+
+      mainVideo.dispatchEvent(new Event('pause'));
+
+      expect(pipPause).not.toHaveBeenCalled();
+    });
+
+    it('差し替えで切り離された旧動画のplayはPiPに伝播しない', async () => {
+      const { mainVideo, pipVideo } = await startPiPForSync();
+      // pipVideoは一時停止中。旧動画のplayが誤伝播すれば再生されてしまう。
+      Object.defineProperty(pipVideo, 'paused', { value: true, configurable: true });
+      const pipPlay = vi.fn(() => Promise.resolve());
+      Object.defineProperty(pipVideo, 'play', { value: pipPlay, configurable: true });
+      // 旧動画がDOMから切り離された状態を模擬
+      mainVideo.remove();
+
+      mainVideo.dispatchEvent(new Event('play'));
+
+      expect(pipPlay).not.toHaveBeenCalled();
+    });
+
+    it('PiP終了時に元動画を一時停止しない（ページ側で再生を継続できる）', async () => {
+      const { mainVideo } = await startPiPForSync();
+      const mainPause = vi.fn();
+      Object.defineProperty(mainVideo, 'pause', { value: mainPause, configurable: true });
+
+      await document.exitPictureInPicture();
+      await flushPromises();
+
+      expect(mainPause).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('アスペクト比に応じた合成', () => {
+    it('4:3動画ではコメント比率(16:9)に合わせて動画をピラーボックス合成する', async () => {
+      setupLocationMock('/watch/sm9');
+      const { mainVideo, commentCanvas } = createNiconicoPlayerDOM({
+        mainVideoOptions: { width: 480, height: 360 },
+      });
+
+      apply(true);
+      document.getElementById(PIP_BUTTON_ID)?.click();
+      await flushPromises();
+
+      // 合成キャンバスはコメント比率(1366/768≒16:9)・高さ360基準で 640x360
+      expect(capturedCanvas?.width).toBe(640);
+      expect(capturedCanvas?.height).toBe(360);
+      // 動画は左右ピラーボックスで中央(x=80)に等倍描画される
+      expect(drawImageMock).toHaveBeenCalledWith(mainVideo, 0, 0, 480, 360, 80, 0, 480, 360);
+      // コメントは合成キャンバス全体に行き渡る
+      expect(commentCanvas).not.toBeNull();
+    });
+
+    it('16:9動画ではコメント比率と一致するため動画解像度のまま合成する', async () => {
+      setupLocationMock('/watch/sm9');
+      const { mainVideo } = createNiconicoPlayerDOM({
+        mainVideoOptions: { width: 1280, height: 720 },
+      });
+
+      apply(true);
+      document.getElementById(PIP_BUTTON_ID)?.click();
+      await flushPromises();
+
+      // 1280/720 と 1366/768 はASPECT_EPSILON内なのでピラーボックスせず原寸
+      expect(capturedCanvas?.width).toBe(1280);
+      expect(capturedCanvas?.height).toBe(720);
+      expect(drawImageMock).toHaveBeenCalledWith(mainVideo, 0, 0, 1280, 720, 0, 0, 1280, 720);
     });
   });
 });

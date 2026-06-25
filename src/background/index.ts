@@ -1,6 +1,8 @@
 // Better Niconico - Background Service Worker
 // バックグラウンドで動作するサービスワーカー
 
+import { resolveArticleExistence } from './nicopediaCheck';
+
 /**
  * 拡張機能のインストール・アップデート時の処理
  */
@@ -48,28 +50,30 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
  * Content Scriptからのメッセージを処理
  */
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.type === 'CHECK_NICOPEDIA_ARTICLE') {
-    const encodedTagName = message.tagName as string;
+  if (message?.type === 'CHECK_NICOPEDIA_ARTICLE') {
+    const encodedTagName = typeof message.tagName === 'string' ? message.tagName : '';
 
-    // Background Scriptからfetch（CORSの制限を回避）
-    fetch(`https://dic.nicovideo.jp/a/${encodedTagName}`, {
-      method: 'GET',
-      credentials: 'omit',
-    })
-      .then((response) => {
-        if (!response.ok) {
-          return { exists: false };
+    // タグ名が不正なら確認せず「不明(error)」を返す（呼び出し側でリンクを隠さない）
+    if (encodedTagName.length === 0) {
+      sendResponse({ exists: false, error: true });
+      return true;
+    }
+
+    // Background から HEAD で存在確認（CORS 回避 + 軽量化。詳細は nicopediaCheck.ts）
+    void resolveArticleExistence(encodedTagName)
+      .then((result) => {
+        if (result === 'exists') {
+          sendResponse({ exists: true });
+        } else if (result === 'missing') {
+          sendResponse({ exists: false });
+        } else {
+          // 不明（通信エラー等）。exists:false は旧クライアント互換、error:true で新クライアントが識別する
+          sendResponse({ exists: false, error: true });
         }
-        return response.text().then((html) => {
-          // 記事が存在しない場合は「まだ記事が書かれていません」が含まれる
-          const exists = !html.includes('まだ記事が書かれていません');
-          return { exists };
-        });
       })
       .catch(() => {
-        return { exists: false };
-      })
-      .then(sendResponse);
+        sendResponse({ exists: false, error: true });
+      });
 
     // 非同期レスポンスを返すためにtrueを返す
     return true;
