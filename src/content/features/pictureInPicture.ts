@@ -821,7 +821,9 @@ function handlePipPlay(): void {
 
   isSyncingPlayback = true;
   void Promise.resolve(mainVideo.play())
-    .catch(() => {})
+    .catch((err) => {
+      console.warn('[Better Niconico] Main video play sync failed:', err);
+    })
     .finally(() => {
       isSyncingPlayback = false;
     });
@@ -838,21 +840,37 @@ function handlePipPause(): void {
 }
 
 function handleMainPlay(): void {
-  if (isSyncingPlayback || !pipVideo || !pipVideo.paused) {
+  // リスナーを張った要素そのもの（playbackSyncVideo）の接続状態で判定する。
+  if (
+    isSyncingPlayback ||
+    !pipVideo ||
+    !pipVideo.paused ||
+    !playbackSyncVideo ||
+    !playbackSyncVideo.isConnected
+  ) {
     return;
   }
 
   isSyncingPlayback = true;
   void Promise.resolve(pipVideo.play())
-    .catch(() => {})
+    .catch((err) => {
+      console.warn('[Better Niconico] PiP play sync failed:', err);
+    })
     .finally(() => {
       isSyncingPlayback = false;
     });
 }
 
 function handleMainPause(): void {
-  // 動画差し替えで切り離される直前の旧動画が発火するpauseは無視する
-  if (isSyncingPlayback || !pipVideo || pipVideo.paused || !mainVideo || !mainVideo.isConnected) {
+  // 動画差し替えで切り離される直前の旧動画が発火するpauseは無視する。
+  // リスナーを張った要素そのもの（playbackSyncVideo）の接続状態で判定する。
+  if (
+    isSyncingPlayback ||
+    !pipVideo ||
+    pipVideo.paused ||
+    !playbackSyncVideo ||
+    !playbackSyncVideo.isConnected
+  ) {
     return;
   }
 

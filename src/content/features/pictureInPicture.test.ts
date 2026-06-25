@@ -500,6 +500,20 @@ describe('pictureInPicture', () => {
       expect(pipPause).not.toHaveBeenCalled();
     });
 
+    it('差し替えで切り離された旧動画のplayはPiPに伝播しない', async () => {
+      const { mainVideo, pipVideo } = await startPiPForSync();
+      // pipVideoは一時停止中。旧動画のplayが誤伝播すれば再生されてしまう。
+      Object.defineProperty(pipVideo, 'paused', { value: true, configurable: true });
+      const pipPlay = vi.fn(() => Promise.resolve());
+      Object.defineProperty(pipVideo, 'play', { value: pipPlay, configurable: true });
+      // 旧動画がDOMから切り離された状態を模擬
+      mainVideo.remove();
+
+      mainVideo.dispatchEvent(new Event('play'));
+
+      expect(pipPlay).not.toHaveBeenCalled();
+    });
+
     it('PiP終了時に元動画を一時停止しない（ページ側で再生を継続できる）', async () => {
       const { mainVideo } = await startPiPForSync();
       const mainPause = vi.fn();
