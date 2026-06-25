@@ -1,103 +1,111 @@
 /**
  * Tests for src/background/index.ts
  *
- * Note: This module uses chrome.* APIs at module initialization,
- * so we test the message handler logic separately.
+ * index.ts を import すると副作用で各リスナーがモック chrome に登録される。
+ * 登録された onMessage ハンドラを取り出し、CHECK_NICOPEDIA_ARTICLE の応答を検証する。
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetChromeMocks } from '../test/setup';
+import { __resetNicopediaCheckState } from './nicopediaCheck';
+import './index';
+
+// import 時に登録された onMessage ハンドラを保持（beforeEach の clearAllMocks 前に取得）
+type MessageHandler = (
+  message: { type?: string; tagName?: unknown },
+  sender: unknown,
+  sendResponse: (response: unknown) => void,
+) => boolean;
+const messageHandler = vi.mocked(chrome.runtime.onMessage.addListener).mock
+  .calls[0][0] as unknown as MessageHandler;
+
+function res(status: number, text = ''): Partial<Response> {
+  return { status, ok: status >= 200 && status < 300, text: () => Promise.resolve(text) };
+}
+
+function flush(ms = 5): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+beforeEach(() => {
+  resetChromeMocks();
+  __resetNicopediaCheckState();
+  vi.stubGlobal('fetch', vi.fn());
+});
 
 describe('background/index', () => {
-  beforeEach(() => {
-    resetChromeMocks();
-    // Reset fetch mock
-    vi.stubGlobal('fetch', vi.fn());
-  });
-
-  describe('onInstalled handler', () => {
-    it('should register onInstalled listener', () => {
+  describe('リスナー登録', () => {
+    it('onInstalled / onUpdated / onMessage が登録される', () => {
       expect(chrome.runtime.onInstalled.addListener).toBeDefined();
-    });
-  });
-
-  describe('onUpdated handler', () => {
-    it('should register onUpdated listener', () => {
       expect(chrome.tabs.onUpdated.addListener).toBeDefined();
-    });
-  });
-
-  describe('CHECK_NICOPEDIA_ARTICLE message handler', () => {
-    it('should return exists: true for valid article', async () => {
-      // Mock fetch to return page without "まだ記事が書かれていません"
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          text: () => Promise.resolve('<html><body>Article content</body></html>'),
-        }),
-      );
-
-      // Simulate the message handler logic
-      const encodedTagName = 'VOCALOID';
-      const response = await fetch(`https://dic.nicovideo.jp/a/${encodedTagName}`, {
-        method: 'GET',
-        credentials: 'omit',
-      });
-
-      expect(response.ok).toBe(true);
-      const html = await response.text();
-      const exists = !html.includes('まだ記事が書かれていません');
-      expect(exists).toBe(true);
-    });
-
-    it('should return exists: false for non-existent article', async () => {
-      // Mock fetch to return page with "まだ記事が書かれていません"
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          text: () => Promise.resolve('<html><body>まだ記事が書かれていません</body></html>'),
-        }),
-      );
-
-      const encodedTagName = 'nonexistent';
-      const response = await fetch(`https://dic.nicovideo.jp/a/${encodedTagName}`);
-      const html = await response.text();
-      const exists = !html.includes('まだ記事が書かれていません');
-      expect(exists).toBe(false);
-    });
-
-    it('should return exists: false when fetch returns non-ok response', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: false,
-          status: 404,
-        }),
-      );
-
-      const response = await fetch('https://dic.nicovideo.jp/a/test');
-      expect(response.ok).toBe(false);
-      // Handler should return { exists: false }
-    });
-
-    it('should return exists: false when fetch throws error', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
-
-      let errorOccurred = false;
-      try {
-        await fetch('https://dic.nicovideo.jp/a/test');
-      } catch {
-        errorOccurred = true;
-      }
-      expect(errorOccurred).toBe(true);
-      // Handler should catch and return { exists: false }
-    });
-  });
-
-  describe('chrome.runtime.onMessage registration', () => {
-    it('should register message listener', () => {
       expect(chrome.runtime.onMessage.addListener).toBeDefined();
+      expect(typeof messageHandler).toBe('function');
+    });
+  });
+
+  describe('CHECK_NICOPEDIA_ARTICLE ハンドラ', () => {
+    it('存在する記事は { exists: true } を返す', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(200)));
+      const sendResponse = vi.fn();
+
+      const ret = messageHandler(
+        { type: 'CHECK_NICOPEDIA_ARTICLE', tagName: 'VOCALOID' },
+        {},
+        sendResponse,
+      );
+
+      expect(ret).toBe(true); // 非同期応答のため true
+      await flush();
+      expect(sendResponse).toHaveBeenCalledWith({ exists: true });
+    });
+
+    it('存在しない記事(404)は { exists: false } を返す', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(404)));
+      const sendResponse = vi.fn();
+
+      messageHandler({ type: 'CHECK_NICOPEDIA_ARTICLE', tagName: 'nonexistent' }, {}, sendResponse);
+      await flush();
+
+      expect(sendResponse).toHaveBeenCalledWith({ exists: false });
+    });
+
+    it('通信エラーは { exists: false, error: true } を返す（非存在と区別）', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
+      const sendResponse = vi.fn();
+
+      messageHandler({ type: 'CHECK_NICOPEDIA_ARTICLE', tagName: 'x' }, {}, sendResponse);
+      await flush();
+
+      expect(sendResponse).toHaveBeenCalledWith({ exists: false, error: true });
+    });
+
+    it('5xx も error 扱い（誤って非存在にしない）', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(503)));
+      const sendResponse = vi.fn();
+
+      messageHandler({ type: 'CHECK_NICOPEDIA_ARTICLE', tagName: 'x' }, {}, sendResponse);
+      await flush();
+
+      expect(sendResponse).toHaveBeenCalledWith({ exists: false, error: true });
+    });
+
+    it('tagName が無ければ問い合わせず error を返す', async () => {
+      const fetchFn = vi.fn();
+      vi.stubGlobal('fetch', fetchFn);
+      const sendResponse = vi.fn();
+
+      const ret = messageHandler({ type: 'CHECK_NICOPEDIA_ARTICLE' }, {}, sendResponse);
+      await flush();
+
+      expect(ret).toBe(true);
+      expect(sendResponse).toHaveBeenCalledWith({ exists: false, error: true });
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+    it('対象外メッセージには false を返す', () => {
+      const sendResponse = vi.fn();
+      const ret = messageHandler({ type: 'OTHER' }, {}, sendResponse);
+      expect(ret).toBe(false);
+      expect(sendResponse).not.toHaveBeenCalled();
     });
   });
 });
